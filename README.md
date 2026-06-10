@@ -60,6 +60,9 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
 
 ## Komendy dev
 
+- **Całe środowisko jedną komendą**: `powershell -ExecutionPolicy Bypass -File scripts\start-dev.ps1`
+  (5 mocków + backend + frontend + seed; idempotentny). Stop: `scripts\stop-dev.ps1`.
+
 - **Baza**: lokalna usługa PostgreSQL 16 (Windows, port 5432) — Docker na tej maszynie nie działa
   (uszkodzony WSL); `docker-compose.yml` to wariant wdrożeniowy. URL: `backend/.env` (`DATABASE_URL`).
 - **Backend** (z `backend/`, venv w `backend/.venv`):
