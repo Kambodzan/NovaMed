@@ -7,5 +7,11 @@ class Settings(BaseSettings):
     app_name: str = "NovaMed API"
     database_url: str = "***REMOVED***"
 
+    # Supabase Auth — backend tylko weryfikuje tokeny (legacy HS256 JWT secret
+    # z dashboardu: Settings → API → JWT Secret)
+    supabase_url: str = ""
+    supabase_jwt_secret: str = "dev-secret-do-podmiany"
+    supabase_jwt_aud: str = "authenticated"
+
 
 settings = Settings()

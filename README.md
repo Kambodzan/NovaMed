@@ -18,6 +18,9 @@ mobilna pacjenta + integracje z systemami krajowymi (mockowane).
 ## Stack (ustalony z autorem)
 
 - **Backend**: Python, FastAPI + SQLAlchemy 2.x + Alembic, PostgreSQL
+- **Auth**: **Supabase Auth** (cloud) — rejestracja/logowanie/reset/2FA po stronie Supabase;
+  backend weryfikuje JWT (Bearer) i mapuje `sub` → `app_user.supabase_uid`; role/RBAC nasze
+  (tabela `role`). Sekrety w `backend/.env`: `SUPABASE_URL`, `SUPABASE_JWT_SECRET`
 - **Frontend web**: React (Vite + TypeScript) — 5 portali w jednej aplikacji, routing per rola
 - **Mobile**: React Native (Expo) — aplikacja pacjenta (push, offline cache)
 - **Integracje zewnętrzne** (P1, ZUS e-ZLA, eWUŚ, laboratoria, płatności): **własne
