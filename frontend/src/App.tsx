@@ -13,6 +13,9 @@ import { Telewizyta } from './pages/Telewizyta'
 import { Udostepnij } from './pages/Udostepnij'
 import { KodOdPacjenta } from './pages/KodOdPacjenta'
 import { LekarzDzien } from './pages/lekarz/Dzien'
+import { Gabinet } from './pages/lekarz/Gabinet'
+import { StaffPacjenci } from './pages/staff/Pacjenci'
+import { PacjentRecord } from './pages/staff/PacjentRecord'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
 import { Terminy } from './pages/poradnia/Terminy'
@@ -28,6 +31,7 @@ function LekarzLayout() {
       brand="Portal Lekarza"
       nav={[
         { to: '/', label: 'Mój dzień', icon: CalendarDays, end: true },
+        { to: '/pacjenci', label: 'Pacjenci', icon: Users },
         { to: '/kod', label: 'Kod od pacjenta', icon: FileSignature },
       ]}
     >
@@ -43,6 +47,7 @@ function PielegniarkaLayout() {
       nav={[
         { to: '/', label: 'Zabiegi', icon: ClipboardList, end: true },
         { to: '/skierowania', label: 'Skierowania', icon: FileSignature },
+        { to: '/pacjenci', label: 'Pacjenci', icon: Users },
         { to: '/kod', label: 'Kod od pacjenta', icon: KeyIcon },
       ]}
     >
@@ -117,6 +122,9 @@ export default function App() {
       {token && me && role === 'lekarz' && (
         <Route path="/" element={<LekarzLayout />}>
           <Route index element={<LekarzDzien />} />
+          <Route path="wizyta/:id" element={<Gabinet />} />
+          <Route path="pacjenci" element={<StaffPacjenci />} />
+          <Route path="pacjent/:id" element={<PacjentRecord />} />
           <Route path="kod" element={<KodOdPacjenta />} />
           <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -127,6 +135,8 @@ export default function App() {
         <Route path="/" element={<PielegniarkaLayout />}>
           <Route index element={<Zabiegi />} />
           <Route path="skierowania" element={<Skierowania />} />
+          <Route path="pacjenci" element={<StaffPacjenci />} />
+          <Route path="pacjent/:id" element={<PacjentRecord />} />
           <Route path="kod" element={<KodOdPacjenta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

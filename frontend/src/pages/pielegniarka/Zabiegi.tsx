@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ClipboardList } from 'lucide-react'
 import { Button, EmptyState, Field, Modal, Overline, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
@@ -76,7 +77,11 @@ export function Zabiegi() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-extrabold text-gray-900">{p.procedure_type}</p>
-                  <p className="text-xs font-medium text-gray-500">{p.patient_name}</p>
+                  <p className="text-xs font-medium">
+                    <Link to={`/pacjent/${p.patient_id}`} className="font-bold text-gray-600 hover:text-primary hover:underline">
+                      {p.patient_name}
+                    </Link>
+                  </p>
                   <Overline className="mt-0.5 !text-[10px]">zlecenie: {p.ordered_by} · {p.referral_code}</Overline>
                   {p.notes && p.procedure_status === 'DONE' && (
                     <p className="mt-1 text-xs font-medium text-gray-500 italic">{p.notes}</p>

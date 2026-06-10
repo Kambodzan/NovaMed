@@ -145,6 +145,26 @@ def test_dzien_lekarza_i_przebieg_wizyty(client, setup):
     assert resp.status_code == 409
 
 
+def test_szczegoly_wizyty_i_historia_pacjenta(client, setup, factory):
+    slot_id = make_slot(client, setup, days_ahead=2, hour=14)
+    client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))
+
+    # uczestnicy i personel widzą szczegóły
+    assert client.get(f"/appointments/{slot_id}", headers=auth_header(setup["patient_token"])).status_code == 200
+    assert client.get(f"/appointments/{slot_id}", headers=auth_header(setup["doctor_token"])).status_code == 200
+    # obcy pacjent — nie
+    _, other_token = factory.patient()
+    assert client.get(f"/appointments/{slot_id}", headers=auth_header(other_token)).status_code == 403
+
+    # historia wizyt pacjenta dla personelu; pacjent nie ma dostępu do tego endpointu
+    resp = client.get(f"/patients/{setup['patient'].user_id}/appointments", headers=auth_header(setup["reg_token"]))
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+    assert client.get(
+        f"/patients/{setup['patient'].user_id}/appointments", headers=auth_header(setup["patient_token"]),
+    ).status_code == 403
+
+
 def test_lekarz_nie_zmienia_cudzych_wizyt(client, setup, factory):
     slot_id = make_slot(client, setup, days_ahead=2)
     client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))

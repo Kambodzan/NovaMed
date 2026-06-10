@@ -452,6 +452,38 @@ def doctor_day(
     return [appointment_out(db, a) for a in rows]
 
 
+@router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
+def patient_appointments(
+    patient_id: int,
+    _: AppUser = Depends(require_roles("lekarz", "pielegniarka", "rejestracja", "kierownik", "administrator")),
+    db: Session = Depends(get_db),
+):
+    """UC-L1/UC-N1: historia wizyt pacjenta (kartoteka dla personelu)."""
+    if db.get(Patient, patient_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    rows = db.scalars(
+        select(Appointment)
+        .where(Appointment.patient_id == patient_id)
+        .order_by(Appointment.appointment_datetime.desc())
+    )
+    return [appointment_out(db, a) for a in rows]
+
+
+@router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
+def appointment_detail(
+    appointment_id: int,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Szczegóły wizyty: uczestnik (pacjent/lekarz wizyty) lub personel placówki."""
+    a = get_appointment_or_404(appointment_id, db)
+    role = user.role.role_name
+    is_participant = user.user_id in (a.patient_id, a.doctor_id)
+    if not is_participant and role not in ("rejestracja", "kierownik", "administrator", "pielegniarka"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do tej wizyty.")
+    return appointment_out(db, a)
+
+
 @router.post("/appointments/{appointment_id}/status", response_model=AppointmentOut)
 def change_status(
     appointment_id: int,

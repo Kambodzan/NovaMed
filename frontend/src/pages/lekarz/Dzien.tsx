@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, MapPin, Video } from 'lucide-react'
-import { Button, EmptyState, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
+import { CalendarDays, DoorOpen, MapPin, Video } from 'lucide-react'
+import { Badge, Button, EmptyState, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
-import { KartaPacjenta } from './KartaPacjenta'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
@@ -14,7 +13,6 @@ export function LekarzDzien() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [day, setDay] = useState(todayIso())
-  const [karta, setKarta] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const { data: visits } = useQuery({
@@ -28,6 +26,11 @@ export function LekarzDzien() {
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['doctor-day'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zmienić statusu.'),
   })
+
+  const startVisit = (v: AppointmentOut) => {
+    changeStatus.mutate({ id: v.appointment_id, status: 'IN_PROGRESS' })
+    navigate(v.appointment_type === 'ONLINE' ? `/telewizyta/${v.appointment_id}` : `/wizyta/${v.appointment_id}`)
+  }
 
   const booked = (visits ?? []).filter(v => v.patient_id !== null)
   const done = booked.filter(v => v.appointment_status === 'COMPLETED').length
@@ -76,31 +79,36 @@ export function LekarzDzien() {
                     {formatTime(v.appointment_datetime)}
                   </span>
                   <span className="text-gray-400">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
-                  <button onClick={() => setKarta(v)} className="min-w-0 flex-1 cursor-pointer text-left">
+                  <button
+                    onClick={() => navigate(`/pacjent/${v.patient_id}`)}
+                    className="min-w-0 flex-1 cursor-pointer text-left"
+                    title="Otwórz kartotekę pacjenta"
+                  >
                     <p className="text-sm font-extrabold text-gray-900 hover:text-primary">{v.patient_name}</p>
                   </button>
+                  {v.price != null && <Badge tone="neutral">{v.price} zł</Badge>}
                   <StatusBadge status={v.appointment_status} />
                   <div className="flex gap-2">
                     {v.appointment_status === 'CONFIRMED' && (
                       <>
-                        <Button size="sm" onClick={() => {
-                          changeStatus.mutate({ id: v.appointment_id, status: 'IN_PROGRESS' })
-                          if (v.appointment_type === 'ONLINE') navigate(`/telewizyta/${v.appointment_id}`)
-                        }}>
-                          {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : 'Rozpocznij'}
+                        <Button size="sm" onClick={() => startVisit(v)}>
+                          {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : <><DoorOpen size={14} /> Rozpocznij</>}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'NO_SHOW' })}>Nie stawił się</Button>
+                        <Button size="sm" variant="ghost" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'NO_SHOW' })}>
+                          Nie stawił się
+                        </Button>
                       </>
                     )}
                     {now && (
                       <>
+                        <Button size="sm" onClick={() => navigate(`/wizyta/${v.appointment_id}`)}>
+                          <DoorOpen size={14} /> Gabinet
+                        </Button>
                         {v.appointment_type === 'ONLINE' && (
-                          <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
-                            <Video size={14} /> Wróć do rozmowy
+                          <Button size="sm" variant="secondary" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
+                            <Video size={14} /> Rozmowa
                           </Button>
                         )}
-                        <Button size="sm" variant="secondary" onClick={() => setKarta(v)}>Karta pacjenta</Button>
-                        <Button size="sm" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'COMPLETED' })}>Zakończ</Button>
                       </>
                     )}
                   </div>
@@ -110,14 +118,6 @@ export function LekarzDzien() {
           </ul>
         )}
       </Tile>
-
-      {karta && karta.patient_id && (
-        <KartaPacjenta
-          patientId={karta.patient_id}
-          appointmentId={karta.appointment_id}
-          onClose={() => setKarta(null)}
-        />
-      )}
     </div>
   )
 }

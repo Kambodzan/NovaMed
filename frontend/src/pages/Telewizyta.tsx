@@ -2,7 +2,7 @@
 // przez WebSocket pokoju wizyty. Lekarz inicjuje połączenie (offer).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Mic, MicOff, Paperclip, PhoneOff, Send, Video as VideoIcon, VideoOff } from 'lucide-react'
+import { ClipboardPen, Mic, MicOff, Paperclip, PhoneOff, Send, Video as VideoIcon, VideoOff } from 'lucide-react'
 import { Button, Overline, Tile, cx, inputCls } from '../ui'
 import { API_URL, WS_URL, api, getAuthToken } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -186,9 +186,16 @@ export function Telewizyta() {
             {peerPresent ? 'Rozmowa w toku' : 'Oczekiwanie na rozmówcę…'}
           </h1>
         </div>
-        <Button variant="danger" onClick={() => void endVisit()}>
-          <PhoneOff size={16} /> {isDoctor ? 'Zakończ wizytę' : 'Opuść wizytę'}
-        </Button>
+        <div className="flex gap-2">
+          {isDoctor && (
+            <a href={`/wizyta/${id}`} target="_blank" rel="noreferrer">
+              <Button variant="secondary"><ClipboardPen size={15} /> Gabinet (nowa karta)</Button>
+            </a>
+          )}
+          <Button variant="danger" onClick={() => void endVisit()}>
+            <PhoneOff size={16} /> {isDoctor ? 'Zakończ wizytę' : 'Opuść wizytę'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
