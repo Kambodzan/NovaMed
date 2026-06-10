@@ -100,6 +100,26 @@ def main() -> None:
                     ))
                     created_slots += 1
 
+    # płatne sloty prywatne (M6): endokrynolog 220 zł, teleporady kardiologa 150 zł
+    has_priced = db.scalar(
+        select(Appointment.appointment_id).where(Appointment.price.is_not(None)).limit(1)
+    )
+    if has_priced is None:
+        base = datetime.now().replace(minute=0, second=0, microsecond=0)
+        for day in range(1, 5):
+            db.add(Appointment(
+                patient_id=None, doctor_id=doctor_ids[2], clinic_id=clinic.clinic_id,
+                appointment_datetime=base.replace(hour=17) + timedelta(days=day),
+                appointment_status=AppointmentStatus.FREE.value,
+                appointment_type=AppointmentType.STATIONARY.value, price=220,
+            ))
+            db.add(Appointment(
+                patient_id=None, doctor_id=doctor_ids[0], clinic_id=clinic.clinic_id,
+                appointment_datetime=base.replace(hour=18) + timedelta(days=day),
+                appointment_status=AppointmentStatus.FREE.value,
+                appointment_type=AppointmentType.ONLINE.value, price=150,
+            ))
+
     # jedna potwierdzona wizyta pacjentki (jutro 9:00 u Kowalczyk)
     has_visit = db.scalar(select(Appointment).where(Appointment.patient_id == pat_u.user_id).limit(1))
     if has_visit is None:

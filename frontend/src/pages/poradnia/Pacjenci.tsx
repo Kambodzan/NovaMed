@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Search, Users } from 'lucide-react'
-import { Badge, EmptyState, PageHeader, Tile, cx, inputCls } from '../../ui'
-import { api } from '../../lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Search, ShieldCheck, Users } from 'lucide-react'
+import { Badge, Button, EmptyState, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { api, ApiError } from '../../lib/api'
 
 interface Clinic { clinic_id: number; clinic_name: string }
 interface PatientRow {
@@ -14,7 +14,9 @@ interface PatientRow {
 }
 
 export function PacjenciPlacowki() {
+  const queryClient = useQueryClient()
   const [q, setQ] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const { data: clinics } = useQuery({ queryKey: ['clinics'], queryFn: () => api<Clinic[]>('/clinics') })
   const clinic = clinics?.[0]
 
@@ -22,6 +24,12 @@ export function PacjenciPlacowki() {
     queryKey: ['clinic-patients', clinic?.clinic_id],
     queryFn: () => api<PatientRow[]>(`/clinics/${clinic!.clinic_id}/patients`),
     enabled: !!clinic,
+  })
+
+  const verify = useMutation({
+    mutationFn: (patientId: number) => api(`/patients/${patientId}/verify-insurance`, { method: 'POST' }),
+    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Weryfikacja eWUŚ nie powiodła się.'),
   })
 
   const filtered = (patients ?? []).filter(p =>
@@ -42,6 +50,8 @@ export function PacjenciPlacowki() {
         />
       </div>
 
+      {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+
       <Tile className="overflow-hidden p-0" delay={60}>
         {filtered.length === 0 ? (
           <EmptyState
@@ -53,8 +63,8 @@ export function PacjenciPlacowki() {
           <table className="w-full text-sm [font-variant-numeric:tabular-nums]">
             <thead>
               <tr>
-                {['Pacjent', 'PESEL', 'Status eWUŚ'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase">{h}</th>
+                {['Pacjent', 'PESEL', 'Status eWUŚ', ''].map((h, i) => (
+                  <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -67,6 +77,12 @@ export function PacjenciPlacowki() {
                     {p.insurance_status
                       ? <Badge tone="success">ubezpieczony</Badge>
                       : <Badge tone="warn">brak potwierdzenia</Badge>}
+                  </td>
+                  <td className="border-t border-gray-100 px-4 py-3.5 text-right">
+                    <Button size="sm" variant="secondary" disabled={verify.isPending}
+                      onClick={() => verify.mutate(p.patient_id)}>
+                      <ShieldCheck size={14} /> Weryfikuj eWUŚ
+                    </Button>
                   </td>
                 </tr>
               ))}

@@ -11,6 +11,8 @@ from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.documents import DocumentStatus, DocumentType, ReferralType
 from app.integrations.base import IntegrationError
+from app.integrations.ewus import EwusClient, get_ewus_client
+from app.integrations.lab import LabClient, get_lab_client
 from app.integrations.p1 import P1Client, get_p1_client
 from app.integrations.zus import ZusClient, get_zus_client
 from app.models import (
@@ -185,9 +187,11 @@ def issue_referral(
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
     p1: P1Client = Depends(get_p1_client),
+    lab: LabClient = Depends(get_lab_client),
 ):
     """UC-L2/L4. NURSING = skierowanie wewnętrzne (od razu ACTIVE, własny kod,
-    bez P1); LAB/SPECIALIST idą przez P1 jak e-skierowanie."""
+    bez P1); LAB/SPECIALIST idą przez P1 jak e-skierowanie. Skierowanie LAB
+    rejestruje też zlecenie w systemie laboratorium (UC-I2)."""
     validate_visit(db, user, patient_id, body.appointment_id)
     patient = db.get(Patient, patient_id)
     payload = json.dumps(body.model_dump(exclude={"appointment_id"}), ensure_ascii=False)
@@ -223,7 +227,18 @@ def issue_referral(
     db.add(Referral(document_id=doc.document_id, referral_code=code,
                     referral_type=body.referral_type.value, notes=body.notes))
     db.commit()
-    return document_out(db, doc)
+
+    # rejestracja zlecenia w laboratorium (best-effort — wynik przyjdzie synchronizacją)
+    lab_warning = None
+    if body.referral_type == ReferralType.LAB:
+        try:
+            lab.create_order(
+                pesel=patient.pesel, referral_code=code,
+                test_type=(body.notes or "Badanie laboratoryjne")[:100],
+            )
+        except IntegrationError as exc:
+            lab_warning = exc.message
+    return document_out(db, doc, error_message=lab_warning)
 
 
 @router.post("/patients/{patient_id}/sick-leaves", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
@@ -376,6 +391,30 @@ def patient_info(
         patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
         pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
         phone_number=user.phone_number,
+    )
+
+
+@router.post("/patients/{patient_id}/verify-insurance", response_model=PatientInfoOut)
+def verify_insurance(
+    patient_id: int,
+    user: AppUser = Depends(require_roles(*STAFF_ROLES)),
+    db: Session = Depends(get_db),
+    ewus: EwusClient = Depends(get_ewus_client),
+):
+    """UC-I4 / sekwencji eWUŚ: ręczna weryfikacja ubezpieczenia przez personel."""
+    p = db.get(Patient, patient_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    try:
+        p.insurance_status = ewus.verify(pesel=p.pesel)
+    except IntegrationError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    db.commit()
+    app_user = db.get(AppUser, patient_id)
+    return PatientInfoOut(
+        patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
+        pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
+        phone_number=app_user.phone_number,
     )
 
 

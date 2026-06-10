@@ -22,6 +22,19 @@ export interface AppointmentOut {
   clinic_name: string
   patient_id: number | null
   patient_name: string | null
+  price: number | null
+}
+
+export interface PaymentInfo {
+  payment_id: number
+  provider_ref: string
+  amount: number
+  payment_status: 'PENDING' | 'PAID' | 'FAILED'
+}
+
+export interface BookOut {
+  appointment: AppointmentOut
+  payment: PaymentInfo | null
 }
 
 export interface DocumentOut {

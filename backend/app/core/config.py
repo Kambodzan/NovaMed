@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Mock-serwisy integracji (mocks/) — podmiana na realne systemy przez env
     p1_base_url: str = "http://localhost:8101"
     zus_base_url: str = "http://localhost:8102"
+    ewus_base_url: str = "http://localhost:8103"
+    lab_base_url: str = "http://localhost:8104"
+    payments_base_url: str = "http://localhost:8105"
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
 

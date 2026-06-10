@@ -37,6 +37,7 @@ export function Terminy() {
     date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
     time: '09:00',
     type: 'STATIONARY',
+    price: '',
   })
   const doctorId = form.doctor_id || String(doctors?.[0]?.doctor_id ?? '')
 
@@ -47,6 +48,7 @@ export function Terminy() {
         doctor_id: Number(doctorId),
         datetimes: [`${form.date}T${form.time}:00`],
         appointment_type: form.type,
+        price: form.price ? Number(form.price) : null,
       },
     }),
     onSuccess: () => {
@@ -80,7 +82,7 @@ export function Terminy() {
       <Tile delay={60}>
         <TileHeader title="Dodaj wolny termin" />
         <form
-          className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+          className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto]"
           onSubmit={e => { e.preventDefault(); addSlot.mutate() }}
         >
           <Field label="Lekarz">
@@ -101,6 +103,10 @@ export function Terminy() {
               <option value="STATIONARY">stacjonarna</option>
               <option value="ONLINE">teleporada</option>
             </select>
+          </Field>
+          <Field label="Cena [zł]" hint="puste = NFZ">
+            <input type="number" min="0" step="10" className={inputCls} value={form.price}
+              onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="—" />
           </Field>
           <div className="flex items-end">
             <Button disabled={addSlot.isPending || !doctorId} type="submit"><Plus size={15} /> Dodaj</Button>
@@ -131,6 +137,9 @@ export function Terminy() {
                         {formatTime(s.appointment_datetime)}
                         <span className={cx('ml-1 font-semibold', s.appointment_type === 'ONLINE' ? 'text-sky-600' : 'text-gray-400')}>
                           {s.appointment_type === 'ONLINE' ? 'online' : 'stacj.'}
+                        </span>
+                        <span className={cx('ml-1', s.price ? 'text-gray-900' : 'text-emerald-700')}>
+                          {s.price ? `${s.price} zł` : 'NFZ'}
                         </span>
                       </span>
                     </li>

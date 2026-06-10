@@ -1,5 +1,7 @@
+import itertools
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import jwt
 import pytest
@@ -10,8 +12,64 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.core.db import Base, get_db
+from app.integrations.base import IntegrationError
+from app.integrations.ewus import get_ewus_client
+from app.integrations.lab import get_lab_client
+from app.integrations.payments import get_payments_client
 from app.main import app
 from app.models import AppUser, Clinic, Doctor, Patient, Role, StaffClinic
+
+
+class FakeEwus:
+    def __init__(self):
+        self.insured = True
+        self.fail = False
+        self.calls: list[str] = []
+
+    def verify(self, *, pesel: str) -> bool:
+        if self.fail:
+            raise IntegrationError("eWUŚ niedostępny (test).")
+        self.calls.append(pesel)
+        return self.insured
+
+
+class FakeLab:
+    def __init__(self):
+        self.orders: list[dict] = []
+        self.results: list[dict] = []
+        self.acked: list[str] = []
+        self.fail = False
+
+    def create_order(self, *, pesel: str, referral_code: str, test_type: str) -> None:
+        if self.fail:
+            raise IntegrationError("Laboratorium niedostępne (test).")
+        self.orders.append({"pesel": pesel, "referral_code": referral_code, "test_type": test_type})
+
+    def fetch_ready_results(self) -> list[dict]:
+        if self.fail:
+            raise IntegrationError("Laboratorium niedostępne (test).")
+        return list(self.results)
+
+    def acknowledge(self, referral_code: str) -> None:
+        self.acked.append(referral_code)
+
+
+class FakePayments:
+    def __init__(self):
+        self._counter = itertools.count(1)
+        self.payments: dict[str, str] = {}
+
+    def create_payment(self, *, amount: float, reference: str) -> str:
+        ref = f"PAY-T{next(self._counter)}"
+        self.payments[ref] = "PENDING"
+        return ref
+
+    def confirm(self, *, provider_ref: str, outcome: str) -> str:
+        self.payments[provider_ref] = "PAID" if outcome == "success" else "FAILED"
+        return self.payments[provider_ref]
+
+    def get_status(self, *, provider_ref: str) -> str:
+        return self.payments[provider_ref]
 
 TEST_SECRET = "test-jwt-secret-0123456789abcdefghijklmn"
 
@@ -35,13 +93,22 @@ def db_session():
 
 
 @pytest.fixture()
-def client(db_session, monkeypatch):
+def integration_fakes():
+    """Fake-klienty integracji M6 — testy są hermetyczne (zero HTTP)."""
+    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments())
+
+
+@pytest.fixture()
+def client(db_session, monkeypatch, integration_fakes):
     monkeypatch.setattr(settings, "supabase_jwt_secret", TEST_SECRET)
 
     def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_ewus_client] = lambda: integration_fakes.ewus
+    app.dependency_overrides[get_lab_client] = lambda: integration_fakes.lab
+    app.dependency_overrides[get_payments_client] = lambda: integration_fakes.payments
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

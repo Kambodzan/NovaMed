@@ -66,9 +66,10 @@ def test_rezerwacja_i_podwojna_rezerwacja(client, setup, factory):
     slot_id = make_slot(client, setup)
     resp = client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))
     assert resp.status_code == 200
-    body = resp.json()
+    body = resp.json()["appointment"]
     assert body["appointment_status"] == "CONFIRMED"
     assert body["patient_name"] == "Jan Testowy"
+    assert resp.json()["payment"] is None  # wizyta bezpłatna — bez płatności
 
     # drugi pacjent — termin zajęty
     _, other_token = factory.patient()

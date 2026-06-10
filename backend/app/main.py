@@ -7,6 +7,7 @@ from app.api.appointments import router as appointments_router
 from app.api.auth import router as auth_router
 from app.api.clinics import router as clinics_router
 from app.api.documents import router as documents_router
+from app.api.integrations import router as integrations_router
 from app.api.procedures import router as procedures_router
 from app.api.reports import router as reports_router
 from app.core.config import settings
@@ -26,6 +27,7 @@ app.include_router(appointments_router)
 app.include_router(documents_router)
 app.include_router(procedures_router)
 app.include_router(reports_router)
+app.include_router(integrations_router)
 
 
 @app.get("/health")

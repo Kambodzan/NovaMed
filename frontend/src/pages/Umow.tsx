@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronRight, MapPin, Video, CalendarDays } from 'lucide-react'
+import { Check, ChevronRight, CreditCard, MapPin, Video, CalendarDays, XCircle } from 'lucide-react'
 import { Button, DateChip, EmptyState, Tile, TileHeader, cx } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { dayNo, formatTime, monthShort } from '../lib/format'
-import type { AppointmentOut } from '../lib/types'
+import type { AppointmentOut, BookOut } from '../lib/types'
+
+type PayPhase = 'idle' | 'awaiting' | 'success' | 'declined'
 
 export function Umow() {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [spec, setSpec] = useState<string | null>(null)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
+  const [booked, setBooked] = useState<BookOut | null>(null)
+  const [payPhase, setPayPhase] = useState<PayPhase>('idle')
   const [error, setError] = useState<string | null>(null)
 
   const { data: allSlots } = useQuery({
@@ -31,14 +35,41 @@ export function Umow() {
     [allSlots, spec],
   )
 
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
+    void queryClient.invalidateQueries({ queryKey: ['slots'] })
+  }
+
   const book = useMutation({
-    mutationFn: (id: number) => api<AppointmentOut>(`/appointments/${id}/book`, { method: 'POST' }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
-      void queryClient.invalidateQueries({ queryKey: ['slots'] })
+    mutationFn: (id: number) => api<BookOut>(`/appointments/${id}/book`, { method: 'POST' }),
+    onSuccess: (data) => {
+      setBooked(data)
+      setPayPhase(data.payment ? 'awaiting' : 'success')
+      setError(null)
+      invalidate()
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zarezerwować terminu.'),
   })
+
+  const pay = useMutation({
+    mutationFn: ({ id, outcome }: { id: number; outcome: 'success' | 'failure' }) =>
+      api<BookOut>(`/appointments/${id}/pay`, { method: 'POST', body: { outcome } }),
+    onSuccess: (data) => {
+      setPayPhase(data.payment?.payment_status === 'PAID' ? 'success' : 'declined')
+      setError(null)
+      invalidate()
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Płatność nie powiodła się.'),
+  })
+
+  const resetToSlots = () => {
+    setBooked(null)
+    setPayPhase('idle')
+    setError(null)
+    setStep(2)
+    book.reset()
+    pay.reset()
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -107,7 +138,12 @@ export function Umow() {
                       : <><MapPin size={12} /> {s.clinic_name}</>}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => { setSlot(s); setStep(3); setError(null); book.reset() }}>Wybierz</Button>
+                <span className={cx('text-sm font-extrabold', s.price ? 'text-gray-900' : 'text-emerald-700')}>
+                  {s.price ? `${s.price} zł` : 'NFZ'}
+                </span>
+                <Button size="sm" onClick={() => { setSlot(s); setStep(3); setError(null); setBooked(null); setPayPhase('idle') }}>
+                  Wybierz
+                </Button>
               </li>
             ))}
           </ul>
@@ -117,8 +153,8 @@ export function Umow() {
       {step === 3 && slot && (
         <Tile delay={60}>
           <TileHeader
-            title="Potwierdzenie rezerwacji"
-            action={!book.isSuccess ? <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Zmień termin</Button> : undefined}
+            title={booked ? 'Płatność' : 'Potwierdzenie rezerwacji'}
+            action={payPhase === 'idle' ? <Button variant="ghost" size="sm" onClick={resetToSlots}>Zmień termin</Button> : undefined}
           />
           <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-gray-50 p-4">
             <DateChip month={monthShort(slot.appointment_datetime)} day={dayNo(slot.appointment_datetime)} time={formatTime(slot.appointment_datetime)} />
@@ -128,29 +164,71 @@ export function Umow() {
                 {slot.specialization} · {slot.appointment_type === 'ONLINE' ? 'teleporada' : slot.clinic_name}
               </p>
             </div>
+            <span className={cx('text-xl font-extrabold', slot.price ? 'text-gray-900' : 'text-emerald-700')}>
+              {slot.price ? `${slot.price} zł` : 'NFZ'}
+            </span>
           </div>
 
-          <div className="mt-4">
-            {book.isSuccess ? (
+          <div className="mt-4 space-y-3">
+            {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+
+            {payPhase === 'idle' && (
+              <>
+                <p className="text-sm font-medium text-gray-500">
+                  {slot.price
+                    ? 'Po rezerwacji termin blokujemy na czas płatności. Wizyta zostanie potwierdzona po jej zaksięgowaniu.'
+                    : 'Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.'}
+                </p>
+                <Button size="lg" disabled={book.isPending} onClick={() => book.mutate(slot.appointment_id)}>
+                  {book.isPending ? 'Rezerwowanie…' : slot.price ? 'Rezerwuję i przechodzę do płatności' : 'Rezerwuję termin'}
+                </Button>
+              </>
+            )}
+
+            {payPhase === 'awaiting' && booked?.payment && (
+              <>
+                <p className="text-sm font-medium text-gray-500">
+                  Termin zablokowany. Do zapłaty: <span className="font-extrabold text-gray-900">{booked.payment.amount} zł</span>.
+                  Operator płatności jest symulowany — wybierz wynik autoryzacji.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button size="lg" disabled={pay.isPending}
+                    onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'success' })}>
+                    <CreditCard size={17} /> Zapłać kartą (symulacja)
+                  </Button>
+                  <Button size="lg" variant="secondary" disabled={pay.isPending}
+                    onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'failure' })}>
+                    Symuluj odmowę płatności
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {payPhase === 'success' && (
               <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={16} /></span>
                 <div>
-                  <p className="font-extrabold text-emerald-800">Wizyta potwierdzona</p>
+                  <p className="font-extrabold text-emerald-800">Wizyta potwierdzona{slot.price ? ' i opłacona' : ''}</p>
                   <p className="mt-0.5 text-sm font-medium text-emerald-700">
                     Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.
                   </p>
                 </div>
               </div>
-            ) : (
-              <>
-                <p className="mb-3 text-sm font-medium text-gray-500">
-                  Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.
-                </p>
-                {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-                <Button size="lg" disabled={book.isPending} onClick={() => book.mutate(slot.appointment_id)}>
-                  {book.isPending ? 'Rezerwowanie…' : 'Rezerwuję termin'}
-                </Button>
-              </>
+            )}
+
+            {payPhase === 'declined' && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"><XCircle size={16} /></span>
+                  <div>
+                    <p className="font-extrabold text-red-700">Płatność odrzucona</p>
+                    <p className="mt-0.5 text-sm font-medium text-red-600">
+                      Termin wrócił do puli wolnych terminów. Możesz spróbować ponownie lub wybrać inny termin.
+                    </p>
+                  </div>
+                </div>
+                <Button variant="secondary" onClick={resetToSlots}>Wróć do terminów</Button>
+              </div>
             )}
           </div>
         </Tile>
