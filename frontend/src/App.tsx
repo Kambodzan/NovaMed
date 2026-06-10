@@ -9,6 +9,7 @@ import { Start } from './pages/Start'
 import { Umow } from './pages/Umow'
 import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
+import { Telewizyta } from './pages/Telewizyta'
 import { LekarzDzien } from './pages/lekarz/Dzien'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="umow" element={<Umow />} />
           <Route path="wizyty" element={<Wizyty />} />
           <Route path="dokumentacja" element={<Dokumentacja />} />
+          <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}
@@ -105,6 +107,7 @@ export default function App() {
       {token && me && role === 'lekarz' && (
         <Route path="/" element={<LekarzLayout />}>
           <Route index element={<LekarzDzien />} />
+          <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}

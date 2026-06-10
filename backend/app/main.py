@@ -13,6 +13,7 @@ from app.api.notifications import router as notifications_router
 from app.api.procedures import router as procedures_router
 from app.api.reports import router as reports_router
 from app.api.reviews import router as reviews_router
+from app.api.telemed import router as telemed_router
 from app.api.waitlist import router as waitlist_router
 from app.core.config import settings
 from app.core.db import get_db
@@ -36,6 +37,7 @@ app.include_router(notifications_router)
 app.include_router(reviews_router)
 app.include_router(waitlist_router)
 app.include_router(admin_router)
+app.include_router(telemed_router)
 
 
 @app.get("/health")

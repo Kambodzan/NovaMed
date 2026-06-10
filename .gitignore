@@ -28,3 +28,6 @@ Thumbs.db
 
 # Pliki robocze
 *.log
+
+# Załączniki telewizyt (dev)
+backend/uploads/

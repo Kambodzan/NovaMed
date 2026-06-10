@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+export const WS_URL = API_URL.replace(/^http/, 'ws')
 
 export class ApiError extends Error {
   status: number
@@ -12,6 +13,11 @@ let tokenProvider: () => string | null = () => null
 
 export function setTokenProvider(fn: () => string | null) {
   tokenProvider = fn
+}
+
+/** Aktualny token (np. do WebSocketu i pobierania plików). */
+export function getAuthToken(): string | null {
+  return tokenProvider()
 }
 
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {

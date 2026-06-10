@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, MapPin, Video } from 'lucide-react'
 import { Button, EmptyState, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
@@ -11,6 +12,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10)
 
 export function LekarzDzien() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [day, setDay] = useState(todayIso())
   const [karta, setKarta] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,12 +83,22 @@ export function LekarzDzien() {
                   <div className="flex gap-2">
                     {v.appointment_status === 'CONFIRMED' && (
                       <>
-                        <Button size="sm" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'IN_PROGRESS' })}>Rozpocznij</Button>
+                        <Button size="sm" onClick={() => {
+                          changeStatus.mutate({ id: v.appointment_id, status: 'IN_PROGRESS' })
+                          if (v.appointment_type === 'ONLINE') navigate(`/telewizyta/${v.appointment_id}`)
+                        }}>
+                          {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : 'Rozpocznij'}
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'NO_SHOW' })}>Nie stawił się</Button>
                       </>
                     )}
                     {now && (
                       <>
+                        {v.appointment_type === 'ONLINE' && (
+                          <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
+                            <Video size={14} /> Wróć do rozmowy
+                          </Button>
+                        )}
                         <Button size="sm" variant="secondary" onClick={() => setKarta(v)}>Karta pacjenta</Button>
                         <Button size="sm" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'COMPLETED' })}>Zakończ</Button>
                       </>

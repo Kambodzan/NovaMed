@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, Check, MapPin, Star, Video } from 'lucide-react'
 import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
@@ -8,6 +9,7 @@ import type { AppointmentOut } from '../lib/types'
 
 export function Wizyty() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [cancelFor, setCancelFor] = useState<AppointmentOut | null>(null)
   const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
   const [reviewFor, setReviewFor] = useState<AppointmentOut | null>(null)
@@ -30,7 +32,8 @@ export function Wizyty() {
   })
 
   const upcoming = (visits ?? [])
-    .filter(v => ['CONFIRMED', 'TEMP_LOCK'].includes(v.appointment_status) && isFuture(v.appointment_datetime))
+    .filter(v => ['CONFIRMED', 'TEMP_LOCK', 'IN_PROGRESS'].includes(v.appointment_status)
+      && (isFuture(v.appointment_datetime) || v.appointment_status === 'IN_PROGRESS'))
     .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))
   const past = (visits ?? []).filter(v => !upcoming.includes(v))
 
@@ -50,9 +53,19 @@ export function Wizyty() {
         <StatusBadge status={v.appointment_status} />
         {actions && v.appointment_status === 'CONFIRMED' && (
           <div className="flex gap-2">
+            {v.appointment_type === 'ONLINE' && (
+              <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
+                <Video size={14} /> Rozpocznij
+              </Button>
+            )}
             <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setError(null) }}>Zmień termin</Button>
             <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>Anuluj</Button>
           </div>
+        )}
+        {actions && v.appointment_status === 'IN_PROGRESS' && v.appointment_type === 'ONLINE' && (
+          <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
+            <Video size={14} /> Dołącz do wizyty
+          </Button>
         )}
         {actions && v.appointment_status === 'TEMP_LOCK' && (
           <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>Zwolnij rezerwację</Button>
