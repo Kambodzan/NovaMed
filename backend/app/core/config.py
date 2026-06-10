@@ -13,5 +13,9 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = "dev-secret-do-podmiany"
     supabase_jwt_aud: str = "authenticated"
 
+    # Mock-serwisy integracji (mocks/) — podmiana na realne systemy przez env
+    p1_base_url: str = "http://localhost:8101"
+    zus_base_url: str = "http://localhost:8102"
+
 
 settings = Settings()

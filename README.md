@@ -66,6 +66,9 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
   - testy: `.\.venv\Scripts\python.exe -m pytest -q`
   - serwer: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
   - migracje: `.\.venv\Scripts\python.exe -m alembic upgrade head` (nowa: `... revision --autogenerate -m "..."`)
+- **Mock-serwisy** (venv backendu; z katalogu danego mocka):
+  - P1: `cd mocks/p1` → `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port 8101`
+  - ZUS e-ZLA: `cd mocks/zus` → `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port 8102`
 - **Makiety UI** (z `mockupy-ui/`): `npm run dev` → localhost:5173
 
 ## Konwencje
