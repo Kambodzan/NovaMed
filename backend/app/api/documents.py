@@ -68,6 +68,7 @@ class DocumentOut(BaseModel):
     document_status: str
     issued_at: datetime
     patient_id: int
+    patient_name: str
     doctor_name: str
     code: str | None = None
     details: str | None = None
@@ -78,6 +79,7 @@ class DocumentOut(BaseModel):
 
 def document_out(db: Session, doc: MedicalDocument, error_message: str | None = None) -> DocumentOut:
     doctor_user = db.get(AppUser, doc.doctor_id)
+    patient = db.get(Patient, doc.patient_id)
     code = None
     details = doc.document_content
     if doc.document_type == DocumentType.PRESCRIPTION.value:
@@ -103,6 +105,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         document_status=doc.document_status,
         issued_at=doc.issued_at,
         patient_id=doc.patient_id,
+        patient_name=f"{patient.first_name} {patient.last_name}",
         doctor_name=doctor_user.username,
         code=code,
         details=details,
@@ -347,6 +350,34 @@ def resend_document(
 
 
 # ---------- wgląd ----------
+
+class PatientInfoOut(BaseModel):
+    patient_id: int
+    first_name: str
+    last_name: str
+    pesel: str
+    birth_date: date
+    insurance_status: bool
+    phone_number: str | None
+
+
+@router.get("/patients/{patient_id}", response_model=PatientInfoOut)
+def patient_info(
+    patient_id: int,
+    _: AppUser = Depends(require_roles(*STAFF_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Nagłówek karty pacjenta dla personelu (UC-L1, UC-N1)."""
+    p = db.get(Patient, patient_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    user = db.get(AppUser, patient_id)
+    return PatientInfoOut(
+        patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
+        pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
+        phone_number=user.phone_number,
+    )
+
 
 @router.get("/patients/{patient_id}/documents", response_model=list[DocumentOut])
 def patient_documents(

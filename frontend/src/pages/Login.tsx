@@ -58,13 +58,25 @@ export function Login() {
       </Tile>
 
       {DEV_MODE && (
-        <button
-          onClick={() => void submit('janina.wisniewska@novamed.dev')}
-          className="fade-up mt-4 cursor-pointer text-xs font-bold text-gray-400 underline-offset-4 hover:text-primary hover:underline"
-          style={{ animationDelay: '160ms' }}
-        >
-          Demo: zaloguj jako Janina Wiśniewska (pacjentka)
-        </button>
+        <div className="fade-up mt-5 text-center" style={{ animationDelay: '160ms' }}>
+          <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">Konta demo (tryb dev)</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {[
+              ['janina.wisniewska@novamed.dev', 'Pacjentka'],
+              ['a.kowalczyk@novamed.dev', 'Lekarka'],
+              ['k.lis@novamed.dev', 'Pielęgniarka'],
+              ['rejestracja@novamed.dev', 'Rejestracja'],
+            ].map(([demoEmail, label]) => (
+              <button
+                key={demoEmail}
+                onClick={() => void submit(demoEmail)}
+                className="tile-shadow cursor-pointer rounded-full bg-surface px-3.5 py-1.5 text-xs font-bold text-gray-600 hover:text-primary"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )

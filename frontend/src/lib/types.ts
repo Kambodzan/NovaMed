@@ -30,8 +30,19 @@ export interface DocumentOut {
   document_status: string
   issued_at: string
   patient_id: number
+  patient_name: string
   doctor_name: string
   code: string | null
   details: string | null
   error_message: string | null
+}
+
+export interface PatientInfo {
+  patient_id: number
+  first_name: string
+  last_name: string
+  pesel: string
+  birth_date: string
+  insurance_status: boolean
+  phone_number: string | null
 }

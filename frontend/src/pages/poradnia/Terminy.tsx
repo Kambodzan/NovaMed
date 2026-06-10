@@ -1,0 +1,147 @@
+import { useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarRange, Plus } from 'lucide-react'
+import { Button, DateChip, EmptyState, Field, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
+import { api, ApiError } from '../../lib/api'
+import { dayNo, formatTime, monthShort } from '../../lib/format'
+import type { AppointmentOut } from '../../lib/types'
+
+interface Clinic { clinic_id: number; clinic_name: string }
+interface DoctorRow { doctor_id: number; name: string; specialization: string | null }
+
+export function Terminy() {
+  const queryClient = useQueryClient()
+  const [error, setError] = useState<string | null>(null)
+  const [ok, setOk] = useState<string | null>(null)
+
+  const { data: clinics } = useQuery({
+    queryKey: ['clinics'],
+    queryFn: () => api<Clinic[]>('/clinics'),
+  })
+  const clinic = clinics?.[0]
+
+  const { data: doctors } = useQuery({
+    queryKey: ['clinic-doctors', clinic?.clinic_id],
+    queryFn: () => api<DoctorRow[]>(`/clinics/${clinic!.clinic_id}/doctors`),
+    enabled: !!clinic,
+  })
+
+  const { data: slots } = useQuery({
+    queryKey: ['clinic-slots', clinic?.clinic_id],
+    queryFn: () => api<AppointmentOut[]>(`/slots?clinic_id=${clinic!.clinic_id}`),
+    enabled: !!clinic,
+  })
+
+  const [form, setForm] = useState({
+    doctor_id: '',
+    date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    time: '09:00',
+    type: 'STATIONARY',
+  })
+  const doctorId = form.doctor_id || String(doctors?.[0]?.doctor_id ?? '')
+
+  const addSlot = useMutation({
+    mutationFn: () => api(`/clinics/${clinic!.clinic_id}/slots`, {
+      method: 'POST',
+      body: {
+        doctor_id: Number(doctorId),
+        datetimes: [`${form.date}T${form.time}:00`],
+        appointment_type: form.type,
+      },
+    }),
+    onSuccess: () => {
+      setError(null)
+      setOk(`Dodano termin ${form.date} ${form.time}.`)
+      void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] })
+    },
+    onError: (e) => { setOk(null); setError(e instanceof ApiError ? e.message : 'Nie udało się dodać terminu.') },
+  })
+
+  const slotsByDoctor = useMemo(() => {
+    const map = new Map<string, AppointmentOut[]>()
+    for (const s of slots ?? []) {
+      const list = map.get(s.doctor_name) ?? []
+      list.push(s)
+      map.set(s.doctor_name, list)
+    }
+    return [...map.entries()]
+  }, [slots])
+
+  return (
+    <div className="space-y-6">
+      <div className="fade-up">
+        <PageHeader
+          overline={clinic?.clinic_name ?? '…'}
+          title="Terminy wizyt"
+          sub="Dodawanie wolnych terminów do kalendarzy lekarzy (UC-PP2)"
+        />
+      </div>
+
+      <Tile delay={60}>
+        <TileHeader title="Dodaj wolny termin" />
+        <form
+          className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+          onSubmit={e => { e.preventDefault(); addSlot.mutate() }}
+        >
+          <Field label="Lekarz">
+            <select className={inputCls} value={doctorId} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))}>
+              {(doctors ?? []).map(d => (
+                <option key={d.doctor_id} value={d.doctor_id}>{d.name} — {d.specialization}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Data">
+            <input type="date" className={inputCls} required value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          </Field>
+          <Field label="Godzina">
+            <input type="time" className={inputCls} required value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+          </Field>
+          <Field label="Forma">
+            <select className={inputCls} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+              <option value="STATIONARY">stacjonarna</option>
+              <option value="ONLINE">teleporada</option>
+            </select>
+          </Field>
+          <div className="flex items-end">
+            <Button disabled={addSlot.isPending || !doctorId} type="submit"><Plus size={15} /> Dodaj</Button>
+          </div>
+        </form>
+        {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+        {ok && <p className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700">{ok}</p>}
+      </Tile>
+
+      <Tile className="p-5" delay={120}>
+        <TileHeader title={`Wolne terminy (${slots?.length ?? 0})`} />
+        {slotsByDoctor.length === 0 ? (
+          <EmptyState
+            icon={<CalendarRange size={28} strokeWidth={1.5} />}
+            title="Brak wolnych terminów"
+            hint="Dodaj terminy formularzem powyżej."
+          />
+        ) : (
+          <div className="space-y-4">
+            {slotsByDoctor.map(([doctor, list]) => (
+              <div key={doctor}>
+                <p className="mb-2 text-sm font-extrabold text-gray-900">{doctor} <span className="font-semibold text-gray-400">· {list.length} terminów</span></p>
+                <ul className="flex flex-wrap gap-2">
+                  {list.slice(0, 8).map(s => (
+                    <li key={s.appointment_id} className="flex items-center gap-2 rounded-2xl bg-gray-50 p-2 pr-3">
+                      <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} />
+                      <span className="text-xs font-bold text-gray-600 [font-variant-numeric:tabular-nums]">
+                        {formatTime(s.appointment_datetime)}
+                        <span className={cx('ml-1 font-semibold', s.appointment_type === 'ONLINE' ? 'text-sky-600' : 'text-gray-400')}>
+                          {s.appointment_type === 'ONLINE' ? 'online' : 'stacj.'}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                  {list.length > 8 && <li className="self-center text-xs font-bold text-gray-400">+{list.length - 8} więcej</li>}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </Tile>
+    </div>
+  )
+}
