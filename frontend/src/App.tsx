@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, Plug, Users } from 'lucide-react'
+import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, KeyRound as KeyIcon, Plug, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { Login } from './pages/Login'
@@ -10,6 +10,8 @@ import { Umow } from './pages/Umow'
 import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
 import { Telewizyta } from './pages/Telewizyta'
+import { Udostepnij } from './pages/Udostepnij'
+import { KodOdPacjenta } from './pages/KodOdPacjenta'
 import { LekarzDzien } from './pages/lekarz/Dzien'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
@@ -22,7 +24,13 @@ import { AdminMonitoring } from './pages/admin/Monitoring'
 
 function LekarzLayout() {
   return (
-    <ProShell brand="Portal Lekarza" nav={[{ to: '/', label: 'Mój dzień', icon: CalendarDays, end: true }]}>
+    <ProShell
+      brand="Portal Lekarza"
+      nav={[
+        { to: '/', label: 'Mój dzień', icon: CalendarDays, end: true },
+        { to: '/kod', label: 'Kod od pacjenta', icon: FileSignature },
+      ]}
+    >
       <Outlet />
     </ProShell>
   )
@@ -35,6 +43,7 @@ function PielegniarkaLayout() {
       nav={[
         { to: '/', label: 'Zabiegi', icon: ClipboardList, end: true },
         { to: '/skierowania', label: 'Skierowania', icon: FileSignature },
+        { to: '/kod', label: 'Kod od pacjenta', icon: KeyIcon },
       ]}
     >
       <Outlet />
@@ -99,6 +108,7 @@ export default function App() {
           <Route path="umow" element={<Umow />} />
           <Route path="wizyty" element={<Wizyty />} />
           <Route path="dokumentacja" element={<Dokumentacja />} />
+          <Route path="udostepnij" element={<Udostepnij />} />
           <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
@@ -107,6 +117,7 @@ export default function App() {
       {token && me && role === 'lekarz' && (
         <Route path="/" element={<LekarzLayout />}>
           <Route index element={<LekarzDzien />} />
+          <Route path="kod" element={<KodOdPacjenta />} />
           <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
@@ -116,6 +127,7 @@ export default function App() {
         <Route path="/" element={<PielegniarkaLayout />}>
           <Route index element={<Zabiegi />} />
           <Route path="skierowania" element={<Skierowania />} />
+          <Route path="kod" element={<KodOdPacjenta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}

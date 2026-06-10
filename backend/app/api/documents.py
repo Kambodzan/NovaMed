@@ -2,7 +2,7 @@ import json
 import secrets
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.documents import DocumentStatus, DocumentType, ReferralType
 from app.domain.notify import notify
+from app.domain.pdf import render_document_pdf
 from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
 from app.integrations.lab import LabClient, get_lab_client
@@ -471,6 +472,42 @@ def my_documents(
         .order_by(MedicalDocument.issued_at.desc())
     )
     return [document_out(db, d) for d in rows]
+
+
+@router.get("/documents/{document_id}/pdf")
+def document_pdf(
+    document_id: int,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """UC-P4: pobranie dokumentu jako PDF (pacjent — własne; personel — wszystkie)."""
+    doc = db.get(MedicalDocument, document_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nie istnieje.")
+    role = user.role.role_name
+    if role == "pacjent":
+        if doc.patient_id != user.user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do dokumentu innego pacjenta.")
+    elif role not in STAFF_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
+
+    out = document_out(db, doc)
+    patient = db.get(Patient, doc.patient_id)
+    pdf = render_document_pdf(
+        doc_label=DOC_LABELS.get(doc.document_type, "dokument").capitalize(),
+        patient_name=out.patient_name,
+        pesel=patient.pesel,
+        doctor_name=out.doctor_name,
+        issued_at=doc.issued_at.strftime("%d.%m.%Y %H:%M"),
+        status_label=doc.document_status,
+        code=out.code,
+        details=out.details,
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="novamed-dokument-{doc.document_id}.pdf"'},
+    )
 
 
 @router.get("/referrals/nursing", response_model=list[DocumentOut])

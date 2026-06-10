@@ -101,6 +101,7 @@ def integration_fakes():
 @pytest.fixture()
 def client(db_session, monkeypatch, integration_fakes):
     monkeypatch.setattr(settings, "supabase_jwt_secret", TEST_SECRET)
+    monkeypatch.setattr(settings, "reminders_enabled", False)  # pętla nie rusza w testach
 
     def override_get_db():
         yield db_session

@@ -6,6 +6,7 @@ from app.models.document import MedicalDocument, Prescription, Referral, LabResu
 from app.models.nursing import NursingProcedure
 from app.models.payment import Payment
 from app.models.review import Review
+from app.models.share import DocumentShare
 from app.models.notification import Notification
 from app.models.waitlist import WaitingListEntry
 
@@ -15,4 +16,5 @@ __all__ = [
     "Appointment",
     "MedicalDocument", "Prescription", "Referral", "LabResult", "SickLeave",
     "NursingProcedure", "Payment", "Review", "Notification", "WaitingListEntry",
+    "DocumentShare",
 ]

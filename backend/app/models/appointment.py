@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -26,6 +26,8 @@ class Appointment(Base):
     appointment_notes: Mapped[str | None] = mapped_column(Text)
     # Cena wizyty prywatnej; NULL = wizyta bezpłatna/NFZ (rozszerzenie ERD)
     price: Mapped[float | None] = mapped_column(Numeric(8, 2))
+    # Czy wysłano przypomnienie 24h przed wizytą (UC-P7)
+    reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")

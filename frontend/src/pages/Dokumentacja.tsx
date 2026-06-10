@@ -1,10 +1,23 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileSignature, FileText, FlaskConical, FolderOpen, Pill } from 'lucide-react'
-import { EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
-import { api } from '../lib/api'
+import { Download, FileSignature, FileText, FlaskConical, FolderOpen, Pill } from 'lucide-react'
+import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
+import { API_URL, api, getAuthToken } from '../lib/api'
 import { formatDatePL } from '../lib/format'
 import type { DocumentOut } from '../lib/types'
+
+async function downloadPdf(documentId: number) {
+  const resp = await fetch(`${API_URL}/documents/${documentId}/pdf`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  })
+  if (!resp.ok) return
+  const blob = await resp.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `novamed-dokument-${documentId}.pdf`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
 
 const docMeta: Record<DocumentOut['document_type'], { icon: typeof FileText; label: string }> = {
   PRESCRIPTION: { icon: Pill, label: 'E-recepta' },
@@ -69,7 +82,12 @@ export function Dokumentacja() {
                         )}
                       </p>
                     </div>
-                    <StatusBadge status={doc.document_status} />
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge status={doc.document_status} />
+                      <Button size="sm" variant="secondary" onClick={() => void downloadPdf(doc.document_id)}>
+                        <Download size={14} /> Pobierz PDF
+                      </Button>
+                    </div>
                   </div>
                 </Tile>
               </li>

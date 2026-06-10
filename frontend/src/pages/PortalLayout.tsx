@@ -9,6 +9,7 @@ const navItems = [
   { to: '/umow', label: 'Umów wizytę' },
   { to: '/wizyty', label: 'Moje wizyty' },
   { to: '/dokumentacja', label: 'Dokumentacja' },
+  { to: '/udostepnij', label: 'Udostępnij' },
 ]
 
 export function PortalLayout() {

@@ -24,5 +24,9 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
 
+    # Pętla przypomnień o wizytach (UC-P7); wyłączana w testach
+    reminders_enabled: bool = True
+    reminders_interval_seconds: int = 600
+
 
 settings = Settings()

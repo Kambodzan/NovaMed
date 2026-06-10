@@ -40,6 +40,24 @@ export interface WaitlistEntry {
   created_at: string
 }
 
+export interface ShareOut {
+  share_id: number
+  access_code: string
+  scope: string
+  scope_label: string
+  expires_at: string
+  revoked: boolean
+}
+
+export interface SharedDocsOut {
+  patient_id: number
+  patient_name: string
+  pesel: string
+  scope_label: string
+  expires_at: string
+  documents: DocumentOut[]
+}
+
 export interface AdminUser {
   user_id: number
   username: string
