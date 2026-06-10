@@ -55,6 +55,16 @@ siatka bento na dashboardach (sama składa się na mobile), soft chipy statusów
 kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementacja referencyjna:
 `mockupy-ui/src/{index.css,ui.tsx}`. Nie wymyślamy stylów per ekran — tylko tokeny ze wspólnym systemem designu.
 
+## Komendy dev
+
+- **Baza**: lokalna usługa PostgreSQL 16 (Windows, port 5432) — Docker na tej maszynie nie działa
+  (uszkodzony WSL); `docker-compose.yml` to wariant wdrożeniowy. URL: `backend/.env` (`DATABASE_URL`).
+- **Backend** (z `backend/`, venv w `backend/.venv`):
+  - testy: `.\.venv\Scripts\python.exe -m pytest -q`
+  - serwer: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
+  - migracje: `.\.venv\Scripts\python.exe -m alembic upgrade head` (nowa: `... revision --autogenerate -m "..."`)
+- **Makiety UI** (z `mockupy-ui/`): `npm run dev` → localhost:5173
+
 ## Konwencje
 
 - Dokumentacja i komentarze domenowe po polsku; kod (nazwy, identyfikatory) po angielsku.
