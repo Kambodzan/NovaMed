@@ -11,7 +11,9 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.domain.appointments import AppointmentStatus, AppointmentType
 from app.models import (
-    Appointment, AppUser, Clinic, Doctor, Nurse, Patient, Role, StaffClinic,
+    Appointment, AppUser, Clinic, Doctor, DocumentShare, LabResult,
+    MedicalDocument, Nurse, NursingProcedure, Patient, PatientClinic,
+    Prescription, Referral, Role, SickLeave, StaffClinic, WaitingListEntry,
 )
 
 DOCTORS = [
@@ -133,8 +135,122 @@ def main() -> None:
         ))
 
     db.commit()
+    demo_pack(db, clinic, doctor_ids, nurse_u.user_id, pat_u)
     print(f"Seed OK — klinika #{clinic.clinic_id}, lekarze: {len(doctor_ids)}, nowe sloty: {created_slots}")
     db.close()
+
+
+DEMO_SHARE_CODE = "DEM-234"  # znacznik pakietu demo + kod do testu „Kod od pacjenta"
+
+
+def demo_pack(db, clinic, doctor_ids: list[int], nurse_id: int, janina: AppUser) -> None:
+    """Pakiet danych demo: na KAŻDYM koncie demo da się przetestować wszystko.
+
+    - Lekarka: wizyty DZIŚ (zakończona / za 2h / teleporada za 3h) + kod DEM-234
+    - Pacjentka: zakończone wizyty (oceny), dokumenty każdego typu (PDF),
+      teleporada do wejścia, aktywne udostępnienie
+    - Pielęgniarka: zabieg zaplanowany dziś + skierowanie czekające w kolejce
+    - Rejestracja: pacjenci przypisani do placówki, dane do raportu, wpis
+      na liście oczekujących (dodanie slotów Kardiologa → powiadomienie)
+    """
+    if db.scalar(select(DocumentShare).where(DocumentShare.access_code == DEMO_SHARE_CODE)):
+        print("Pakiet demo już obecny — pomijam.")
+        return
+
+    kow = doctor_ids[0]  # dr Kowalczyk
+    now = datetime.now().replace(minute=0, second=0, microsecond=0)
+
+    # drugi pacjent demo
+    stan = get_or_create_user(db, "stan.gorski@novamed.dev", "Stanisław Górski", "pacjent")
+    if db.get(Patient, stan.user_id) is None:
+        db.add(Patient(
+            patient_id=stan.user_id, first_name="Stanisław", last_name="Górski",
+            pesel="48092367890", birth_date=date(1948, 9, 23), insurance_status=True,
+        ))
+
+    # przypisanie pacjentów do placówki (lista w Panelu Poradni)
+    for pid in (janina.user_id, stan.user_id):
+        if not db.scalar(select(PatientClinic).where(
+            PatientClinic.clinic_id == clinic.clinic_id, PatientClinic.patient_id == pid,
+        )):
+            db.add(PatientClinic(clinic_id=clinic.clinic_id, patient_id=pid, assigned_date=date.today()))
+
+    def visit(patient_id, dt, status_, type_=AppointmentType.STATIONARY, reminder=True):
+        a = Appointment(
+            patient_id=patient_id, doctor_id=kow, clinic_id=clinic.clinic_id,
+            appointment_datetime=dt, appointment_status=status_.value,
+            appointment_type=type_.value, reminder_sent=reminder,
+        )
+        db.add(a)
+        db.flush()
+        return a
+
+    # dzień lekarki DZIŚ + materiał na ocenę/raport/telewizytę.
+    # Nadchodzące wizyty nie mogą przeskoczyć za północ (seed odpalany wieczorem)
+    # — wtedy lądują jutro o sensownych godzinach.
+    upcoming_1 = now + timedelta(hours=2)
+    upcoming_2 = now + timedelta(hours=3)
+    if upcoming_2.date() != now.date():
+        upcoming_1 = (now + timedelta(days=1)).replace(hour=9)
+        upcoming_2 = (now + timedelta(days=1)).replace(hour=10)
+    v_done_today = visit(janina.user_id, now - timedelta(hours=2), AppointmentStatus.COMPLETED)
+    visit(stan.user_id, upcoming_1, AppointmentStatus.CONFIRMED, reminder=False)
+    visit(janina.user_id, upcoming_2, AppointmentStatus.CONFIRMED, AppointmentType.ONLINE, reminder=False)
+    v_old = visit(janina.user_id, (now - timedelta(days=7)).replace(hour=10), AppointmentStatus.COMPLETED)
+
+    def doc(appointment, dtype, dstatus, content=None):
+        d = MedicalDocument(
+            appointment_id=appointment.appointment_id, patient_id=appointment.patient_id,
+            doctor_id=kow, issued_at=appointment.appointment_datetime,
+            document_type=dtype, document_content=content, document_status=dstatus,
+        )
+        db.add(d)
+        db.flush()
+        return d
+
+    # komplet typów dokumentów u Janiny (testy PDF/filtrów/kodu dostępu)
+    d_rx = doc(v_old, "PRESCRIPTION", "CONFIRMED")
+    db.add(Prescription(document_id=d_rx.document_id, prescription_code="4521",
+                        prescribed_drugs="Amlodypina Bluefish 5 mg ×30 tabl. — D.S. 1×1 rano"))
+    d_lab = doc(v_old, "LAB_RESULT", "READY")
+    db.add(LabResult(document_id=d_lab.document_id, test_type="Lipidogram",
+                     test_description="Cholesterol całk. 228 mg/dl • LDL 142 mg/dl • HDL 58 mg/dl • TG 140 mg/dl"))
+    d_zla = doc(v_old, "SICK_LEAVE", "SENT")
+    db.add(SickLeave(document_id=d_zla.document_id, sick_leave_code="ZLA-2026-0001",
+                     start_date=(now - timedelta(days=7)).date(), end_date=(now - timedelta(days=1)).date(),
+                     sent_to_zus=True))
+    doc(v_old, "NOTE", "FINAL",
+        content="RR 138/88, tony serca czyste. Kontynuacja leczenia, kontrola za 6 tygodni.")
+
+    # pielęgniarka: zabieg zaplanowany DZIŚ (+1h) i skierowanie czekające w kolejce
+    d_ref1 = doc(v_done_today, "REFERRAL", "ACTIVE", content='{"referral_type": "NURSING"}')
+    ref1 = Referral(document_id=d_ref1.document_id, referral_code="NUR-DEMO1",
+                    referral_type="NURSING", notes="Iniekcje domięśniowe wit. B12 — 1×dz. przez 10 dni")
+    db.add(ref1)
+    db.flush()
+    db.add(NursingProcedure(
+        nurse_id=nurse_id, patient_id=janina.user_id, clinic_id=clinic.clinic_id,
+        appointment_id=v_done_today.appointment_id, referral_id=ref1.referral_id,
+        procedure_type="Iniekcje domięśniowe wit. B12", procedure_status="PLANNED",
+        procedure_datetime=now + timedelta(hours=1),
+    ))
+    d_ref2 = doc(v_done_today, "REFERRAL", "ACTIVE", content='{"referral_type": "NURSING"}')
+    db.add(Referral(document_id=d_ref2.document_id, referral_code="NUR-DEMO2",
+                    referral_type="NURSING", notes="Zmiana opatrunku podudzia — co 2 dni"))
+
+    # aktywne udostępnienie Janiny (test „Kod od pacjenta" bez przelogowywania)
+    db.add(DocumentShare(
+        patient_id=janina.user_id, access_code=DEMO_SHARE_CODE,
+        scope="ALL", expires_at=now + timedelta(days=30),
+    ))
+
+    # lista oczekujących: Stanisław czeka na Kardiologa — dodanie slotów
+    # Kardiologa w Panelu Poradni wyśle mu powiadomienie
+    if not db.scalar(select(WaitingListEntry).where(WaitingListEntry.patient_id == stan.user_id)):
+        db.add(WaitingListEntry(patient_id=stan.user_id, specialization="Kardiolog"))
+
+    db.commit()
+    print(f"Pakiet demo dodany (kod udostępnienia: {DEMO_SHARE_CODE}).")
 
 
 if __name__ == "__main__":
