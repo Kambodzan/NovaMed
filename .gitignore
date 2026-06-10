@@ -1,0 +1,30 @@
+# narzedzia developerskie — ustawienia lokalne
+
+
+# Node
+node_modules/
+dist/
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Środowisko
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Pliki robocze
+*.log
