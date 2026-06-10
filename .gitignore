@@ -31,3 +31,6 @@ Thumbs.db
 
 # Załączniki telewizyt (dev)
 backend/uploads/
+
+# Certyfikaty dev (generowane przez scripts/make-cert.py)
+certs/

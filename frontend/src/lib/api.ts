@@ -1,10 +1,10 @@
-// Adres API: jawnie z env, a domyślnie host z paska adresu + port 8000 —
-// dzięki temu wejście z innego komputera w LAN (http://192.168.x.x:5174)
-// automatycznie celuje w API na tej samej maszynie.
+// Adres API: jawnie z env, a domyślnie protokół i host z paska adresu + port 8000 —
+// wejście z innego komputera w LAN (https://192.168.x.x:5174) automatycznie
+// celuje w API na tej samej maszynie tym samym protokołem (https→wss dla WS).
 const envApiUrl = import.meta.env.VITE_API_URL as string | undefined
 export const API_URL = envApiUrl && envApiUrl.length > 0
   ? envApiUrl
-  : `http://${window.location.hostname}:8000`
+  : `${window.location.protocol}//${window.location.hostname}:8000`
 export const WS_URL = API_URL.replace(/^http/, 'ws')
 
 export class ApiError extends Error {

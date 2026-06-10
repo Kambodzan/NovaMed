@@ -46,13 +46,19 @@ Start-Uvicorn (Join-Path $root "mocks\lab")      "main:app" 8104 "mock laborator
 Start-Uvicorn (Join-Path $root "mocks\payments") "main:app" 8105 "mock płatności"
 
 Write-Host "Backend API:" -ForegroundColor Cyan
-# --host 0.0.0.0: dostęp także z innych urządzeń w sieci lokalnej
+# --host 0.0.0.0: dostęp także z innych urządzeń w sieci lokalnej.
+# HTTPS gdy są certy dev (scripts\make-cert.py) — wymagane przez kamerę w LAN.
+$certFile = Join-Path $root "certs\dev-cert.pem"
+$keyFile = Join-Path $root "certs\dev-key.pem"
+$useTls = (Test-Path $certFile) -and (Test-Path $keyFile)
 if (Test-Port 8000) {
     Write-Host "  [OK] NovaMed API już działa (:8000)" -ForegroundColor DarkGray
 } else {
-    Start-Process -WindowStyle Minimized -WorkingDirectory (Join-Path $root "backend") $py `
-        -ArgumentList "-m", "uvicorn", "app.main:app", "--port", "8000", "--host", "0.0.0.0"
-    Write-Host "  [START] NovaMed API (:8000)" -ForegroundColor Green
+    $uvArgs = @("-m", "uvicorn", "app.main:app", "--port", "8000", "--host", "0.0.0.0")
+    if ($useTls) { $uvArgs += @("--ssl-certfile", $certFile, "--ssl-keyfile", $keyFile) }
+    Start-Process -WindowStyle Minimized -WorkingDirectory (Join-Path $root "backend") $py -ArgumentList $uvArgs
+    $proto = "http"; if ($useTls) { $proto = "https" }
+    Write-Host "  [START] NovaMed API ($proto`://:8000)" -ForegroundColor Green
 }
 
 Write-Host "Seed danych demo (idempotentny):" -ForegroundColor Cyan
@@ -84,4 +90,9 @@ foreach ($svc in @(
     }
 }
 Write-Host ""
-Write-Host "Aplikacja: http://localhost:5174   (API: http://localhost:8000/docs)" -ForegroundColor Cyan
+if ($useTls) {
+    Write-Host "Aplikacja: https://localhost:5174   (API: https://localhost:8000/docs)" -ForegroundColor Cyan
+    Write-Host "Z innego urzadzenia: zaakceptuj certyfikat dla OBU adresow (:5174 i :8000)." -ForegroundColor Yellow
+} else {
+    Write-Host "Aplikacja: http://localhost:5174   (API: http://localhost:8000/docs)" -ForegroundColor Cyan
+}

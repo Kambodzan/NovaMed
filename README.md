@@ -63,11 +63,14 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
 - **Całe środowisko jedną komendą**: `powershell -ExecutionPolicy Bypass -File scripts\start-dev.ps1`
   (5 mocków + backend + frontend + seed; idempotentny). Stop: `scripts\stop-dev.ps1`.
 - **Dostęp z sieci lokalnej**: front i API słuchają na 0.0.0.0; frontend sam celuje w API
-  na hoście z paska adresu (puste `VITE_API_URL`), CORS wpuszcza adresy prywatne.
+  na hoście/protokole z paska adresu (puste `VITE_API_URL`), CORS wpuszcza adresy prywatne.
   Wymaga reguły firewalla (raz, jako admin):
   `New-NetFirewallRule -DisplayName 'NovaMed dev' -Direction Inbound -Protocol TCP -LocalPort 5174,8000 -Action Allow`
-  Uwaga: kamera (getUserMedia) przez HTTP działa tylko na localhost — z innego komputera
-  telewizyta degraduje się do czatu (ograniczenie przeglądarek, nie nasze).
+- **HTTPS dev** (wymagane przez kamerę/mikrofon przy wejściu z LAN): certy generuje
+  `backend\.venv\Scripts\python.exe scripts\make-cert.py` (→ `certs/`, gitignore; SAN z IP
+  maszyny — po zmianie sieci wygeneruj ponownie). start-dev podnosi wtedy front i API po
+  HTTPS. Na każdym urządzeniu testowym trzeba RAZ zaakceptować ostrzeżenie przeglądarki
+  dla **obu** originów: `https://HOST:5174` i `https://HOST:8000` (np. otwierając /health).
 
 - **Baza**: lokalna usługa PostgreSQL 16 (Windows, port 5432) — Docker na tej maszynie nie działa
   (uszkodzony WSL); `docker-compose.yml` to wariant wdrożeniowy. URL: `backend/.env` (`DATABASE_URL`).

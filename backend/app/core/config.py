@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     # dev: front otwierany z adresów LAN (testy z innych urządzeń w sieci lokalnej)
-    cors_origin_regex: str = r"^http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+$"
+    cors_origin_regex: str = r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+$"
 
     # Pętla przypomnień o wizytach (UC-P7); wyłączana w testach
     reminders_enabled: bool = True
