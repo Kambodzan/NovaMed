@@ -17,5 +17,7 @@ class Settings(BaseSettings):
     p1_base_url: str = "http://localhost:8101"
     zus_base_url: str = "http://localhost:8102"
 
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
+
 
 settings = Settings()

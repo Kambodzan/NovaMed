@@ -69,6 +69,11 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
 - **Mock-serwisy** (venv backendu; z katalogu danego mocka):
   - P1: `cd mocks/p1` → `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port 8101`
   - ZUS e-ZLA: `cd mocks/zus` → `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port 8102`
+- **Frontend** (z `frontend/`): `npm run dev` → localhost:5174 (oczekuje API na :8000).
+  Auth: tryb dev (`/auth/dev-token`, hasła niesprawdzane) dopóki `VITE_SUPABASE_URL`
+  puste w `frontend/.env.development`; po wpisaniu kluczy Supabase przełącza się sam.
+  Konto demo: `janina.wisniewska@novamed.dev` (pacjentka, z seedu).
+- **Seed danych demo**: `backend> .\.venv\Scripts\python.exe -m app.seed_dev` (idempotentny)
 - **Makiety UI** (z `mockupy-ui/`): `npm run dev` → localhost:5173
 
 ## Konwencje

@@ -1,13 +1,15 @@
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user, get_token_claims
+from app.core.config import settings
 from app.core.db import get_db
 from app.models import AppUser, Patient, Role
 
@@ -37,6 +39,34 @@ class MeOut(BaseModel):
     username: str
     role: str
     active_account: bool
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class DevTokenIn(BaseModel):
+    email: EmailStr
+
+
+@router.post("/dev-token")
+def dev_token(body: DevTokenIn):
+    """TYLKO DEV: zastępuje logowanie Supabase, dopóki projekt Supabase nie jest
+    skonfigurowany (SUPABASE_URL puste). Token podpisany tym samym sekretem,
+    którym backend weryfikuje — identyczny przepływ jak z prawdziwym Supabase.
+    Tożsamość deterministyczna: sub = uuid5(email)."""
+    if settings.supabase_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Niedostępne — skonfigurowano Supabase.")
+    sub = str(uuid.uuid5(uuid.NAMESPACE_DNS, body.email.lower()))
+    token = jwt.encode(
+        {
+            "sub": sub,
+            "email": body.email.lower(),
+            "aud": settings.supabase_jwt_aud,
+            "exp": datetime.now(timezone.utc) + timedelta(hours=12),
+        },
+        settings.supabase_jwt_secret,
+        algorithm="HS256",
+    )
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/register-profile", status_code=status.HTTP_201_CREATED, response_model=MeOut)
@@ -84,15 +114,20 @@ def register_profile(
         username=user.username,
         role=ROLE_PACJENT,
         active_account=True,
+        first_name=body.first_name,
+        last_name=body.last_name,
     )
 
 
 @router.get("/me", response_model=MeOut)
-def me(user: AppUser = Depends(get_current_user)):
+def me(user: AppUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    patient = db.get(Patient, user.user_id)
     return MeOut(
         user_id=user.user_id,
         email=user.email,
         username=user.username,
         role=user.role.role_name,
         active_account=user.active_account,
+        first_name=patient.first_name if patient else None,
+        last_name=patient.last_name if patient else None,
     )
