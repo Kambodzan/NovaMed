@@ -14,5 +14,18 @@ const https = fs.existsSync(certFile) && fs.existsSync(keyFile)
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  server: { https },
+  server: {
+    https,
+    // API przez ten sam origin co strona (/api → backend :8000):
+    // jedna akceptacja certyfikatu, zero CORS, działa też dla WebSocketów.
+    proxy: {
+      '/api': {
+        target: 'https://localhost:8000',
+        changeOrigin: true,
+        secure: false, // backend ma self-signed cert dev
+        ws: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
 })

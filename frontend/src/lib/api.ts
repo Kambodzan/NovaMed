@@ -1,11 +1,11 @@
-// Adres API: jawnie z env, a domyślnie protokół i host z paska adresu + port 8000 —
-// wejście z innego komputera w LAN (https://192.168.x.x:5174) automatycznie
-// celuje w API na tej samej maszynie tym samym protokołem (https→wss dla WS).
+// Adres API: jawnie z env, a domyślnie ten sam origin co strona pod /api
+// (proxy vite → backend :8000). Jedna akceptacja certyfikatu, zero CORS,
+// działa z localhost i z innych urządzeń w LAN. WebSockety analogicznie (wss).
 const envApiUrl = import.meta.env.VITE_API_URL as string | undefined
-export const API_URL = envApiUrl && envApiUrl.length > 0
-  ? envApiUrl
-  : `${window.location.protocol}//${window.location.hostname}:8000`
-export const WS_URL = API_URL.replace(/^http/, 'ws')
+export const API_URL = envApiUrl && envApiUrl.length > 0 ? envApiUrl : '/api'
+export const WS_URL = API_URL.startsWith('/')
+  ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_URL}`
+  : API_URL.replace(/^http/, 'ws')
 
 export class ApiError extends Error {
   status: number
