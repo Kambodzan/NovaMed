@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { CalendarDays, CalendarRange, ClipboardList, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { Login } from './pages/Login'
@@ -11,8 +11,10 @@ import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
 import { LekarzDzien } from './pages/lekarz/Dzien'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
+import { Zabiegi } from './pages/pielegniarka/Zabiegi'
 import { Terminy } from './pages/poradnia/Terminy'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
+import { Raporty } from './pages/poradnia/Raporty'
 
 function LekarzLayout() {
   return (
@@ -24,7 +26,13 @@ function LekarzLayout() {
 
 function PielegniarkaLayout() {
   return (
-    <ProShell brand="Portal Pielęgniarki" nav={[{ to: '/', label: 'Skierowania', icon: ClipboardList, end: true }]}>
+    <ProShell
+      brand="Portal Pielęgniarki"
+      nav={[
+        { to: '/', label: 'Zabiegi', icon: ClipboardList, end: true },
+        { to: '/skierowania', label: 'Skierowania', icon: FileSignature },
+      ]}
+    >
       <Outlet />
     </ProShell>
   )
@@ -37,6 +45,7 @@ function PoradniaLayout() {
       nav={[
         { to: '/', label: 'Terminy', icon: CalendarRange, end: true },
         { to: '/pacjenci', label: 'Pacjenci placówki', icon: Users },
+        { to: '/raporty', label: 'Raporty', icon: BarChart3 },
       ]}
     >
       <Outlet />
@@ -84,7 +93,8 @@ export default function App() {
 
       {token && me && role === 'pielegniarka' && (
         <Route path="/" element={<PielegniarkaLayout />}>
-          <Route index element={<Skierowania />} />
+          <Route index element={<Zabiegi />} />
+          <Route path="skierowania" element={<Skierowania />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}
@@ -93,6 +103,7 @@ export default function App() {
         <Route path="/" element={<PoradniaLayout />}>
           <Route index element={<Terminy />} />
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
+          <Route path="raporty" element={<Raporty />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}

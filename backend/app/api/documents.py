@@ -416,14 +416,26 @@ def nursing_referrals(
     _: AppUser = Depends(require_roles("pielegniarka")),
     db: Session = Depends(get_db),
 ):
-    """UC-L4→UC-N2: aktywne skierowania na zabiegi pielęgniarskie
-    (planowanie zabiegów na ich podstawie: M5)."""
+    """UC-L4→UC-N2: skierowania na zabiegi pielęgniarskie czekające na zaplanowanie.
+    Skierowanie z zaplanowanym (nieodwołanym) zabiegiem znika z kolejki;
+    po odwołaniu zabiegu wraca."""
+    from app.models import NursingProcedure  # import lokalny — unika cyklu
+
+    active_procedure = (
+        select(NursingProcedure.procedure_id)
+        .where(
+            NursingProcedure.referral_id == Referral.referral_id,
+            NursingProcedure.procedure_status != "CANCELLED",
+        )
+        .exists()
+    )
     rows = db.scalars(
         select(MedicalDocument)
         .join(Referral, Referral.document_id == MedicalDocument.document_id)
         .where(
             Referral.referral_type == ReferralType.NURSING.value,
             MedicalDocument.document_status == DocumentStatus.ACTIVE.value,
+            ~active_procedure,
         )
         .order_by(MedicalDocument.issued_at)
     )

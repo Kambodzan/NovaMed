@@ -34,3 +34,13 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   }
   return resp.json() as Promise<T>
 }
+
+/** Pobranie surowej treści (np. CSV) z autoryzacją. */
+export async function apiText(path: string): Promise<string> {
+  const token = tokenProvider()
+  const resp = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!resp.ok) throw new ApiError(resp.status, `Błąd ${resp.status}`)
+  return resp.text()
+}

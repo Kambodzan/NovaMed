@@ -37,6 +37,28 @@ export interface DocumentOut {
   error_message: string | null
 }
 
+export interface ProcedureOut {
+  procedure_id: number
+  procedure_datetime: string
+  procedure_type: string
+  procedure_status: 'PLANNED' | 'DONE' | 'CANCELLED'
+  notes: string | null
+  patient_id: number
+  patient_name: string
+  referral_code: string
+  ordered_by: string
+}
+
+export interface ReportOut {
+  month: string
+  total_booked: number
+  completed: number
+  cancelled: number
+  no_show: number
+  online_share_pct: number
+  per_doctor: Array<{ doctor_id: number; doctor_name: string; booked: number; completed: number }>
+}
+
 export interface PatientInfo {
   patient_id: number
   first_name: string
