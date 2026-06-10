@@ -46,7 +46,14 @@ Start-Uvicorn (Join-Path $root "mocks\lab")      "main:app" 8104 "mock laborator
 Start-Uvicorn (Join-Path $root "mocks\payments") "main:app" 8105 "mock płatności"
 
 Write-Host "Backend API:" -ForegroundColor Cyan
-Start-Uvicorn (Join-Path $root "backend") "app.main:app" 8000 "NovaMed API"
+# --host 0.0.0.0: dostęp także z innych urządzeń w sieci lokalnej
+if (Test-Port 8000) {
+    Write-Host "  [OK] NovaMed API już działa (:8000)" -ForegroundColor DarkGray
+} else {
+    Start-Process -WindowStyle Minimized -WorkingDirectory (Join-Path $root "backend") $py `
+        -ArgumentList "-m", "uvicorn", "app.main:app", "--port", "8000", "--host", "0.0.0.0"
+    Write-Host "  [START] NovaMed API (:8000)" -ForegroundColor Green
+}
 
 Write-Host "Seed danych demo (idempotentny):" -ForegroundColor Cyan
 Push-Location (Join-Path $root "backend")
