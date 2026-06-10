@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, MapPin, Video } from 'lucide-react'
-import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile } from '../ui'
+import { CalendarDays, Check, MapPin, Star, Video } from 'lucide-react'
+import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { dayNo, formatTime, isFuture, monthShort } from '../lib/format'
 import type { AppointmentOut } from '../lib/types'
@@ -10,6 +10,7 @@ export function Wizyty() {
   const queryClient = useQueryClient()
   const [cancelFor, setCancelFor] = useState<AppointmentOut | null>(null)
   const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
+  const [reviewFor, setReviewFor] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const { data: visits } = useQuery({
@@ -55,6 +56,14 @@ export function Wizyty() {
         )}
         {actions && v.appointment_status === 'TEMP_LOCK' && (
           <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>Zwolnij rezerwację</Button>
+        )}
+        {!actions && v.appointment_status === 'COMPLETED' && !v.reviewed && (
+          <Button size="sm" variant="secondary" onClick={() => setReviewFor(v)}>
+            <Star size={14} /> Oceń
+          </Button>
+        )}
+        {!actions && v.appointment_status === 'COMPLETED' && v.reviewed && (
+          <span className="text-xs font-bold text-gray-400">opinia wystawiona</span>
         )}
       </div>
     </Tile>
@@ -108,7 +117,88 @@ export function Wizyty() {
           onDone={() => { invalidate(); setRescheduleFor(null) }}
         />
       )}
+
+      {reviewFor && (
+        <ReviewModal
+          visit={reviewFor}
+          onClose={() => setReviewFor(null)}
+          onDone={() => { invalidate(); setReviewFor(null) }}
+        />
+      )}
     </div>
+  )
+}
+
+function Stars({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <button key={i} type="button" aria-label={`${i} gwiazdek`} onClick={() => onChange(i === value ? 0 : i)}
+          className="cursor-pointer p-0.5 transition-transform hover:scale-110">
+          <Star size={26} className={i <= value ? 'fill-amber-400 text-amber-400' : 'text-gray-200'} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ReviewModal({ visit, onClose, onDone }: {
+  visit: AppointmentOut
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [doctorRating, setDoctorRating] = useState(0)
+  const [doctorComment, setDoctorComment] = useState('')
+  const [clinicRating, setClinicRating] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = useMutation({
+    mutationFn: () => api('/reviews', {
+      method: 'POST',
+      body: {
+        appointment_id: visit.appointment_id,
+        doctor_rating: doctorRating || null,
+        doctor_comment: doctorComment || null,
+        clinic_rating: clinicRating || null,
+      },
+    }),
+    onSuccess: onDone,
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać opinii.'),
+  })
+
+  return (
+    <Modal
+      overline="Opinia po wizycie (UC-P8)"
+      title={visit.doctor_name}
+      onClose={onClose}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Anuluj</Button>
+        <Button disabled={submit.isPending || (doctorRating === 0 && clinicRating === 0)} onClick={() => submit.mutate()}>
+          <Check size={14} /> {submit.isPending ? 'Zapisywanie…' : 'Wyślij opinię'}
+        </Button>
+      </>}
+    >
+      <div className="space-y-4 pb-2">
+        <div className={cx('rounded-2xl p-4', doctorRating ? 'bg-primary-soft' : 'bg-gray-50')}>
+          <p className="mb-2 text-sm font-extrabold text-gray-900">Oceń lekarza</p>
+          <Stars value={doctorRating} onChange={setDoctorRating} />
+          {doctorRating > 0 && (
+            <textarea
+              className={cx(inputCls, 'mt-3 h-16 py-2')}
+              value={doctorComment}
+              onChange={e => setDoctorComment(e.target.value)}
+              placeholder="Komentarz (opcjonalnie)"
+            />
+          )}
+        </div>
+        <div className={cx('rounded-2xl p-4', clinicRating ? 'bg-primary-soft' : 'bg-gray-50')}>
+          <p className="mb-2 text-sm font-extrabold text-gray-900">Oceń placówkę — {visit.clinic_name}</p>
+          <Stars value={clinicRating} onChange={setClinicRating} />
+        </div>
+        <p className="text-xs font-medium text-gray-400">Możesz ocenić lekarza, placówkę lub oboje.</p>
+        {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+      </div>
+    </Modal>
   )
 }
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.documents import DocumentStatus, DocumentType, ReferralType
+from app.domain.notify import notify
 from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
 from app.integrations.lab import LabClient, get_lab_client
@@ -146,6 +147,23 @@ def doctor_pwz(db: Session, doctor_id: int) -> str:
     return db.get(Doctor, doctor_id).license_number
 
 
+DOC_LABELS = {
+    DocumentType.PRESCRIPTION.value: "e-recepta",
+    DocumentType.REFERRAL.value: "e-skierowanie",
+    DocumentType.SICK_LEAVE.value: "e-zwolnienie (e-ZLA)",
+    DocumentType.LAB_RESULT.value: "wynik badania",
+    DocumentType.NOTE.value: "notatka z wizyty",
+}
+
+
+def notify_new_document(db: Session, doc: MedicalDocument, code: str | None = None) -> None:
+    """UC-P7: pacjent dostaje powiadomienie o każdym nowym dokumencie."""
+    label = DOC_LABELS.get(doc.document_type, "dokument")
+    extra = f" Kod: {code}." if code else ""
+    notify(db, doc.patient_id, f"Nowy dokument: {label}",
+           f"W Twojej dokumentacji pojawił się nowy dokument ({label}).{extra}")
+
+
 # ---------- wystawianie (lekarz) ----------
 
 @router.post("/patients/{patient_id}/prescriptions", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
@@ -176,6 +194,7 @@ def issue_prescription(
         return document_out(db, doc, error_message=exc.message)
     doc.document_status = DocumentStatus.CONFIRMED.value
     db.add(Prescription(document_id=doc.document_id, prescription_code=code, prescribed_drugs=body.drugs))
+    notify_new_document(db, doc, code)
     db.commit()
     return document_out(db, doc)
 
@@ -207,6 +226,7 @@ def issue_referral(
             referral_type=body.referral_type.value,
             notes=body.notes,
         ))
+        notify_new_document(db, doc)
         db.commit()
         return document_out(db, doc)
 
@@ -226,6 +246,7 @@ def issue_referral(
     doc.document_status = DocumentStatus.CONFIRMED.value
     db.add(Referral(document_id=doc.document_id, referral_code=code,
                     referral_type=body.referral_type.value, notes=body.notes))
+    notify_new_document(db, doc, code)
     db.commit()
 
     # rejestracja zlecenia w laboratorium (best-effort — wynik przyjdzie synchronizacją)
@@ -271,6 +292,7 @@ def issue_sick_leave(
         document_id=doc.document_id, sick_leave_code=code,
         start_date=body.date_from, end_date=body.date_to, sent_to_zus=True,
     ))
+    notify_new_document(db, doc, code)
     db.commit()
     return document_out(db, doc)
 
@@ -290,6 +312,7 @@ def add_lab_result(
     db.flush()
     db.add(LabResult(document_id=doc.document_id, test_type=body.test_type,
                      test_description=body.test_description))
+    notify_new_document(db, doc)
     db.commit()
     return document_out(db, doc)
 

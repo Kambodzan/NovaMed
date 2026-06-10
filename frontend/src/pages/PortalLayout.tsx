@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { HeartPulse, LogOut } from 'lucide-react'
 import { cx } from '../ui'
 import { useAuth } from '../lib/auth'
+import { NotificationsBell } from '../components/NotificationsBell'
 
 const navItems = [
   { to: '/', label: 'Start' },
@@ -41,6 +42,7 @@ export function PortalLayout() {
           <span className="hidden text-sm font-bold text-gray-700 sm:inline">
             {me?.first_name ? `${me.first_name} ${me.last_name}` : me?.email}
           </span>
+          <NotificationsBell />
           <button
             onClick={() => void logout()}
             aria-label="Wyloguj"

@@ -66,6 +66,7 @@ export function Login() {
               ['a.kowalczyk@novamed.dev', 'Lekarka'],
               ['k.lis@novamed.dev', 'Pielęgniarka'],
               ['rejestracja@novamed.dev', 'Rejestracja'],
+              ['admin@novamed.dev', 'Administrator'],
             ].map(([demoEmail, label]) => (
               <button
                 key={demoEmail}

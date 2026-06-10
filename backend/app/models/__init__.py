@@ -7,11 +7,12 @@ from app.models.nursing import NursingProcedure
 from app.models.payment import Payment
 from app.models.review import Review
 from app.models.notification import Notification
+from app.models.waitlist import WaitingListEntry
 
 __all__ = [
     "Role", "AppUser", "Administrator", "Doctor", "Nurse", "Patient",
     "Clinic", "PatientClinic", "StaffClinic",
     "Appointment",
     "MedicalDocument", "Prescription", "Referral", "LabResult", "SickLeave",
-    "NursingProcedure", "Payment", "Review", "Notification",
+    "NursingProcedure", "Payment", "Review", "Notification", "WaitingListEntry",
 ]

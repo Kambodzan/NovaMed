@@ -14,6 +14,9 @@ class Review(Base):
 
     review_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("app_user.user_id"))
+    # Powiązanie z wizytą (rozszerzenie ERD): UC-P8 wymaga
+    # oceniania tylko ODBYTYCH wizyt i blokady duplikatów per wizyta.
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointment.appointment_id"))
     doctor_id: Mapped[int | None] = mapped_column(ForeignKey("doctor.doctor_id"))
     clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinic.clinic_id"))
     rating: Mapped[int] = mapped_column(Integer)  # 1-5

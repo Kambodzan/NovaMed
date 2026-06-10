@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronRight, CreditCard, MapPin, Video, CalendarDays, XCircle } from 'lucide-react'
-import { Button, DateChip, EmptyState, Tile, TileHeader, cx } from '../ui'
+import { BellPlus, Check, ChevronRight, CreditCard, MapPin, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
+import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { dayNo, formatTime, monthShort } from '../lib/format'
-import type { AppointmentOut, BookOut } from '../lib/types'
+import type { AppointmentOut, BookOut, WaitlistEntry } from '../lib/types'
 
 type PayPhase = 'idle' | 'awaiting' | 'success' | 'declined'
 
@@ -15,6 +15,7 @@ export function Umow() {
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
+  const [waitlistOpen, setWaitlistOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const { data: allSlots } = useQuery({
@@ -117,8 +118,16 @@ export function Umow() {
               ))}
             </ul>
           )}
+          <p className="mt-4 text-sm font-medium text-gray-500">
+            Nie ma specjalisty, którego szukasz?{' '}
+            <button onClick={() => setWaitlistOpen(true)} className="cursor-pointer font-extrabold text-primary hover:underline">
+              Zapisz się na listę oczekujących
+            </button>
+          </p>
         </Tile>
       )}
+
+      {waitlistOpen && <WaitlistModal onClose={() => setWaitlistOpen(false)} />}
 
       {step === 2 && (
         <Tile delay={60}>
@@ -234,5 +243,73 @@ export function Umow() {
         </Tile>
       )}
     </div>
+  )
+}
+
+function WaitlistModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [spec, setSpec] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: entries } = useQuery({
+    queryKey: ['waitlist'],
+    queryFn: () => api<WaitlistEntry[]>('/waiting-list/my'),
+  })
+
+  const join = useMutation({
+    mutationFn: () => api('/waiting-list', { method: 'POST', body: { specialization: spec } }),
+    onSuccess: () => { setSpec(''); setError(null); void queryClient.invalidateQueries({ queryKey: ['waitlist'] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać na listę.'),
+  })
+
+  const leave = useMutation({
+    mutationFn: (id: number) => api(`/waiting-list/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['waitlist'] }),
+  })
+
+  return (
+    <Modal
+      overline="UC-P3: brak terminów"
+      title="Lista oczekujących"
+      onClose={onClose}
+    >
+      <div className="space-y-4 pb-2">
+        <p className="text-sm font-medium text-gray-500">
+          Gdy pojawią się nowe terminy wybranej specjalizacji, dostaniesz powiadomienie,
+          a wpis z listy zniknie automatycznie.
+        </p>
+        <form className="flex gap-2" onSubmit={e => { e.preventDefault(); if (spec.trim().length >= 2) join.mutate() }}>
+          <Field label="Specjalizacja">
+            <input className={inputCls} value={spec} onChange={e => setSpec(e.target.value)}
+              placeholder="np. Dermatolog" list="spec-suggestions" />
+          </Field>
+          <datalist id="spec-suggestions">
+            {['Kardiolog', 'Internista', 'Endokrynolog', 'Dermatolog', 'Pediatra', 'Neurolog', 'Ortopeda'].map(s => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+          <div className="flex items-end">
+            <Button disabled={join.isPending || spec.trim().length < 2} type="submit">
+              <BellPlus size={15} /> Zapisz
+            </Button>
+          </div>
+        </form>
+        {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+
+        {entries && entries.length > 0 && (
+          <ul className="space-y-1.5">
+            {entries.map(e => (
+              <li key={e.entry_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-2.5">
+                <span className="flex-1 text-sm font-bold text-gray-900">{e.specialization}</span>
+                <button aria-label="Usuń z listy" onClick={() => leave.mutate(e.entry_id)}
+                  className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600">
+                  <Trash2 size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   )
 }

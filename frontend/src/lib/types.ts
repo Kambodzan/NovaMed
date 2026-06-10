@@ -23,6 +23,49 @@ export interface AppointmentOut {
   patient_id: number | null
   patient_name: string | null
   price: number | null
+  reviewed?: boolean | null
+}
+
+export interface NotificationOut {
+  notification_id: number
+  sent_at: string
+  notification_title: string
+  notification_content: string
+  is_read: boolean
+}
+
+export interface WaitlistEntry {
+  entry_id: number
+  specialization: string
+  created_at: string
+}
+
+export interface AdminUser {
+  user_id: number
+  username: string
+  email: string
+  role: string
+  active_account: boolean
+  created_at: string
+}
+
+export interface IntegrationStatus {
+  id: string
+  name: string
+  url: string
+  status: 'OK' | 'DOWN'
+  latency_ms: number | null
+  env: string
+}
+
+export interface AdminStats {
+  users_by_role: Record<string, number>
+  appointments_total: number
+  appointments_completed: number
+  documents_total: number
+  procedures_total: number
+  payments_paid_total: number
+  database: string
 }
 
 export interface PaymentInfo {

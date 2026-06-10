@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, Users } from 'lucide-react'
+import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, Plug, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { Login } from './pages/Login'
@@ -15,6 +15,9 @@ import { Zabiegi } from './pages/pielegniarka/Zabiegi'
 import { Terminy } from './pages/poradnia/Terminy'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
+import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
+import { AdminIntegracje } from './pages/admin/Integracje'
+import { AdminMonitoring } from './pages/admin/Monitoring'
 
 function LekarzLayout() {
   return (
@@ -31,6 +34,21 @@ function PielegniarkaLayout() {
       nav={[
         { to: '/', label: 'Zabiegi', icon: ClipboardList, end: true },
         { to: '/skierowania', label: 'Skierowania', icon: FileSignature },
+      ]}
+    >
+      <Outlet />
+    </ProShell>
+  )
+}
+
+function AdminLayout() {
+  return (
+    <ProShell
+      brand="Panel Administratora"
+      nav={[
+        { to: '/', label: 'Użytkownicy', icon: Users, end: true },
+        { to: '/integracje', label: 'Integracje', icon: Plug },
+        { to: '/monitoring', label: 'Monitoring', icon: Activity },
       ]}
     >
       <Outlet />
@@ -109,17 +127,12 @@ export default function App() {
       )}
 
       {token && me && role === 'administrator' && (
-        <Route
-          path="*"
-          element={
-            <div className="flex min-h-screen flex-col items-center justify-center gap-2 text-center">
-              <p className="text-lg font-extrabold text-gray-900">Panel Administratora — wkrótce</p>
-              <p className="max-w-sm text-sm font-medium text-gray-500">
-                Zarządzanie użytkownikami, integracjami i monitoringiem wejdzie w milestone M8.
-              </p>
-            </div>
-          }
-        />
+        <Route path="/" element={<AdminLayout />}>
+          <Route index element={<AdminUzytkownicy />} />
+          <Route path="integracje" element={<AdminIntegracje />} />
+          <Route path="monitoring" element={<AdminMonitoring />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       )}
     </Routes>
   )

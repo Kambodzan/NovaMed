@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_roles
 from app.core.db import get_db
 from app.domain.documents import DocumentStatus, DocumentType
+from app.domain.notify import notify
 from app.integrations.base import IntegrationError
 from app.integrations.lab import LabClient, get_lab_client
 from app.models import AppUser, LabResult, MedicalDocument, Referral
@@ -67,6 +68,8 @@ def lab_sync(
         ))
         # skierowanie LAB zrealizowane — wynik dotarł
         src.document_status = DocumentStatus.REALIZED.value
+        notify(db, src.patient_id, "Nowy wynik badania",
+               f"Wynik badania ({r.get('test_type', 'laboratoryjne')}) jest już dostępny w Twojej dokumentacji.")
         imported += 1
         lab.acknowledge(code)
     db.commit()

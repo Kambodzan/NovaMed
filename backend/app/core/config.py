@@ -13,12 +13,14 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = "dev-secret-do-podmiany"
     supabase_jwt_aud: str = "authenticated"
 
-    # Mock-serwisy integracji (mocks/) — podmiana na realne systemy przez env
-    p1_base_url: str = "http://localhost:8101"
-    zus_base_url: str = "http://localhost:8102"
-    ewus_base_url: str = "http://localhost:8103"
-    lab_base_url: str = "http://localhost:8104"
-    payments_base_url: str = "http://localhost:8105"
+    # Mock-serwisy integracji (mocks/) — podmiana na realne systemy przez env.
+    # 127.0.0.1 zamiast localhost: na Windows localhost próbuje najpierw IPv6 (::1),
+    # a uvicorn słucha na IPv4 — kosztowało to ~1 s na każde wywołanie.
+    p1_base_url: str = "http://127.0.0.1:8101"
+    zus_base_url: str = "http://127.0.0.1:8102"
+    ewus_base_url: str = "http://127.0.0.1:8103"
+    lab_base_url: str = "http://127.0.0.1:8104"
+    payments_base_url: str = "http://127.0.0.1:8105"
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
 

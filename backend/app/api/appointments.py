@@ -13,10 +13,18 @@ from app.domain.appointments import (
     AppointmentType,
     assert_transition,
 )
+from app.domain.notify import notify
 from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
 from app.integrations.payments import PaymentsClient, get_payments_client
-from app.models import Appointment, AppUser, Clinic, Doctor, Patient, Payment, StaffClinic
+from app.models import (
+    Appointment, AppUser, Clinic, Doctor, Patient, Payment, StaffClinic, WaitingListEntry,
+)
+
+
+def visit_label(db: Session, a: Appointment) -> str:
+    doctor_user = db.get(AppUser, a.doctor_id)
+    return f"{doctor_user.username}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}"
 
 router = APIRouter(tags=["appointments"])
 
@@ -43,6 +51,7 @@ class AppointmentOut(BaseModel):
     patient_id: int | None = None
     patient_name: str | None = None
     price: float | None = None
+    reviewed: bool | None = None  # tylko w /appointments/my (UC-P8)
 
 
 class PaymentInfoOut(BaseModel):
@@ -145,6 +154,21 @@ def create_slots(
         )
         db.add(a)
         created.append(a)
+
+    # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
+    doctor = db.get(Doctor, body.doctor_id)
+    if doctor.specialization:
+        entries = db.scalars(select(WaitingListEntry).where(
+            WaitingListEntry.specialization == doctor.specialization,
+        )).all()
+        for entry in entries:
+            notify(
+                db, entry.patient_id,
+                "Nowe terminy — koniec oczekiwania",
+                f"Pojawiły się nowe terminy: {doctor.specialization}. Zarezerwuj wizytę w zakładce „Umów wizytę”.",
+            )
+            db.delete(entry)
+
     db.commit()
     return [appointment_out(db, a) for a in created]
 
@@ -200,6 +224,8 @@ def book_appointment(
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
         a.patient_id = user.user_id
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        notify(db, user.user_id, "Wizyta potwierdzona",
+               f"Twoja wizyta: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
 
@@ -263,11 +289,15 @@ def pay_appointment(
         payment.paid_at = datetime.now()
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        notify(db, user.user_id, "Wizyta opłacona i potwierdzona",
+               f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}.")
     else:
         payment.payment_status = "FAILED"
         assert_transition(a.appointment_status, AppointmentStatus.FREE)
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
+        notify(db, user.user_id, "Płatność odrzucona",
+               "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),
@@ -313,6 +343,10 @@ def cancel_appointment(
 
     assert_transition(a.appointment_status, AppointmentStatus.CANCELLED)
     a.appointment_status = AppointmentStatus.CANCELLED.value
+    if a.patient_id:
+        notify(db, a.patient_id, "Wizyta odwołana",
+               f"Wizyta {visit_label(db, a)} została odwołana."
+               + (" Jeśli była opłacona, zwrot nastąpi tą samą metodą płatności." if a.price else ""))
 
     # zwrot terminu do puli, jeśli wizyta jeszcze przed czasem
     if hours_left > 0:
@@ -377,12 +411,22 @@ def my_appointments(
     db: Session = Depends(get_db),
 ):
     """UC-P3/P4: lista wizyt pacjenta (bez wolnych slotów)."""
+    from app.models import Review  # import lokalny — unika cyklu
+
     rows = db.scalars(
         select(Appointment)
         .where(Appointment.patient_id == user.user_id)
         .order_by(Appointment.appointment_datetime.desc())
-    )
-    return [appointment_out(db, a) for a in rows]
+    ).all()
+    reviewed_ids = set(db.scalars(select(Review.appointment_id).where(
+        Review.appointment_id.in_([a.appointment_id for a in rows] or [0]),
+    )))
+    out = []
+    for a in rows:
+        item = appointment_out(db, a)
+        item.reviewed = a.appointment_id in reviewed_ids
+        out.append(item)
+    return out
 
 
 @router.get("/appointments/day", response_model=list[AppointmentOut])
