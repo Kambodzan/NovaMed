@@ -136,6 +136,7 @@ def main() -> None:
 
     db.commit()
     demo_pack(db, clinic, doctor_ids, nurse_u.user_id, pat_u)
+    family_demo_pack(db, clinic, doctor_ids[0], pat_u)
     print(f"Seed OK — klinika #{clinic.clinic_id}, lekarze: {len(doctor_ids)}, nowe sloty: {created_slots}")
     db.close()
 
@@ -251,6 +252,44 @@ def demo_pack(db, clinic, doctor_ids: list[int], nurse_id: int, janina: AppUser)
 
     db.commit()
     print(f"Pakiet demo dodany (kod udostępnienia: {DEMO_SHARE_CODE}).")
+
+
+def family_demo_pack(db, clinic, kow: int, janina: AppUser) -> None:
+    """Rozszerzenie pakietu demo (idempotentne osobno od markera DEM-234):
+    podopieczny Janiny + wizyta z notify_earlier — testy kont rodzinnych
+    i powiadomień o wcześniejszych terminach na koncie demo."""
+    now = datetime.now().replace(minute=0, second=0, microsecond=0)
+
+    dep_u = get_or_create_user(db, "podopieczny.stas@novamed.dev", "Staś Wiśniewski", "pacjent")
+    dep_u.active_account = False  # podopieczny nie loguje się sam
+    if db.get(Patient, dep_u.user_id) is None:
+        db.add(Patient(
+            patient_id=dep_u.user_id, first_name="Staś", last_name="Wiśniewski",
+            pesel="19251012342", birth_date=date(2019, 5, 10), guardian_id=janina.user_id,
+        ))
+    if not db.scalar(select(Appointment).where(Appointment.patient_id == dep_u.user_id)):
+        db.add(Appointment(
+            patient_id=dep_u.user_id, doctor_id=kow, clinic_id=clinic.clinic_id,
+            appointment_datetime=(now + timedelta(days=1)).replace(hour=12),
+            appointment_status=AppointmentStatus.CONFIRMED.value,
+            appointment_type=AppointmentType.STATIONARY.value, reminder_sent=False,
+        ))
+
+    # Janina obserwuje wcześniejsze terminy (wizyta za 2 tyg.) — odwołanie
+    # czyjejś wizyty u dr. Kowalczyk / nowe sloty wyślą jej powiadomienie
+    if not db.scalar(select(Appointment).where(
+        Appointment.patient_id == janina.user_id, Appointment.notify_earlier.is_(True),
+    )):
+        db.add(Appointment(
+            patient_id=janina.user_id, doctor_id=kow, clinic_id=clinic.clinic_id,
+            appointment_datetime=(now + timedelta(days=14)).replace(hour=11),
+            appointment_status=AppointmentStatus.CONFIRMED.value,
+            appointment_type=AppointmentType.STATIONARY.value,
+            reminder_sent=False, notify_earlier=True,
+        ))
+        print("Demo kont rodzinnych: podopieczny Staś + wizyta z notify_earlier.")
+
+    db.commit()
 
 
 if __name__ == "__main__":

@@ -65,6 +65,7 @@ if (Test-Port 8000) {
 Write-Host "Seed danych demo (idempotentny):" -ForegroundColor Cyan
 Push-Location (Join-Path $root "backend")
 & $py -m app.seed_dev
+& $py (Join-Path $root "scripts\import-dictionaries.py")
 Pop-Location
 
 Write-Host "Frontend:" -ForegroundColor Cyan
