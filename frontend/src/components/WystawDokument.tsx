@@ -5,6 +5,22 @@ import { AlertTriangle, Check, RotateCcw, Send } from 'lucide-react'
 import { Button, Field, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import type { DocumentOut } from '../lib/types'
+import { Typeahead } from './Typeahead'
+
+interface Icd10Row { code: string; name: string }
+interface MedicationRow { med_id: number; name: string; form: string | null; strength: string | null }
+
+const searchIcd10 = (q: string) =>
+  api<Icd10Row[]>(`/dictionaries/icd10?q=${encodeURIComponent(q)}`).then(rows =>
+    rows.map(r => ({ key: r.code, label: `${r.code} — ${r.name}`, insert: r.code })))
+
+const searchMedications = (q: string) =>
+  api<MedicationRow[]>(`/dictionaries/medications?q=${encodeURIComponent(q)}`).then(rows =>
+    rows.map(r => ({
+      key: String(r.med_id),
+      label: [r.name, r.strength, r.form && `(${r.form})`].filter(Boolean).join(' '),
+      insert: [r.name, r.strength].filter(Boolean).join(' '),
+    })))
 
 type DocKind = 'PRESCRIPTION' | 'REFERRAL' | 'SICK_LEAVE' | 'LAB_RESULT' | 'NOTE'
 
@@ -26,6 +42,7 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
   const [kind, setKind] = useState<DocKind>(kinds[0])
   const [result, setResult] = useState<DocumentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [drugQuery, setDrugQuery] = useState('')
 
   const [form, setForm] = useState({
     icd10: 'I10',
@@ -124,22 +141,37 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
       </Field>
 
       {(kind === 'PRESCRIPTION' || kind === 'REFERRAL') && (
-        <Field label="Rozpoznanie (ICD-10)">
-          <select className={inputCls} value={form.icd10} onChange={set('icd10')}>
-            <option value="I10">I10 — nadciśnienie tętnicze samoistne</option>
-            <option value="E78.0">E78.0 — czysta hipercholesterolemia</option>
-            <option value="E11.9">E11.9 — cukrzyca typu 2</option>
-            <option value="J06.9">J06.9 — ostre zakażenie górnych dróg oddechowych</option>
-            <option value="M54.5">M54.5 — ból odcinka lędźwiowego</option>
-          </select>
+        <Field label="Rozpoznanie (ICD-10)" hint="zacznij pisać kod lub nazwę rozpoznania">
+          <Typeahead
+            id="icd10" minLength={1} required
+            value={form.icd10}
+            onChange={v => setForm(f => ({ ...f, icd10: v }))}
+            search={searchIcd10}
+            placeholder="np. I10 albo nadciśnienie"
+          />
         </Field>
       )}
 
       {kind === 'PRESCRIPTION' && (
-        <Field label="Leki" hint="Dawkowanie w schemacie D.S.">
-          <textarea className={cx(inputCls, 'h-20 py-2.5')} required minLength={3} value={form.drugs} onChange={set('drugs')}
-            placeholder="np. Atorvasterol 40 mg ×30 tabl. — D.S. 1×1 wieczorem" />
-        </Field>
+        <>
+          <Field label="Dodaj lek ze słownika" hint="wybór dopisuje lek do pola poniżej">
+            <Typeahead
+              id="medications"
+              value={drugQuery}
+              onChange={setDrugQuery}
+              onPick={item => {
+                setForm(f => ({ ...f, drugs: (f.drugs ? f.drugs.trimEnd() + '\n' : '') + `${item.insert} — D.S. ` }))
+                setDrugQuery('')
+              }}
+              search={searchMedications}
+              placeholder="np. Atorva…"
+            />
+          </Field>
+          <Field label="Leki" hint="Dawkowanie w schemacie D.S.">
+            <textarea className={cx(inputCls, 'h-20 py-2.5')} required minLength={3} value={form.drugs} onChange={set('drugs')}
+              placeholder="np. Atorvasterol 40 mg ×30 tabl. — D.S. 1×1 wieczorem" />
+          </Field>
+        </>
       )}
 
       {kind === 'REFERRAL' && (

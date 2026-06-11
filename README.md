@@ -86,6 +86,8 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
   puste w `frontend/.env.development`; po wpisaniu kluczy Supabase przełącza się sam.
   Konto demo: `janina.wisniewska@novamed.dev` (pacjentka, z seedu).
 - **Seed danych demo**: `backend> .\.venv\Scripts\python.exe -m app.seed_dev` (idempotentny)
+- **Słowniki ICD-10/leków**: `backend> .\.venv\Scripts\python.exe ..\scripts\import-dictionaries.py`
+  (starter z `data/dictionaries/`; pełne oficjalne pliki: `--icd10 plik.csv`, `--rpl plik.csv` z RPL)
 - **Makiety UI** (z `mockupy-ui/`): `npm run dev` → localhost:5173
 
 ## Konwencje

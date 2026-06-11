@@ -11,6 +11,7 @@ from app.api.admin import router as admin_router
 from app.api.appointments import router as appointments_router
 from app.api.auth import router as auth_router
 from app.api.clinics import router as clinics_router
+from app.api.dictionaries import router as dictionaries_router
 from app.api.documents import router as documents_router
 from app.api.integrations import router as integrations_router
 from app.api.notifications import router as notifications_router
@@ -73,6 +74,7 @@ app.include_router(waitlist_router)
 app.include_router(admin_router)
 app.include_router(telemed_router)
 app.include_router(shares_router)
+app.include_router(dictionaries_router)
 
 
 @app.get("/health")

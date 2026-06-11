@@ -1,0 +1,100 @@
+code;name
+A09;Biegunka i zapalenie żołądkowo-jelitowe o przypuszczalnie zakaźnym pochodzeniu
+B01;Ospa wietrzna
+B02;Półpasiec
+B34.9;Zakażenie wirusowe, nieokreślone
+B37.0;Kandydoza jamy ustnej
+B86;Świerzb
+D50.9;Niedokrwistość z niedoboru żelaza, nieokreślona
+E03.9;Niedoczynność tarczycy, nieokreślona
+E04.9;Wole nietoksyczne, nieokreślone
+E05.9;Nadczynność tarczycy, nieokreślona
+E10.9;Cukrzyca typu 1 bez powikłań
+E11.9;Cukrzyca typu 2 bez powikłań
+E66.0;Otyłość spowodowana nadmierną podażą energii
+E78.0;Czysta hipercholesterolemia
+E78.2;Hiperlipidemia mieszana
+E79.0;Hiperurykemia bez objawów zapalenia stawów
+F32.1;Epizod depresyjny umiarkowany
+F41.1;Zaburzenie lękowe uogólnione
+F41.2;Zaburzenie depresyjno-lękowe mieszane
+F43.2;Zaburzenia adaptacyjne
+F51.0;Bezsenność nieorganiczna
+G35;Stwardnienie rozsiane
+G40.9;Padaczka, nieokreślona
+G43.9;Migrena, nieokreślona
+G47.0;Zaburzenia zasypiania i utrzymania snu (bezsenność)
+G54.4;Zaburzenia korzeni nerwów rdzeniowych lędźwiowo-krzyżowych
+H10.9;Zapalenie spojówek, nieokreślone
+H40.9;Jaskra, nieokreślona
+H52.1;Krótkowzroczność
+H60.9;Zapalenie ucha zewnętrznego, nieokreślone
+H66.9;Zapalenie ucha środkowego, nieokreślone
+H81.1;Łagodne napadowe zawroty głowy
+I10;Nadciśnienie tętnicze samoistne (pierwotne)
+I11.9;Choroba nadciśnieniowa z zajęciem serca bez niewydolności serca
+I20.9;Dusznica bolesna, nieokreślona
+I25.9;Przewlekła choroba niedokrwienna serca, nieokreślona
+I48;Migotanie i trzepotanie przedsionków
+I50.9;Niewydolność serca, nieokreślona
+I83.9;Żylaki kończyn dolnych bez owrzodzenia i zapalenia
+J00;Ostre zapalenie nosogardła (przeziębienie)
+J01.9;Ostre zapalenie zatok, nieokreślone
+J02.9;Ostre zapalenie gardła, nieokreślone
+J03.9;Ostre zapalenie migdałków, nieokreślone
+J04.0;Ostre zapalenie krtani
+J06.9;Ostre zakażenie górnych dróg oddechowych, nieokreślone
+J11;Grypa wywołana niezidentyfikowanym wirusem
+J20.9;Ostre zapalenie oskrzeli, nieokreślone
+J30.1;Alergiczny nieżyt nosa wywołany pyłkami roślin
+J32.9;Przewlekłe zapalenie zatok, nieokreślone
+J44.9;Przewlekła obturacyjna choroba płuc, nieokreślona
+J45.9;Astma oskrzelowa, nieokreślona
+K21.0;Choroba refluksowa przełyku z zapaleniem przełyku
+K25.9;Wrzód żołądka, nieokreślony
+K29.7;Zapalenie błony śluzowej żołądka, nieokreślone
+K52.9;Niezakaźne zapalenie żołądka i jelit, nieokreślone
+K58.9;Zespół jelita drażliwego bez biegunki
+K59.0;Zaparcie
+K80.2;Kamica pęcherzyka żółciowego bez zapalenia
+L20.9;Atopowe zapalenie skóry, nieokreślone
+L23.9;Alergiczne kontaktowe zapalenie skóry, nieokreślone
+L40.9;Łuszczyca, nieokreślona
+L50.9;Pokrzywka, nieokreślona
+L70.0;Trądzik pospolity
+M10.9;Dna moczanowa, nieokreślona
+M15.9;Choroba zwyrodnieniowa wielostawowa, nieokreślona
+M17.9;Gonartroza (choroba zwyrodnieniowa stawu kolanowego), nieokreślona
+M25.5;Ból stawu
+M47.9;Zmiany zwyrodnieniowe kręgosłupa, nieokreślone
+M54.2;Ból karku
+M54.4;Rwa kulszowa z bólem lędźwiowym
+M54.5;Ból odcinka lędźwiowego kręgosłupa
+M62.6;Przykurcz mięśnia
+M79.1;Ból mięśniowy (mialgia)
+N18.3;Przewlekła choroba nerek, stadium 3
+N20.0;Kamica nerki
+N30.0;Ostre zapalenie pęcherza moczowego
+N39.0;Zakażenie układu moczowego, nieokreślone
+N40;Rozrost gruczołu krokowego
+N76.0;Ostre zapalenie pochwy
+N91.2;Brak miesiączki, nieokreślony
+N95.1;Stany związane z menopauzą i klimakterium
+O26.9;Stan związany z ciążą, nieokreślony
+R05;Kaszel
+R07.4;Ból w klatce piersiowej, nieokreślony
+R10.4;Inne i nieokreślone bóle brzucha
+R11;Nudności i wymioty
+R42;Zawroty głowy
+R50.9;Gorączka, nieokreślona
+R51;Ból głowy
+R53;Złe samopoczucie i zmęczenie
+S61.9;Rana otwarta nadgarstka i ręki, nieokreślona
+S93.4;Skręcenie i naderwanie stawu skokowego
+T78.4;Alergia, nieokreślona
+Z00.0;Ogólne badanie lekarskie
+Z03.9;Obserwacja medyczna w kierunku podejrzewanych chorób, nieokreślona
+Z23;Konieczność szczepienia przeciwko pojedynczej chorobie bakteryjnej
+Z25;Konieczność szczepienia przeciwko innym pojedynczym chorobom wirusowym
+Z71.3;Poradnictwo i nadzór dietetyczny
+Z76.0;Powtórne wystawienie recepty
