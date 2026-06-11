@@ -312,6 +312,7 @@ function RescheduleModal({ visit, onClose, onDone }: {
 }) {
   const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
   const { data: slots } = useQuery({
     queryKey: ['slots', visit.doctor_id],
     queryFn: () => api<AppointmentOut[]>(`/slots?doctor_id=${visit.doctor_id}`),
@@ -330,7 +331,7 @@ function RescheduleModal({ visit, onClose, onDone }: {
       {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       {slots && slots.length > 0 ? (
         <ul className="space-y-2 pb-4">
-          {slots.slice(0, 8).map(s => (
+          {slots.slice(0, showAll ? undefined : 8).map(s => (
             <li key={s.appointment_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
               <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
               <span className="flex-1 text-sm font-semibold text-gray-500">
@@ -341,6 +342,13 @@ function RescheduleModal({ visit, onClose, onDone }: {
               </Button>
             </li>
           ))}
+          {!showAll && slots.length > 8 && (
+            <li className="text-center">
+              <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+                {t('Pokaż więcej terminów')} ({slots.length - 8})
+              </Button>
+            </li>
+          )}
         </ul>
       ) : (
         <p className="pb-4 text-sm font-medium text-gray-500">{t('Ten lekarz nie ma teraz wolnych terminów.')}</p>

@@ -1,14 +1,31 @@
 // Dzwonek powiadomień (UC-P7): licznik nieprzeczytanych + panel.
+// Klik w powiadomienie prowadzi do miejsca akcji (deep-link po tytule).
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, CheckCheck } from 'lucide-react'
+import { Bell, CheckCheck, ChevronRight } from 'lucide-react'
 import { Button, EmptyState, Modal, cx } from '../ui'
 import { api } from '../lib/api'
 import { formatDatePL, formatTime } from '../lib/format'
 import type { NotificationOut } from '../lib/types'
 
+// dopasowanie po tytule — kolejność ma znaczenie (od najbardziej szczegółowych)
+const NOTIFICATION_LINKS: [RegExp, string][] = [
+  [/nowe terminy/i, '/umow'],
+  [/dokument|recept|skierowan|zwolnien|wynik/i, '/dokumentacja'],
+  [/wizyt|termin|płatno|rezerwacj|przypomnien/i, '/wizyty'],
+]
+
+function linkFor(title: string): string | null {
+  for (const [pattern, route] of NOTIFICATION_LINKS) {
+    if (pattern.test(title)) return route
+  }
+  return null
+}
+
 export function NotificationsBell() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
 
   const { data: unread } = useQuery({
@@ -68,26 +85,35 @@ export function NotificationsBell() {
         >
           {notifications && notifications.length > 0 ? (
             <ul className="space-y-2 pb-2">
-              {notifications.map(n => (
-                <li key={n.notification_id}>
-                  <button
-                    onClick={() => !n.is_read && markRead.mutate(n.notification_id)}
-                    className={cx(
-                      'w-full cursor-pointer rounded-2xl p-3.5 text-left',
-                      n.is_read ? 'bg-gray-50 opacity-70' : 'bg-primary-soft',
-                    )}
-                  >
-                    <p className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
-                      {!n.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                      {n.notification_title}
-                    </p>
-                    <p className="mt-0.5 text-xs font-medium text-gray-600">{n.notification_content}</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-400">
-                      {formatDatePL(n.sent_at)}, {formatTime(n.sent_at)}
-                    </p>
-                  </button>
-                </li>
-              ))}
+              {notifications.map(n => {
+                const link = linkFor(n.notification_title)
+                return (
+                  <li key={n.notification_id}>
+                    <button
+                      onClick={() => {
+                        if (!n.is_read) markRead.mutate(n.notification_id)
+                        if (link) { setOpen(false); navigate(link) }
+                      }}
+                      className={cx(
+                        'group flex w-full cursor-pointer items-center gap-2 rounded-2xl p-3.5 text-left',
+                        n.is_read ? 'bg-gray-50 opacity-70' : 'bg-primary-soft',
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
+                          {!n.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                          {n.notification_title}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-medium text-gray-600">{n.notification_content}</span>
+                        <span className="mt-1 block text-[11px] font-semibold text-gray-400">
+                          {formatDatePL(n.sent_at)}, {formatTime(n.sent_at)}
+                        </span>
+                      </span>
+                      {link && <ChevronRight size={15} className="shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           ) : (
             <div className="pb-2">

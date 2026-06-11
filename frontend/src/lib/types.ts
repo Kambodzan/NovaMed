@@ -143,4 +143,6 @@ export interface PatientInfo {
   birth_date: string
   insurance_status: boolean
   phone_number: string | null
+  guardian_name: string | null
+  guardian_phone: string | null
 }

@@ -37,10 +37,12 @@ export function Umow() {
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [allSlots])
 
-  const slots = useMemo(
-    () => (allSlots ?? []).filter(s => !spec || s.specialization === spec).slice(0, 12),
+  const [visibleCount, setVisibleCount] = useState(12)
+  const matching = useMemo(
+    () => (allSlots ?? []).filter(s => !spec || s.specialization === spec),
     [allSlots, spec],
   )
+  const slots = matching.slice(0, visibleCount)
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
@@ -119,7 +121,7 @@ export function Umow() {
                 return (
                   <li key={s}>
                     <button
-                      onClick={() => { setSpec(s); setStep(2) }}
+                      onClick={() => { setSpec(s); setVisibleCount(12); setStep(2) }}
                       className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
                     >
                       <span>
@@ -186,6 +188,13 @@ export function Umow() {
               </li>
             ))}
           </ul>
+          {matching.length > visibleCount && (
+            <div className="mt-3 text-center">
+              <Button variant="ghost" size="sm" onClick={() => setVisibleCount(c => c + 12)}>
+                {t('Pokaż więcej terminów')} ({matching.length - visibleCount})
+              </Button>
+            </div>
+          )}
         </Tile>
       )}
 

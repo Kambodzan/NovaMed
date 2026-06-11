@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, DoorOpen, MapPin, Video } from 'lucide-react'
-import { Badge, Button, EmptyState, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
+import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
@@ -14,6 +14,7 @@ export function LekarzDzien() {
   const navigate = useNavigate()
   const [day, setDay] = useState(todayIso())
   const [error, setError] = useState<string | null>(null)
+  const [noShowFor, setNoShowFor] = useState<AppointmentOut | null>(null)
 
   const { data: visits } = useQuery({
     queryKey: ['doctor-day', day],
@@ -42,7 +43,12 @@ export function LekarzDzien() {
           overline="Mój dzień"
           title={formatDatePL(day + 'T00:00:00')}
           sub={`${booked.length} pacjentów · ${done} zakończone`}
-          action={<input type="date" className={cx(inputCls, 'w-44')} value={day} onChange={e => setDay(e.target.value)} />}
+          action={<>
+            {day !== todayIso() && (
+              <Button size="sm" variant="secondary" onClick={() => setDay(todayIso())}>Dziś</Button>
+            )}
+            <input type="date" className={cx(inputCls, 'w-44')} value={day} onChange={e => setDay(e.target.value)} />
+          </>}
         />
       </div>
 
@@ -95,7 +101,7 @@ export function LekarzDzien() {
                         <Button size="sm" onClick={() => startVisit(v)}>
                           {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : <><DoorOpen size={14} /> Rozpocznij</>}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => changeStatus.mutate({ id: v.appointment_id, status: 'NO_SHOW' })}>
+                        <Button size="sm" variant="ghost" onClick={() => setNoShowFor(v)}>
                           Nie stawił się
                         </Button>
                       </>
@@ -119,6 +125,24 @@ export function LekarzDzien() {
           </ul>
         )}
       </Tile>
+
+      {noShowFor && (
+        <Modal
+          overline={`${formatTime(noShowFor.appointment_datetime)} · ${noShowFor.patient_name}`}
+          title="Pacjent się nie stawił?"
+          onClose={() => setNoShowFor(null)}
+          footer={<>
+            <Button variant="secondary" onClick={() => setNoShowFor(null)}>Wróć</Button>
+            <Button variant="danger" onClick={() => { changeStatus.mutate({ id: noShowFor.appointment_id, status: 'NO_SHOW' }); setNoShowFor(null) }}>
+              Tak, oznacz NO-SHOW
+            </Button>
+          </>}
+        >
+          <p className="text-sm leading-relaxed font-medium text-gray-600">
+            Wizyta zostanie oznaczona jako „nie stawił się". Tej zmiany nie można cofnąć.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }

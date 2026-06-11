@@ -225,6 +225,22 @@ def create_slots(
     return [appointment_out(db, a) for a in created]
 
 
+@router.delete("/slots/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_free_slot(
+    appointment_id: int,
+    _: AppUser = Depends(require_roles(*SLOT_MANAGERS)),
+    db: Session = Depends(get_db),
+):
+    """Usunięcie błędnie dodanego WOLNEGO terminu (rejestracja/kierownik/admin).
+    Zarezerwowanych nie ruszamy — od tego jest anulowanie z powiadomieniem."""
+    a = get_appointment_or_404(appointment_id, db)
+    if a.appointment_status != AppointmentStatus.FREE.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Można usunąć tylko wolny termin (bez rezerwacji).")
+    db.delete(a)
+    db.commit()
+
+
 @router.get("/slots", response_model=list[AppointmentOut])
 def search_slots(
     db: Session = Depends(get_db),

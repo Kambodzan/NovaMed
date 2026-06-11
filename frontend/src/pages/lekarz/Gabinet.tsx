@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ClipboardPen, FolderOpen, Play, ShieldCheck, Square, User, Video } from 'lucide-react'
-import { Badge, Button, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
+import { AlertTriangle, Check, ClipboardPen, FolderOpen, Play, ShieldCheck, Square, User, Users, Video } from 'lucide-react'
+import { Badge, Button, Modal, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut, DocumentOut, PatientInfo } from '../../lib/types'
@@ -18,6 +18,8 @@ export function Gabinet() {
   const [note, setNote] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // potwierdzenia akcji bez powrotu: NO_SHOW i zakończenie z niezapisaną notatką
+  const [confirm, setConfirm] = useState<'NO_SHOW' | 'COMPLETE_UNSAVED' | null>(null)
 
   const { data: visit } = useQuery({
     queryKey: ['appointment', id],
@@ -77,7 +79,7 @@ export function Gabinet() {
             {confirmed && (
               <>
                 <Button onClick={() => changeStatus.mutate('IN_PROGRESS')}><Play size={15} /> Rozpocznij wizytę</Button>
-                <Button variant="ghost" onClick={() => changeStatus.mutate('NO_SHOW')}>Nie stawił się</Button>
+                <Button variant="ghost" onClick={() => setConfirm('NO_SHOW')}>Nie stawił się</Button>
               </>
             )}
             {inProgress && (
@@ -87,7 +89,7 @@ export function Gabinet() {
                     <Video size={15} /> Rozmowa wideo
                   </Button>
                 )}
-                <Button onClick={() => changeStatus.mutate('COMPLETED')}>
+                <Button onClick={() => note.trim() ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
                   <Square size={14} /> Zakończ wizytę
                 </Button>
               </>
@@ -114,6 +116,12 @@ export function Gabinet() {
                 <p className="text-lg font-extrabold text-gray-900">{patient.first_name} {patient.last_name}</p>
                 <p className="font-medium text-gray-500">PESEL {patient.pesel} · ur. {formatDatePL(patient.birth_date)}</p>
                 {patient.phone_number && <p className="font-medium text-gray-500">tel. {patient.phone_number}</p>}
+                {patient.guardian_name && (
+                  <p className="flex items-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-800">
+                    <Users size={13} /> Podopieczny — opiekun: {patient.guardian_name}
+                    {patient.guardian_phone && <>, tel. {patient.guardian_phone}</>}
+                  </p>
+                )}
                 <div className="pt-1.5">
                   {patient.insurance_status
                     ? <Badge tone="success"><ShieldCheck size={12} /> eWUŚ: ubezpieczony</Badge>
@@ -152,6 +160,47 @@ export function Gabinet() {
             {patientId && <WystawDokument patientId={patientId} appointmentId={Number(id)} hideKinds={['NOTE']} />}
           </Tile>
         </div>
+
+        {confirm === 'NO_SHOW' && (
+          <Modal
+            overline="Gabinet"
+            title="Pacjent się nie stawił?"
+            onClose={() => setConfirm(null)}
+            footer={<>
+              <Button variant="secondary" onClick={() => setConfirm(null)}>Wróć</Button>
+              <Button variant="danger" onClick={() => { setConfirm(null); changeStatus.mutate('NO_SHOW') }}>
+                Tak, oznacz NO-SHOW
+              </Button>
+            </>}
+          >
+            <p className="text-sm leading-relaxed font-medium text-gray-600">
+              Wizyta {visit.patient_name} zostanie oznaczona jako „nie stawił się". Tej zmiany nie można cofnąć.
+            </p>
+          </Modal>
+        )}
+
+        {confirm === 'COMPLETE_UNSAVED' && (
+          <Modal
+            overline="Gabinet"
+            title="Niezapisana notatka"
+            onClose={() => setConfirm(null)}
+            footer={<>
+              <Button variant="ghost" onClick={() => { setConfirm(null); changeStatus.mutate('COMPLETED') }}>
+                Zakończ bez notatki
+              </Button>
+              <Button
+                disabled={saveNote.isPending}
+                onClick={() => saveNote.mutate(undefined, { onSuccess: () => { setConfirm(null); changeStatus.mutate('COMPLETED') } })}
+              >
+                <Check size={14} /> Zapisz notatkę i zakończ
+              </Button>
+            </>}
+          >
+            <p className="text-sm leading-relaxed font-medium text-gray-600">
+              Masz wpisaną notatkę, która nie została zapisana w dokumentacji. Po zakończeniu wizyty wrócisz do widoku dnia.
+            </p>
+          </Modal>
+        )}
 
         {/* dokumentacja pacjenta */}
         <Tile className="p-5" delay={120}>

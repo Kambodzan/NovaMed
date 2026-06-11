@@ -399,6 +399,21 @@ class PatientInfoOut(BaseModel):
     birth_date: date
     insurance_status: bool
     phone_number: str | None
+    # konta rodzinne: podopieczny zwykle nie ma telefonu — kontakt przez opiekuna
+    guardian_name: str | None = None
+    guardian_phone: str | None = None
+
+
+def patient_info_out(db: Session, p: Patient) -> PatientInfoOut:
+    user = db.get(AppUser, p.patient_id)
+    guardian = db.get(AppUser, p.guardian_id) if p.guardian_id else None
+    return PatientInfoOut(
+        patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
+        pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
+        phone_number=user.phone_number,
+        guardian_name=guardian.username if guardian else None,
+        guardian_phone=guardian.phone_number if guardian else None,
+    )
 
 
 @router.get("/patients/{patient_id}", response_model=PatientInfoOut)
@@ -411,12 +426,7 @@ def patient_info(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
-    user = db.get(AppUser, patient_id)
-    return PatientInfoOut(
-        patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
-        pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
-        phone_number=user.phone_number,
-    )
+    return patient_info_out(db, p)
 
 
 @router.post("/patients/{patient_id}/verify-insurance", response_model=PatientInfoOut)
@@ -435,12 +445,7 @@ def verify_insurance(
     except IntegrationError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
     db.commit()
-    app_user = db.get(AppUser, patient_id)
-    return PatientInfoOut(
-        patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
-        pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
-        phone_number=app_user.phone_number,
-    )
+    return patient_info_out(db, p)
 
 
 @router.get("/patients/{patient_id}/documents", response_model=list[DocumentOut])

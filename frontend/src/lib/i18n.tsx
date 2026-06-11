@@ -3,6 +3,7 @@
 // więc nieprzetłumaczony tekst nigdy nie wybucha. Portale personelu zostają
 // po polsku (decyzja projektowa — personel pracuje w PL).
 import { createContext, useContext, useState } from 'react'
+import { setDateLang } from './format'
 
 export type Lang = 'pl' | 'en'
 
@@ -157,6 +158,35 @@ const EN: Record<string, string> = {
   'Wygenerowane kody pojawią się w tym miejscu — możesz je unieważnić w każdej chwili.':
     'Generated codes will appear here — you can revoke them at any time.',
 
+  // statusy (StatusBadge w ui.tsx)
+  'wolny termin': 'available slot',
+  'blokada tymczasowa': 'payment pending',
+  'potwierdzona': 'confirmed',
+  'w trakcie': 'in progress',
+  'zakończona': 'completed',
+  'odwołana': 'cancelled',
+  'nieodbyta': 'no-show',
+  'przerwana': 'interrupted',
+  'szkic': 'draft',
+  'wysłana do P1': 'sent to P1',
+  'zrealizowana': 'dispensed',
+  'błąd wysyłki': 'submission error',
+  'zlecone': 'ordered',
+  'oczekuje na pacjenta': 'awaiting patient',
+  'próbka pobrana': 'sample collected',
+  'w analizie': 'in analysis',
+  'wynik gotowy': 'result ready',
+  'odebrany': 'received',
+  'materiał niewłaściwy': 'invalid sample',
+  'aktywne': 'active',
+  'zatwierdzona': 'final',
+  'wysłane do ZUS': 'sent to ZUS',
+  'zaplanowany': 'planned',
+  'wykonany': 'done',
+
+  // listy terminów
+  'Pokaż więcej terminów': 'Show more slots',
+
   // Rodzina
   'Konta rodzinne': 'Family accounts',
   'Profile podopiecznych — umawiaj wizyty i przeglądaj ich dokumentację w ich imieniu':
@@ -188,11 +218,15 @@ const Ctx = createContext<I18nCtx>({ lang: 'pl', setLang: () => {}, t: s => s })
 const STORAGE_KEY = 'novamed-lang'
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() =>
-    localStorage.getItem(STORAGE_KEY) === 'en' ? 'en' : 'pl')
+  const [lang, setLangState] = useState<Lang>(() => {
+    const initial: Lang = localStorage.getItem(STORAGE_KEY) === 'en' ? 'en' : 'pl'
+    setDateLang(initial)
+    return initial
+  })
 
   const setLang = (l: Lang) => {
     localStorage.setItem(STORAGE_KEY, l)
+    setDateLang(l)
     setLangState(l)
   }
 

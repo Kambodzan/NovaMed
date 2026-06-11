@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellRing, CalendarRange, Plus } from 'lucide-react'
+import { BellRing, CalendarRange, Plus, X } from 'lucide-react'
 import { Button, DateChip, EmptyState, Field, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { dayNo, formatTime, monthShort } from '../../lib/format'
@@ -92,6 +92,14 @@ export function Terminy() {
       void queryClient.invalidateQueries({ queryKey: ['clinics'] })
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać ustawienia.'),
+  })
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  const removeSlot = useMutation({
+    mutationFn: (id: number) => api(`/slots/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] }) },
+    onError: (e) => { setOk(null); setError(e instanceof ApiError ? e.message : 'Nie udało się usunąć terminu.') },
   })
 
   const slotsByDoctor = useMemo(() => {
@@ -189,28 +197,49 @@ export function Terminy() {
           />
         ) : (
           <div className="space-y-4">
-            {slotsByDoctor.map(([doctor, list]) => (
-              <div key={doctor}>
-                <p className="mb-2 text-sm font-extrabold text-gray-900">{doctor} <span className="font-semibold text-gray-400">· {list.length} terminów</span></p>
-                <ul className="flex flex-wrap gap-2">
-                  {list.slice(0, 8).map(s => (
-                    <li key={s.appointment_id} className="flex items-center gap-2 rounded-2xl bg-gray-50 p-2 pr-3">
-                      <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} />
-                      <span className="text-xs font-bold text-gray-600 [font-variant-numeric:tabular-nums]">
-                        {formatTime(s.appointment_datetime)}
-                        <span className={cx('ml-1 font-semibold', s.appointment_type === 'ONLINE' ? 'text-sky-600' : 'text-gray-400')}>
-                          {s.appointment_type === 'ONLINE' ? 'online' : 'stacj.'}
+            {slotsByDoctor.map(([doctor, list]) => {
+              const shown = expanded[doctor] ? list : list.slice(0, 8)
+              return (
+                <div key={doctor}>
+                  <p className="mb-2 text-sm font-extrabold text-gray-900">{doctor} <span className="font-semibold text-gray-400">· {list.length} terminów</span></p>
+                  <ul className="flex flex-wrap gap-2">
+                    {shown.map(s => (
+                      <li key={s.appointment_id} className="group flex items-center gap-2 rounded-2xl bg-gray-50 p-2 pr-2">
+                        <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} />
+                        <span className="text-xs font-bold text-gray-600 [font-variant-numeric:tabular-nums]">
+                          {formatTime(s.appointment_datetime)}
+                          <span className={cx('ml-1 font-semibold', s.appointment_type === 'ONLINE' ? 'text-sky-600' : 'text-gray-400')}>
+                            {s.appointment_type === 'ONLINE' ? 'online' : 'stacj.'}
+                          </span>
+                          <span className={cx('ml-1', s.price ? 'text-gray-900' : 'text-emerald-700')}>
+                            {s.price ? `${s.price} zł` : 'NFZ'}
+                          </span>
                         </span>
-                        <span className={cx('ml-1', s.price ? 'text-gray-900' : 'text-emerald-700')}>
-                          {s.price ? `${s.price} zł` : 'NFZ'}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                  {list.length > 8 && <li className="self-center text-xs font-bold text-gray-400">+{list.length - 8} więcej</li>}
-                </ul>
-              </div>
-            ))}
+                        <button
+                          aria-label="Usuń wolny termin"
+                          title="Usuń wolny termin"
+                          disabled={removeSlot.isPending}
+                          onClick={() => removeSlot.mutate(s.appointment_id)}
+                          className="cursor-pointer rounded-full p-1 text-gray-300 hover:bg-gray-100 hover:text-red-600"
+                        >
+                          <X size={13} />
+                        </button>
+                      </li>
+                    ))}
+                    {list.length > 8 && (
+                      <li className="self-center">
+                        <button
+                          onClick={() => setExpanded(e => ({ ...e, [doctor]: !e[doctor] }))}
+                          className="cursor-pointer text-xs font-extrabold text-primary hover:underline"
+                        >
+                          {expanded[doctor] ? 'Zwiń' : `Pokaż wszystkie (+${list.length - 8})`}
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
         )}
       </Tile>

@@ -3,6 +3,7 @@
 // ZASADA RESTRAINT: max 1 akcja primary + 1 secondary na kafel.
 
 import type { ReactNode, ButtonHTMLAttributes } from 'react'
+import { useI18n } from './lib/i18n'
 
 export const cx = (...parts: Array<string | false | undefined>) =>
   parts.filter(Boolean).join(' ')
@@ -127,8 +128,10 @@ const statusMap: Record<string, { label: string; tone: Tone }> = {
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  // useI18n poza I18nProviderem (portale personelu) zwraca identyczność — zostaje PL
+  const { t } = useI18n()
   const s = statusMap[status] ?? { label: status, tone: 'neutral' as Tone }
-  return <Badge tone={s.tone}>{s.label}</Badge>
+  return <Badge tone={s.tone}>{t(s.label)}</Badge>
 }
 
 /* ---------- Avatar ---------- */

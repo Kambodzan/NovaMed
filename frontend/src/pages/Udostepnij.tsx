@@ -8,9 +8,17 @@ import { useI18n } from '../lib/i18n'
 import { formatDatePL, formatTime } from '../lib/format'
 import type { ShareOut } from '../lib/types'
 
+const SCOPE_LABEL: Record<string, string> = {
+  ALL: 'Cała dokumentacja',
+  LAB_RESULT: 'Tylko wyniki badań',
+  PRESCRIPTION: 'Tylko e-recepty',
+  LAST_12M: 'Dokumenty z ostatnich 12 miesięcy',
+}
+
 export function Udostepnij() {
   const queryClient = useQueryClient()
   const { t } = useI18n()
+  const scopeLabel = (s: { scope: string; scope_label: string }) => t(SCOPE_LABEL[s.scope] ?? s.scope_label)
   const [scope, setScope] = useState('ALL')
   const [hours, setHours] = useState('24')
   const [lastCode, setLastCode] = useState<ShareOut | null>(null)
@@ -81,7 +89,7 @@ export function Udostepnij() {
               <Overline className="!text-primary/60">{t('Przekaż ten kod lekarzowi lub pielęgniarce')}</Overline>
               <p className="my-3 text-4xl font-extrabold tracking-[0.25em] text-primary">{lastCode.access_code}</p>
               <p className="text-xs font-semibold text-gray-400">
-                {lastCode.scope_label} · {t('ważny do:')} {formatDatePL(lastCode.expires_at)}, {formatTime(lastCode.expires_at)}
+                {scopeLabel(lastCode)} · {t('ważny do:')} {formatDatePL(lastCode.expires_at)}, {formatTime(lastCode.expires_at)}
               </p>
               <div className="mt-4 flex justify-center gap-2">
                 <Button size="sm" variant="secondary" onClick={() => void copy(lastCode.access_code)}>
@@ -103,7 +111,7 @@ export function Udostepnij() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-extrabold tracking-[0.15em] text-gray-900">{s.access_code}</p>
                   <p className="text-xs font-medium text-gray-500">
-                    {s.scope_label} · {t('do')} {formatDatePL(s.expires_at)}, {formatTime(s.expires_at)}
+                    {scopeLabel(s)} · {t('do')} {formatDatePL(s.expires_at)}, {formatTime(s.expires_at)}
                   </p>
                 </div>
                 <Button size="sm" variant="ghost" disabled={revoke.isPending} onClick={() => revoke.mutate(s.share_id)}>

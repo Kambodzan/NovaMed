@@ -104,3 +104,35 @@ def test_opiekun_ma_dostep_do_zalacznikow_telewizyty_podopiecznego(client, setup
     # obcy pacjent dalej nie ma dostępu
     _, other_token = factory.patient()
     assert client.get(url, headers=auth_header(other_token)).status_code == 403
+
+
+def test_usuwanie_wolnego_slotu(client, setup):
+    dt = (datetime.now() + timedelta(days=3)).replace(hour=14, minute=0, second=0, microsecond=0)
+    free = make_slots(client, setup, [dt.isoformat()])[0]
+    booked = make_slots(client, setup, [(dt + timedelta(hours=1)).isoformat()])[0]
+    client.post(f"/appointments/{booked['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+
+    # pacjent nie usunie; rejestracja usunie tylko WOLNY slot
+    assert client.delete(f"/slots/{free['appointment_id']}",
+                         headers=auth_header(setup["patient_token"])).status_code == 403
+    assert client.delete(f"/slots/{booked['appointment_id']}",
+                         headers=auth_header(setup["reg_token"])).status_code == 409
+    assert client.delete(f"/slots/{free['appointment_id']}",
+                         headers=auth_header(setup["reg_token"])).status_code == 204
+    assert client.get(f"/appointments/{free['appointment_id']}",
+                      headers=auth_header(setup["doctor_token"])).status_code == 404
+
+
+def test_karta_pacjenta_pokazuje_opiekuna(client, setup):
+    dep = client.post("/family", json={
+        "first_name": "Hania", "last_name": "Testowa",
+        "pesel": "20210112342", "birth_date": "2021-01-01",
+    }, headers=auth_header(setup["patient_token"])).json()
+
+    info = client.get(f"/patients/{dep['patient_id']}", headers=auth_header(setup["doctor_token"])).json()
+    assert info["guardian_name"] is not None
+    assert info["guardian_phone"] == "601234567"  # telefon opiekuna z conftest
+
+    # zwykły pacjent bez opiekuna
+    own = client.get(f"/patients/{setup['patient'].user_id}", headers=auth_header(setup["doctor_token"])).json()
+    assert own["guardian_name"] is None
