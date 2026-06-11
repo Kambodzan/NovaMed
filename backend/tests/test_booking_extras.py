@@ -72,6 +72,20 @@ def test_ics_rbac(client, setup, factory):
     assert client.get(f"/appointments/{slot['appointment_id']}/ics", headers=auth_header(other_token)).status_code == 403
 
 
+def test_przelozenie_zachowuje_powod_wizyty(client, setup):
+    slot = make_slot(client, setup, days_ahead=6, hour=9)
+    target = make_slot(client, setup, days_ahead=6, hour=10)
+    client.post(f"/appointments/{slot['appointment_id']}/book",
+                json={"reason": "duszności przy wysiłku", "notify_earlier": True},
+                headers=auth_header(setup["patient_token"]))
+    resp = client.post(f"/appointments/{slot['appointment_id']}/reschedule",
+                       json={"new_appointment_id": target["appointment_id"]},
+                       headers=auth_header(setup["patient_token"]))
+    assert resp.status_code == 200
+    assert resp.json()["notes"] == "duszności przy wysiłku"
+    assert resp.json()["notify_earlier"] is True
+
+
 def test_seria_cykliczna_tworzy_wszystkie_sloty(client, setup):
     # frontend rozwija „co tydzień ×N" do listy datetimes — backend przyjmuje całą serię
     base = (datetime.now() + timedelta(days=7)).replace(hour=8, minute=0, second=0, microsecond=0)

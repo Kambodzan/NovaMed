@@ -488,7 +488,8 @@ def reschedule_appointment(
     ))
     new.patient_id = old.patient_id  # przełożenie zachowuje pacjenta (także podopiecznego)
     new.appointment_status = AppointmentStatus.CONFIRMED.value
-    new.notify_earlier = old.notify_earlier  # preferencja wędruje z wizytą
+    new.notify_earlier = old.notify_earlier      # preferencja wędruje z wizytą
+    new.appointment_notes = old.appointment_notes  # powód wizyty też (lekarz nie traci wywiadu)
     notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
     db.commit()
     return appointment_out(db, new)
