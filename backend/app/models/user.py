@@ -78,5 +78,9 @@ class Patient(Base):
     pesel: Mapped[str] = mapped_column(String(11))
     birth_date: Mapped[date] = mapped_column(Date)
     insurance_status: Mapped[bool] = mapped_column(Boolean, default=False)  # aktualizowane z eWUŚ
+    # Konta rodzinne (rozszerzenie ERD): opiekun zarządza
+    # wizytami i dokumentacją podopiecznego; podopieczny nie loguje się sam.
+    guardian_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.user_id"))
 
-    user: Mapped["AppUser"] = relationship()
+    user: Mapped["AppUser"] = relationship(foreign_keys=[patient_id])
+    guardian: Mapped["AppUser | None"] = relationship(foreign_keys=[guardian_id])

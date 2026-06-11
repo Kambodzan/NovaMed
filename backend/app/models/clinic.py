@@ -14,6 +14,9 @@ class Clinic(Base):
     address: Mapped[str] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(20))
     clinic_email: Mapped[str | None] = mapped_column(String(100))
+    # Minimalne wyprzedzenie [h] powiadomień o wcześniejszym terminie
+    # (rozszerzenie ERD): nie powiadamiamy o slotach „za 2h".
+    earlier_notice_min_hours: Mapped[int] = mapped_column(Integer, default=24)
 
 
 class PatientClinic(Base):

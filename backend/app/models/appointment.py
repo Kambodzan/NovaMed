@@ -28,6 +28,9 @@ class Appointment(Base):
     price: Mapped[float | None] = mapped_column(Numeric(8, 2))
     # Czy wysłano przypomnienie 24h przed wizytą (UC-P7)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Pacjent chce powiadomienie, gdy u tego lekarza zwolni się WCZEŚNIEJSZY termin
+    # (rozszerzenie ERD)
+    notify_earlier: Mapped[bool] = mapped_column(Boolean, default=False)
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")
