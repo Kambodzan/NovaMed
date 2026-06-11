@@ -3,6 +3,7 @@ import { HeartPulse, LogOut } from 'lucide-react'
 import { cx } from '../ui'
 import { useAuth } from '../lib/auth'
 import { useFamily } from '../lib/family'
+import { useI18n } from '../lib/i18n'
 import { NotificationsBell } from '../components/NotificationsBell'
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
 export function PortalLayout() {
   const { me, logout } = useAuth()
   const { dependents, activeId, setActiveId, active } = useFamily()
+  const { lang, setLang, t } = useI18n()
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-20 sm:px-6">
@@ -27,7 +29,7 @@ export function PortalLayout() {
           </span>
           <span className="text-lg font-extrabold tracking-tight text-gray-900">NovaMed</span>
         </div>
-        <nav className="tile-shadow flex flex-wrap items-center gap-1 rounded-full bg-surface p-1.5" aria-label="Nawigacja">
+        <nav className="tile-shadow flex flex-wrap items-center gap-1 rounded-full bg-surface p-1.5" aria-label={t('Nawigacja')}>
           {navItems.map(n => (
             <NavLink
               key={n.to}
@@ -38,14 +40,21 @@ export function PortalLayout() {
                 isActive ? 'bg-primary-soft font-extrabold text-primary' : 'font-semibold text-gray-500 hover:text-gray-900',
               )}
             >
-              {n.label}
+              {t(n.label)}
             </NavLink>
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setLang(lang === 'pl' ? 'en' : 'pl')}
+            aria-label={lang === 'pl' ? 'Switch to English' : 'Przełącz na polski'}
+            className="tile-shadow cursor-pointer rounded-full bg-surface px-3 py-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase hover:text-gray-900"
+          >
+            {lang === 'pl' ? 'EN' : 'PL'}
+          </button>
           {dependents.length > 0 ? (
             <select
-              aria-label="Aktywny profil"
+              aria-label={t('Aktywny profil')}
               className={cx(
                 'tile-shadow cursor-pointer rounded-full bg-surface px-3.5 py-2 text-sm font-bold text-gray-700 outline-none',
                 activeId !== null && 'ring-2 ring-amber-400',
@@ -66,7 +75,7 @@ export function PortalLayout() {
           <NotificationsBell />
           <button
             onClick={() => void logout()}
-            aria-label="Wyloguj"
+            aria-label={t('Wyloguj')}
             className="tile-shadow cursor-pointer rounded-full bg-surface p-2.5 text-gray-500 hover:text-gray-900"
           >
             <LogOut size={17} />
@@ -76,7 +85,8 @@ export function PortalLayout() {
 
       {active && (
         <p className="mb-1 rounded-xl bg-amber-50 px-3.5 py-2 text-sm font-bold text-amber-800">
-          Działasz w imieniu: {active.first_name} {active.last_name}. Wizyty, dokumenty i rezerwacje dotyczą tego profilu.
+          {t('Działasz w imieniu: {name}. Wizyty, dokumenty i rezerwacje dotyczą tego profilu.',
+            { name: `${active.first_name} ${active.last_name}` })}
         </p>
       )}
       <div className="pt-3">

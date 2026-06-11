@@ -4,6 +4,7 @@ import { BellPlus, Check, ChevronRight, CreditCard, MapPin, Trash2, Video, Calen
 import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
+import { useI18n } from '../lib/i18n'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
 import type { AppointmentOut, BookOut, WaitlistEntry } from '../lib/types'
 
@@ -21,6 +22,7 @@ export function Umow() {
   const [notifyEarlier, setNotifyEarlier] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { asPatient, active } = useFamily()
+  const { t } = useI18n()
 
   const { data: allSlots } = useQuery({
     queryKey: ['slots'],
@@ -82,9 +84,9 @@ export function Umow() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="fade-up flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900">Umów wizytę</h1>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900">{t('Umów wizytę')}</h1>
         <ol className="flex items-center gap-2">
-          {['Specjalista', 'Termin', 'Potwierdzenie'].map((s, i) => (
+          {[t('Specjalista'), t('Termin'), t('Potwierdzenie')].map((s, i) => (
             <li key={s} className="flex items-center gap-2">
               <span className={cx(
                 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold',
@@ -100,12 +102,12 @@ export function Umow() {
 
       {step === 1 && (
         <Tile delay={60}>
-          <TileHeader title="Kogo potrzebujesz?" />
+          <TileHeader title={t('Kogo potrzebujesz?')} />
           {specs.length === 0 ? (
             <EmptyState
               icon={<CalendarDays size={28} strokeWidth={1.5} />}
-              title="Brak wolnych terminów"
-              hint="Wróć później — placówki na bieżąco dodają nowe terminy."
+              title={t('Brak wolnych terminów')}
+              hint={t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
             />
           ) : (
             <ul className="space-y-1.5">
@@ -124,12 +126,12 @@ export function Umow() {
                         <span className="block font-bold text-gray-900 group-hover:text-primary">{s}</span>
                         {earliest && (
                           <span className="block text-xs font-semibold text-emerald-700">
-                            najbliższy: {formatDatePL(earliest)}, {formatTime(earliest)}
+                            {t('najbliższy:')} {formatDatePL(earliest)}, {formatTime(earliest)}
                           </span>
                         )}
                       </span>
                       <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
-                        {count} {count === 1 ? 'termin' : 'terminów'}
+                        {count} {count === 1 ? t('termin') : t('terminów')}
                         <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
                       </span>
                     </button>
@@ -139,9 +141,9 @@ export function Umow() {
             </ul>
           )}
           <p className="mt-4 text-sm font-medium text-gray-500">
-            Nie ma specjalisty, którego szukasz?{' '}
+            {t('Nie ma specjalisty, którego szukasz?')}{' '}
             <button onClick={() => setWaitlistOpen(true)} className="cursor-pointer font-extrabold text-primary hover:underline">
-              Zapisz się na listę oczekujących
+              {t('Zapisz się na listę oczekujących')}
             </button>
           </p>
         </Tile>
@@ -152,8 +154,8 @@ export function Umow() {
       {step === 2 && (
         <Tile delay={60}>
           <TileHeader
-            title={`Wolne terminy — ${spec}`}
-            action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>Zmień</Button>}
+            title={`${t('Wolne terminy —')} ${spec}`}
+            action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>{t('Zmień')}</Button>}
           />
           <ul className="space-y-2.5">
             {slots.map((s, i) => (
@@ -163,7 +165,7 @@ export function Umow() {
               )}>
                 {i === 0 && (
                   <span className="absolute -top-2 left-4 rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-white uppercase">
-                    najbliższy
+                    {t('najbliższy')}
                   </span>
                 )}
                 <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
@@ -171,7 +173,7 @@ export function Umow() {
                   <p className="text-sm font-extrabold text-gray-900">{s.doctor_name}</p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold text-gray-500">
                     {s.appointment_type === 'ONLINE'
-                      ? <><Video size={12} /> teleporada</>
+                      ? <><Video size={12} /> {t('teleporada')}</>
                       : <><MapPin size={12} /> {s.clinic_name}</>}
                   </p>
                 </div>
@@ -179,7 +181,7 @@ export function Umow() {
                   {s.price ? `${s.price} zł` : 'NFZ'}
                 </span>
                 <Button size="sm" onClick={() => { setSlot(s); setStep(3); setError(null); setBooked(null); setPayPhase('idle') }}>
-                  Wybierz
+                  {t('Wybierz')}
                 </Button>
               </li>
             ))}
@@ -190,15 +192,15 @@ export function Umow() {
       {step === 3 && slot && (
         <Tile delay={60}>
           <TileHeader
-            title={booked ? 'Płatność' : 'Potwierdzenie rezerwacji'}
-            action={payPhase === 'idle' ? <Button variant="ghost" size="sm" onClick={resetToSlots}>Zmień termin</Button> : undefined}
+            title={booked ? t('Płatność') : t('Potwierdzenie rezerwacji')}
+            action={payPhase === 'idle' ? <Button variant="ghost" size="sm" onClick={resetToSlots}>{t('Zmień termin')}</Button> : undefined}
           />
           <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-gray-50 p-4">
             <DateChip month={monthShort(slot.appointment_datetime)} day={dayNo(slot.appointment_datetime)} time={formatTime(slot.appointment_datetime)} />
             <div className="min-w-0 flex-1">
               <p className="font-extrabold text-gray-900">{slot.doctor_name}</p>
               <p className="text-sm font-semibold text-gray-500">
-                {slot.specialization} · {slot.appointment_type === 'ONLINE' ? 'teleporada' : slot.clinic_name}
+                {slot.specialization} · {slot.appointment_type === 'ONLINE' ? t('teleporada') : slot.clinic_name}
               </p>
             </div>
             <span className={cx('text-xl font-extrabold', slot.price ? 'text-gray-900' : 'text-emerald-700')}>
@@ -209,20 +211,20 @@ export function Umow() {
           <div className="mt-4 space-y-3">
             {active && (
               <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-bold text-amber-800">
-                Rezerwujesz dla: {active.first_name} {active.last_name} (podopieczny).
+                {t('Rezerwujesz dla: {name} (podopieczny).', { name: `${active.first_name} ${active.last_name}` })}
               </p>
             )}
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
             {payPhase === 'idle' && (
               <>
-                <Field label="Co Ci dolega? (opcjonalnie)" hint="Lekarz zobaczy to przed wizytą — pomoże mu się przygotować.">
+                <Field label={t('Co Ci dolega? (opcjonalnie)')} hint={t('Lekarz zobaczy to przed wizytą — pomoże mu się przygotować.')}>
                   <textarea
                     className={cx(inputCls, 'h-20 py-2.5')}
                     value={reason}
                     onChange={e => setReason(e.target.value)}
                     maxLength={500}
-                    placeholder="np. od tygodnia duszności przy wysiłku…"
+                    placeholder={t('np. od tygodnia duszności przy wysiłku…')}
                   />
                 </Field>
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
@@ -233,16 +235,16 @@ export function Umow() {
                     onChange={e => setNotifyEarlier(e.target.checked)}
                   />
                   <span className="text-sm font-semibold text-gray-700">
-                    Powiadom mnie, jeśli u tego lekarza zwolni się wcześniejszy termin
+                    {t('Powiadom mnie, jeśli u tego lekarza zwolni się wcześniejszy termin')}
                   </span>
                 </label>
                 <p className="text-sm font-medium text-gray-500">
                   {slot.price
-                    ? 'Po rezerwacji termin blokujemy na czas płatności. Wizyta zostanie potwierdzona po jej zaksięgowaniu.'
-                    : 'Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.'}
+                    ? t('Po rezerwacji termin blokujemy na czas płatności. Wizyta zostanie potwierdzona po jej zaksięgowaniu.')
+                    : t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}
                 </p>
                 <Button size="lg" disabled={book.isPending} onClick={() => book.mutate(slot.appointment_id)}>
-                  {book.isPending ? 'Rezerwowanie…' : slot.price ? 'Rezerwuję i przechodzę do płatności' : 'Rezerwuję termin'}
+                  {book.isPending ? t('Rezerwowanie…') : slot.price ? t('Rezerwuję i przechodzę do płatności') : t('Rezerwuję termin')}
                 </Button>
               </>
             )}
@@ -250,17 +252,17 @@ export function Umow() {
             {payPhase === 'awaiting' && booked?.payment && (
               <>
                 <p className="text-sm font-medium text-gray-500">
-                  Termin zablokowany. Do zapłaty: <span className="font-extrabold text-gray-900">{booked.payment.amount} zł</span>.
-                  Operator płatności jest symulowany — wybierz wynik autoryzacji.
+                  {t('Termin zablokowany. Do zapłaty:')} <span className="font-extrabold text-gray-900">{booked.payment.amount} zł</span>.{' '}
+                  {t('Operator płatności jest symulowany — wybierz wynik autoryzacji.')}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Button size="lg" disabled={pay.isPending}
                     onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'success' })}>
-                    <CreditCard size={17} /> Zapłać kartą (symulacja)
+                    <CreditCard size={17} /> {t('Zapłać kartą (symulacja)')}
                   </Button>
                   <Button size="lg" variant="secondary" disabled={pay.isPending}
                     onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'failure' })}>
-                    Symuluj odmowę płatności
+                    {t('Symuluj odmowę płatności')}
                   </Button>
                 </div>
               </>
@@ -270,9 +272,9 @@ export function Umow() {
               <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={16} /></span>
                 <div>
-                  <p className="font-extrabold text-emerald-800">Wizyta potwierdzona{slot.price ? ' i opłacona' : ''}</p>
+                  <p className="font-extrabold text-emerald-800">{slot.price ? t('Wizyta potwierdzona i opłacona') : t('Wizyta potwierdzona')}</p>
                   <p className="mt-0.5 text-sm font-medium text-emerald-700">
-                    Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.
+                    {t('Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.')}
                   </p>
                 </div>
               </div>
@@ -283,13 +285,13 @@ export function Umow() {
                 <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"><XCircle size={16} /></span>
                   <div>
-                    <p className="font-extrabold text-red-700">Płatność odrzucona</p>
+                    <p className="font-extrabold text-red-700">{t('Płatność odrzucona')}</p>
                     <p className="mt-0.5 text-sm font-medium text-red-600">
-                      Termin wrócił do puli wolnych terminów. Możesz spróbować ponownie lub wybrać inny termin.
+                      {t('Termin wrócił do puli wolnych terminów. Możesz spróbować ponownie lub wybrać inny termin.')}
                     </p>
                   </div>
                 </div>
-                <Button variant="secondary" onClick={resetToSlots}>Wróć do terminów</Button>
+                <Button variant="secondary" onClick={resetToSlots}>{t('Wróć do terminów')}</Button>
               </div>
             )}
           </div>
@@ -301,6 +303,7 @@ export function Umow() {
 
 function WaitlistModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const [spec, setSpec] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -322,19 +325,18 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal
-      overline="UC-P3: brak terminów"
-      title="Lista oczekujących"
+      overline="UC-P3"
+      title={t('Lista oczekujących')}
       onClose={onClose}
     >
       <div className="space-y-4 pb-2">
         <p className="text-sm font-medium text-gray-500">
-          Gdy pojawią się nowe terminy wybranej specjalizacji, dostaniesz powiadomienie,
-          a wpis z listy zniknie automatycznie.
+          {t('Gdy pojawią się nowe terminy wybranej specjalizacji, dostaniesz powiadomienie, a wpis z listy zniknie automatycznie.')}
         </p>
         <form className="flex gap-2" onSubmit={e => { e.preventDefault(); if (spec.trim().length >= 2) join.mutate() }}>
-          <Field label="Specjalizacja">
+          <Field label={t('Specjalizacja')}>
             <input className={inputCls} value={spec} onChange={e => setSpec(e.target.value)}
-              placeholder="np. Dermatolog" list="spec-suggestions" />
+              placeholder={t('np. Dermatolog')} list="spec-suggestions" />
           </Field>
           <datalist id="spec-suggestions">
             {['Kardiolog', 'Internista', 'Endokrynolog', 'Dermatolog', 'Pediatra', 'Neurolog', 'Ortopeda'].map(s => (
@@ -343,7 +345,7 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
           </datalist>
           <div className="flex items-end">
             <Button disabled={join.isPending || spec.trim().length < 2} type="submit">
-              <BellPlus size={15} /> Zapisz
+              <BellPlus size={15} /> {t('Zapisz')}
             </Button>
           </div>
         </form>
@@ -354,7 +356,7 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
             {entries.map(e => (
               <li key={e.entry_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-2.5">
                 <span className="flex-1 text-sm font-bold text-gray-900">{e.specialization}</span>
-                <button aria-label="Usuń z listy" onClick={() => leave.mutate(e.entry_id)}
+                <button aria-label={t('Usuń z listy')} onClick={() => leave.mutate(e.entry_id)}
                   className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600">
                   <Trash2 size={15} />
                 </button>

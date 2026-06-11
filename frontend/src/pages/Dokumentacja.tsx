@@ -4,6 +4,7 @@ import { Download, FileSignature, FileText, FlaskConical, FolderOpen, Pill } fro
 import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
 import { API_URL, api, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
+import { useI18n } from '../lib/i18n'
 import { formatDatePL } from '../lib/format'
 import type { DocumentOut } from '../lib/types'
 
@@ -31,6 +32,7 @@ const docMeta: Record<DocumentOut['document_type'], { icon: typeof FileText; lab
 export function Dokumentacja() {
   const [filter, setFilter] = useState<string>('ALL')
   const { activeId, asPatient } = useFamily()
+  const { t } = useI18n()
   const { data: docs } = useQuery({
     queryKey: ['my-documents', activeId],
     queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
@@ -40,19 +42,19 @@ export function Dokumentacja() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">Moja dokumentacja</h1>
+      <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Moja dokumentacja')}</h1>
 
       <div className="fade-up flex flex-wrap gap-2" style={{ animationDelay: '50ms' }}>
-        {['ALL', ...Object.keys(docMeta)].map(t => (
+        {['ALL', ...Object.keys(docMeta)].map(kind => (
           <button
-            key={t}
-            onClick={() => setFilter(t)}
+            key={kind}
+            onClick={() => setFilter(kind)}
             className={cx(
               'cursor-pointer rounded-full px-4 py-2 text-xs font-extrabold transition-colors',
-              filter === t ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-500 hover:text-gray-900',
+              filter === kind ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-500 hover:text-gray-900',
             )}
           >
-            {t === 'ALL' ? 'Wszystkie' : docMeta[t as DocumentOut['document_type']].label}
+            {kind === 'ALL' ? t('Wszystkie') : t(docMeta[kind as DocumentOut['document_type']].label)}
           </button>
         ))}
       </div>
@@ -60,8 +62,8 @@ export function Dokumentacja() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={28} strokeWidth={1.5} />}
-          title="Brak dokumentów"
-          hint="E-recepty, skierowania i wyniki badań pojawią się tu po wizytach u lekarza."
+          title={t('Brak dokumentów')}
+          hint={t('E-recepty, skierowania i wyniki badań pojawią się tu po wizytach u lekarza.')}
         />
       ) : (
         <ul className="space-y-3">
@@ -75,19 +77,19 @@ export function Dokumentacja() {
                       <m.icon size={19} />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <Overline>{m.label} · {formatDatePL(doc.issued_at)}</Overline>
+                      <Overline>{t(m.label)} · {formatDatePL(doc.issued_at)}</Overline>
                       <p className="mt-1 text-sm leading-relaxed font-medium text-gray-600">{doc.details}</p>
                       <p className="mt-1.5 text-xs font-semibold text-gray-400">
                         {doc.doctor_name}
                         {doc.code && (
-                          <> · kod: <span className="rounded-md bg-gray-100 px-2 py-0.5 font-extrabold tracking-[0.2em] text-gray-900">{doc.code}</span></>
+                          <> · {t('kod:')} <span className="rounded-md bg-gray-100 px-2 py-0.5 font-extrabold tracking-[0.2em] text-gray-900">{doc.code}</span></>
                         )}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={doc.document_status} />
                       <Button size="sm" variant="secondary" onClick={() => void downloadPdf(doc.document_id)}>
-                        <Download size={14} /> Pobierz PDF
+                        <Download size={14} /> {t('Pobierz PDF')}
                       </Button>
                     </div>
                   </div>

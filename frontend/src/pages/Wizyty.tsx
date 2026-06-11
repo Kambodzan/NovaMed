@@ -5,6 +5,7 @@ import { CalendarDays, CalendarPlus, Check, MapPin, Star, Video } from 'lucide-r
 import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
+import { useI18n } from '../lib/i18n'
 
 async function downloadIcs(appointmentId: number) {
   const resp = await fetch(`${API_URL}/appointments/${appointmentId}/ics`, {
@@ -30,6 +31,7 @@ export function Wizyty() {
   const [error, setError] = useState<string | null>(null)
 
   const { activeId, asPatient } = useFamily()
+  const { t } = useI18n()
   const { data: visits } = useQuery({
     queryKey: ['my-appointments', activeId],
     queryFn: () => api<AppointmentOut[]>(asPatient('/appointments/my')),
@@ -62,7 +64,7 @@ export function Wizyty() {
             {v.specialization}
             {' · '}
             {v.appointment_type === 'ONLINE' ? <Video size={13} /> : <MapPin size={13} />}
-            {v.appointment_type === 'ONLINE' ? 'teleporada' : v.clinic_name}
+            {v.appointment_type === 'ONLINE' ? t('teleporada') : v.clinic_name}
           </p>
         </div>
         <StatusBadge status={v.appointment_status} />
@@ -70,31 +72,31 @@ export function Wizyty() {
           <div className="flex gap-2">
             {v.appointment_type === 'ONLINE' && (
               <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
-                <Video size={14} /> Rozpocznij
+                <Video size={14} /> {t('Rozpocznij')}
               </Button>
             )}
-            <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setError(null) }}>Zmień termin</Button>
-            <Button size="sm" variant="ghost" title="Dodaj do kalendarza (ICS)" onClick={() => void downloadIcs(v.appointment_id)}>
-              <CalendarPlus size={14} /> Do kalendarza
+            <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setError(null) }}>{t('Zmień termin')}</Button>
+            <Button size="sm" variant="ghost" title={t('Dodaj do kalendarza (ICS)')} onClick={() => void downloadIcs(v.appointment_id)}>
+              <CalendarPlus size={14} /> {t('Do kalendarza')}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>Anuluj</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>{t('Anuluj')}</Button>
           </div>
         )}
         {actions && v.appointment_status === 'IN_PROGRESS' && v.appointment_type === 'ONLINE' && (
           <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
-            <Video size={14} /> Dołącz do wizyty
+            <Video size={14} /> {t('Dołącz do wizyty')}
           </Button>
         )}
         {actions && v.appointment_status === 'TEMP_LOCK' && (
-          <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>Zwolnij rezerwację</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>{t('Zwolnij rezerwację')}</Button>
         )}
         {!actions && v.appointment_status === 'COMPLETED' && !v.reviewed && (
           <Button size="sm" variant="secondary" onClick={() => setReviewFor(v)}>
-            <Star size={14} /> Oceń
+            <Star size={14} /> {t('Oceń')}
           </Button>
         )}
         {!actions && v.appointment_status === 'COMPLETED' && v.reviewed && (
-          <span className="text-xs font-bold text-gray-400">opinia wystawiona</span>
+          <span className="text-xs font-bold text-gray-400">{t('opinia wystawiona')}</span>
         )}
       </div>
     </Tile>
@@ -102,40 +104,40 @@ export function Wizyty() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">Moje wizyty</h1>
+      <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Moje wizyty')}</h1>
 
       <section className="space-y-3">
-        <Overline>Nadchodzące · bezpłatne odwołanie do 24 h przed terminem</Overline>
+        <Overline>{t('Nadchodzące · bezpłatne odwołanie do 24 h przed terminem')}</Overline>
         {upcoming.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={28} strokeWidth={1.5} />}
-            title="Brak nadchodzących wizyt"
-            hint="Umów wizytę w zakładce „Umów wizytę”."
+            title={t('Brak nadchodzących wizyt')}
+            hint={t('Umów wizytę w zakładce „Umów wizytę”.')}
           />
         ) : upcoming.map(v => <Row key={v.appointment_id} v={v} actions />)}
       </section>
 
       {past.length > 0 && (
         <section className="space-y-3">
-          <Overline>Historia</Overline>
+          <Overline>{t('Historia')}</Overline>
           {past.map(v => <Row key={v.appointment_id} v={v} />)}
         </section>
       )}
 
       {cancelFor && (
         <Modal
-          overline="Moje wizyty"
-          title="Anulować wizytę?"
+          overline={t('Moje wizyty')}
+          title={t('Anulować wizytę?')}
           onClose={() => setCancelFor(null)}
           footer={<>
-            <Button variant="secondary" onClick={() => setCancelFor(null)}>Wróć</Button>
+            <Button variant="secondary" onClick={() => setCancelFor(null)}>{t('Wróć')}</Button>
             <Button variant="danger" disabled={cancel.isPending} onClick={() => cancel.mutate(cancelFor.appointment_id)}>
-              {cancel.isPending ? 'Anulowanie…' : 'Tak, anuluj'}
+              {cancel.isPending ? t('Anulowanie…') : t('Tak, anuluj')}
             </Button>
           </>}
         >
           <p className="text-sm leading-relaxed font-medium text-gray-600">
-            {cancelFor.doctor_name}, {formatTime(cancelFor.appointment_datetime)}. Termin wróci do puli wolnych terminów.
+            {cancelFor.doctor_name}, {formatTime(cancelFor.appointment_datetime)}. {t('Termin wróci do puli wolnych terminów.')}
           </p>
           {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
         </Modal>
@@ -178,6 +180,7 @@ function ReviewModal({ visit, onClose, onDone }: {
   onClose: () => void
   onDone: () => void
 }) {
+  const { t } = useI18n()
   const [doctorRating, setDoctorRating] = useState(0)
   const [doctorComment, setDoctorComment] = useState('')
   const [clinicRating, setClinicRating] = useState(0)
@@ -199,34 +202,34 @@ function ReviewModal({ visit, onClose, onDone }: {
 
   return (
     <Modal
-      overline="Opinia po wizycie (UC-P8)"
+      overline={t('Opinia po wizycie (UC-P8)')}
       title={visit.doctor_name}
       onClose={onClose}
       footer={<>
-        <Button variant="secondary" onClick={onClose}>Anuluj</Button>
+        <Button variant="secondary" onClick={onClose}>{t('Anuluj')}</Button>
         <Button disabled={submit.isPending || (doctorRating === 0 && clinicRating === 0)} onClick={() => submit.mutate()}>
-          <Check size={14} /> {submit.isPending ? 'Zapisywanie…' : 'Wyślij opinię'}
+          <Check size={14} /> {submit.isPending ? t('Zapisywanie…') : t('Wyślij opinię')}
         </Button>
       </>}
     >
       <div className="space-y-4 pb-2">
         <div className={cx('rounded-2xl p-4', doctorRating ? 'bg-primary-soft' : 'bg-gray-50')}>
-          <p className="mb-2 text-sm font-extrabold text-gray-900">Oceń lekarza</p>
+          <p className="mb-2 text-sm font-extrabold text-gray-900">{t('Oceń lekarza')}</p>
           <Stars value={doctorRating} onChange={setDoctorRating} />
           {doctorRating > 0 && (
             <textarea
               className={cx(inputCls, 'mt-3 h-16 py-2')}
               value={doctorComment}
               onChange={e => setDoctorComment(e.target.value)}
-              placeholder="Komentarz (opcjonalnie)"
+              placeholder={t('Komentarz (opcjonalnie)')}
             />
           )}
         </div>
         <div className={cx('rounded-2xl p-4', clinicRating ? 'bg-primary-soft' : 'bg-gray-50')}>
-          <p className="mb-2 text-sm font-extrabold text-gray-900">Oceń placówkę — {visit.clinic_name}</p>
+          <p className="mb-2 text-sm font-extrabold text-gray-900">{t('Oceń placówkę —')} {visit.clinic_name}</p>
           <Stars value={clinicRating} onChange={setClinicRating} />
         </div>
-        <p className="text-xs font-medium text-gray-400">Możesz ocenić lekarza, placówkę lub oboje.</p>
+        <p className="text-xs font-medium text-gray-400">{t('Możesz ocenić lekarza, placówkę lub oboje.')}</p>
         {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       </div>
     </Modal>
@@ -238,6 +241,7 @@ function RescheduleModal({ visit, onClose, onDone }: {
   onClose: () => void
   onDone: () => void
 }) {
+  const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const { data: slots } = useQuery({
     queryKey: ['slots', visit.doctor_id],
@@ -253,7 +257,7 @@ function RescheduleModal({ visit, onClose, onDone }: {
   })
 
   return (
-    <Modal overline={`${visit.doctor_name} · obecnie ${formatTime(visit.appointment_datetime)}`} title="Wybierz nowy termin" onClose={onClose}>
+    <Modal overline={`${visit.doctor_name} · ${t('obecnie')} ${formatTime(visit.appointment_datetime)}`} title={t('Wybierz nowy termin')} onClose={onClose}>
       {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       {slots && slots.length > 0 ? (
         <ul className="space-y-2 pb-4">
@@ -261,16 +265,16 @@ function RescheduleModal({ visit, onClose, onDone }: {
             <li key={s.appointment_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
               <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
               <span className="flex-1 text-sm font-semibold text-gray-500">
-                {s.appointment_type === 'ONLINE' ? 'teleporada' : s.clinic_name}
+                {s.appointment_type === 'ONLINE' ? t('teleporada') : s.clinic_name}
               </span>
               <Button size="sm" disabled={reschedule.isPending} onClick={() => reschedule.mutate(s.appointment_id)}>
-                Wybierz
+                {t('Wybierz')}
               </Button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="pb-4 text-sm font-medium text-gray-500">Ten lekarz nie ma teraz wolnych terminów.</p>
+        <p className="pb-4 text-sm font-medium text-gray-500">{t('Ten lekarz nie ma teraz wolnych terminów.')}</p>
       )}
     </Modal>
   )
