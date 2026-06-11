@@ -52,6 +52,8 @@ class AppointmentOut(BaseModel):
     patient_name: str | None = None
     price: float | None = None
     reviewed: bool | None = None  # tylko w /appointments/my (UC-P8)
+    notes: str | None = None      # powód wizyty („co Ci dolega") podany przy rezerwacji
+    notify_earlier: bool = False
 
 
 class PaymentInfoOut(BaseModel):
@@ -68,6 +70,11 @@ class BookOut(BaseModel):
 
 class PayIn(BaseModel):
     outcome: str = Field(pattern="^(success|failure)$", description="Symulacja autoryzacji u operatora (mock)")
+
+
+class BookIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=500, description="Powód wizyty (opcjonalnie)")
+    notify_earlier: bool = Field(default=False, description="Powiadom, gdy zwolni się wcześniejszy termin")
 
 
 class RescheduleIn(BaseModel):
@@ -96,6 +103,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         patient_id=a.patient_id,
         patient_name=f"{patient.first_name} {patient.last_name}" if patient else None,
         price=float(a.price) if a.price is not None else None,
+        notes=a.appointment_notes,
+        notify_earlier=a.notify_earlier,
     )
 
 
@@ -200,6 +209,7 @@ def search_slots(
 @router.post("/appointments/{appointment_id}/book", response_model=BookOut)
 def book_appointment(
     appointment_id: int,
+    body: BookIn | None = None,
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
@@ -212,6 +222,12 @@ def book_appointment(
     a = get_appointment_or_404(appointment_id, db)
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
+
+    # powód wizyty i opcje rezerwacji (opcjonalne body)
+    if body:
+        if body.reason:
+            a.appointment_notes = body.reason.strip()[:500]
+        a.notify_earlier = body.notify_earlier
 
     # eWUŚ — automatyczna weryfikacja przy rejestracji wizyty; awaria nie blokuje rezerwacji
     patient = db.get(Patient, user.user_id)
@@ -467,6 +483,56 @@ def patient_appointments(
         .order_by(Appointment.appointment_datetime.desc())
     )
     return [appointment_out(db, a) for a in rows]
+
+
+@router.get("/appointments/{appointment_id}/ics")
+def appointment_ics(
+    appointment_id: int,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Eksport wizyty do kalendarza (plik .ics) — uczestnicy wizyty."""
+    from fastapi.responses import Response
+
+    a = get_appointment_or_404(appointment_id, db)
+    if user.user_id not in (a.patient_id, a.doctor_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do tej wizyty.")
+
+    doctor_user = db.get(AppUser, a.doctor_id)
+    doctor = db.get(Doctor, a.doctor_id)
+    clinic = db.get(Clinic, a.clinic_id)
+    start = a.appointment_datetime
+    end = start + timedelta(minutes=30)
+    fmt = "%Y%m%dT%H%M%S"
+    location = "Teleporada online (NovaMed)" if a.appointment_type == "ONLINE" else f"{clinic.clinic_name}, {clinic.address}"
+    summary = f"Wizyta: {doctor_user.username}" + (f" ({doctor.specialization})" if doctor.specialization else "")
+
+    ics = "\r\n".join([
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//NovaMed//Portal Medyczny//PL",
+        "BEGIN:VEVENT",
+        f"UID:novamed-appointment-{a.appointment_id}@novamed",
+        f"DTSTAMP:{datetime.now().strftime(fmt)}",
+        f"DTSTART:{start.strftime(fmt)}",
+        f"DTEND:{end.strftime(fmt)}",
+        f"SUMMARY:{summary}",
+        f"LOCATION:{location}",
+        "DESCRIPTION:Szczegóły i ewentualne zmiany terminu w portalu NovaMed.",
+        "BEGIN:VALARM",
+        "TRIGGER:-PT2H",
+        "ACTION:DISPLAY",
+        "DESCRIPTION:Przypomnienie o wizycie",
+        "END:VALARM",
+        "END:VEVENT",
+        "END:VCALENDAR",
+        "",
+    ])
+    return Response(
+        content=ics,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="wizyta-{a.appointment_id}.ics"'},
+    )
 
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)

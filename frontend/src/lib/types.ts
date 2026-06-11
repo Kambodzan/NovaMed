@@ -24,6 +24,8 @@ export interface AppointmentOut {
   patient_name: string | null
   price: number | null
   reviewed?: boolean | null
+  notes: string | null
+  notify_earlier: boolean
 }
 
 export interface NotificationOut {

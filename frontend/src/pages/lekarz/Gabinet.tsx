@@ -119,6 +119,12 @@ export function Gabinet() {
                     ? <Badge tone="success"><ShieldCheck size={12} /> eWUŚ: ubezpieczony</Badge>
                     : <Badge tone="warn"><AlertTriangle size={12} /> eWUŚ: brak potwierdzenia</Badge>}
                 </div>
+                {visit.notes && (
+                  <div className="mt-2 rounded-xl bg-amber-50 px-3.5 py-2.5">
+                    <p className="text-xs font-extrabold tracking-wider text-amber-700 uppercase">Powód wizyty (od pacjenta)</p>
+                    <p className="mt-0.5 text-sm font-medium text-amber-900">{visit.notes}</p>
+                  </div>
+                )}
               </div>
             ) : <p className="text-sm font-medium text-gray-400">Wczytywanie…</p>}
           </Tile>

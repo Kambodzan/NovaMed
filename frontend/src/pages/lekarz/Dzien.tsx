@@ -85,6 +85,7 @@ export function LekarzDzien() {
                     title="Otwórz kartotekę pacjenta"
                   >
                     <p className="text-sm font-extrabold text-gray-900 hover:text-primary">{v.patient_name}</p>
+                    {v.notes && <p className="truncate text-xs font-medium text-gray-500">{v.notes}</p>}
                   </button>
                   {v.price != null && <Badge tone="neutral">{v.price} zł</Badge>}
                   <StatusBadge status={v.appointment_status} />

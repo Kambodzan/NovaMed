@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, Check, ChevronRight, CreditCard, MapPin, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
 import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
-import { dayNo, formatTime, monthShort } from '../lib/format'
+import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
 import type { AppointmentOut, BookOut, WaitlistEntry } from '../lib/types'
 
 type PayPhase = 'idle' | 'awaiting' | 'success' | 'declined'
@@ -16,6 +16,8 @@ export function Umow() {
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
   const [waitlistOpen, setWaitlistOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [notifyEarlier, setNotifyEarlier] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const { data: allSlots } = useQuery({
@@ -42,7 +44,10 @@ export function Umow() {
   }
 
   const book = useMutation({
-    mutationFn: (id: number) => api<BookOut>(`/appointments/${id}/book`, { method: 'POST' }),
+    mutationFn: (id: number) => api<BookOut>(`/appointments/${id}/book`, {
+      method: 'POST',
+      body: { reason: reason.trim() || null, notify_earlier: notifyEarlier },
+    }),
     onSuccess: (data) => {
       setBooked(data)
       setPayPhase(data.payment ? 'awaiting' : 'success')
@@ -102,20 +107,33 @@ export function Umow() {
             />
           ) : (
             <ul className="space-y-1.5">
-              {specs.map(([s, count]) => (
-                <li key={s}>
-                  <button
-                    onClick={() => { setSpec(s); setStep(2) }}
-                    className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
-                  >
-                    <span className="font-bold text-gray-900 group-hover:text-primary">{s}</span>
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
-                      {count} {count === 1 ? 'termin' : 'terminów'}
-                      <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {specs.map(([s, count]) => {
+                const earliest = (allSlots ?? [])
+                  .filter(x => x.specialization === s)
+                  .map(x => x.appointment_datetime)
+                  .sort()[0]
+                return (
+                  <li key={s}>
+                    <button
+                      onClick={() => { setSpec(s); setStep(2) }}
+                      className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
+                    >
+                      <span>
+                        <span className="block font-bold text-gray-900 group-hover:text-primary">{s}</span>
+                        {earliest && (
+                          <span className="block text-xs font-semibold text-emerald-700">
+                            najbliższy: {formatDatePL(earliest)}, {formatTime(earliest)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
+                        {count} {count === 1 ? 'termin' : 'terminów'}
+                        <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
           <p className="mt-4 text-sm font-medium text-gray-500">
@@ -136,8 +154,16 @@ export function Umow() {
             action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>Zmień</Button>}
           />
           <ul className="space-y-2.5">
-            {slots.map(s => (
-              <li key={s.appointment_id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-gray-50 p-3">
+            {slots.map((s, i) => (
+              <li key={s.appointment_id} className={cx(
+                'relative flex flex-wrap items-center gap-3 rounded-2xl p-3',
+                i === 0 ? 'bg-primary-soft ring-1 ring-primary/30' : 'bg-gray-50',
+              )}>
+                {i === 0 && (
+                  <span className="absolute -top-2 left-4 rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-white uppercase">
+                    najbliższy
+                  </span>
+                )}
                 <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-extrabold text-gray-900">{s.doctor_name}</p>
@@ -183,6 +209,26 @@ export function Umow() {
 
             {payPhase === 'idle' && (
               <>
+                <Field label="Co Ci dolega? (opcjonalnie)" hint="Lekarz zobaczy to przed wizytą — pomoże mu się przygotować.">
+                  <textarea
+                    className={cx(inputCls, 'h-20 py-2.5')}
+                    value={reason}
+                    onChange={e => setReason(e.target.value)}
+                    maxLength={500}
+                    placeholder="np. od tygodnia duszności przy wysiłku…"
+                  />
+                </Field>
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                    checked={notifyEarlier}
+                    onChange={e => setNotifyEarlier(e.target.checked)}
+                  />
+                  <span className="text-sm font-semibold text-gray-700">
+                    Powiadom mnie, jeśli u tego lekarza zwolni się wcześniejszy termin
+                  </span>
+                </label>
                 <p className="text-sm font-medium text-gray-500">
                   {slot.price
                     ? 'Po rezerwacji termin blokujemy na czas płatności. Wizyta zostanie potwierdzona po jej zaksięgowaniu.'

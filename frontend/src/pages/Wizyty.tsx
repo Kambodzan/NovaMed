@@ -1,9 +1,22 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, Check, MapPin, Star, Video } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Check, MapPin, Star, Video } from 'lucide-react'
 import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
-import { api, ApiError } from '../lib/api'
+import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
+
+async function downloadIcs(appointmentId: number) {
+  const resp = await fetch(`${API_URL}/appointments/${appointmentId}/ics`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  })
+  if (!resp.ok) return
+  const blob = await resp.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `wizyta-${appointmentId}.ics`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
 import { dayNo, formatTime, isFuture, monthShort } from '../lib/format'
 import type { AppointmentOut } from '../lib/types'
 
@@ -59,6 +72,9 @@ export function Wizyty() {
               </Button>
             )}
             <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setError(null) }}>Zmień termin</Button>
+            <Button size="sm" variant="ghost" title="Dodaj do kalendarza (ICS)" onClick={() => void downloadIcs(v.appointment_id)}>
+              <CalendarPlus size={14} /> Do kalendarza
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>Anuluj</Button>
           </div>
         )}
