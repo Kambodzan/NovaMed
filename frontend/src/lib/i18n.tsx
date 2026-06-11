@@ -186,6 +186,14 @@ const EN: Record<string, string> = {
 
   // listy terminów
   'Pokaż więcej terminów': 'Show more slots',
+  'Szukaj lekarza lub specjalizacji…': 'Search for a doctor or specialty…',
+  'Specjalizacje': 'Specialties',
+  'Lekarze': 'Doctors',
+  'Stacjonarne': 'In person',
+  'Teleporady': 'Telehealth',
+  'Brak terminów dla wybranych filtrów': 'No slots match the filters',
+  'Zmień filtr lub wróć do wyboru specjalisty.': 'Change the filter or go back to specialist selection.',
+  'Pokaż kolejne dni': 'Show more days',
 
   // Rodzina
   'Konta rodzinne': 'Family accounts',

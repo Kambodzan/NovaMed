@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronRight, CreditCard, MapPin, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronRight, CreditCard, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
 import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -14,6 +14,11 @@ export function Umow() {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [spec, setSpec] = useState<string | null>(null)
+  const [doctor, setDoctor] = useState<{ id: number; name: string } | null>(null)
+  const [mode, setMode] = useState<'spec' | 'doctor'>('spec')
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'STATIONARY' | 'ONLINE'>('ALL')
+  const [visibleDays, setVisibleDays] = useState(4)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
@@ -28,7 +33,7 @@ export function Umow() {
   // żeby nie zarezerwować po cichu dla niewłaściwej osoby (płatność w toku zostaje)
   useEffect(() => {
     setStep(s => (s > 1 && payPhase === 'idle' ? 1 : s))
-    if (payPhase === 'idle') { setSlot(null); setBooked(null) }
+    if (payPhase === 'idle') { setSlot(null); setBooked(null); setDoctor(null); setSpec(null) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
@@ -37,20 +42,55 @@ export function Umow() {
     queryFn: () => api<AppointmentOut[]>('/slots'),
   })
 
-  const specs = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const s of allSlots ?? []) {
-      if (s.specialization) counts.set(s.specialization, (counts.get(s.specialization) ?? 0) + 1)
-    }
-    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  }, [allSlots])
+  const q = query.trim().toLowerCase()
 
-  const [visibleCount, setVisibleCount] = useState(12)
+  const specs = useMemo(() => {
+    const map = new Map<string, { count: number; earliest: string }>()
+    for (const s of allSlots ?? []) {
+      if (!s.specialization) continue
+      const cur = map.get(s.specialization)
+      map.set(s.specialization, {
+        count: (cur?.count ?? 0) + 1,
+        earliest: cur && cur.earliest < s.appointment_datetime ? cur.earliest : s.appointment_datetime,
+      })
+    }
+    return [...map.entries()]
+      .filter(([name]) => !q || name.toLowerCase().includes(q))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+  }, [allSlots, q])
+
+  const doctors = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; spec: string | null; count: number; earliest: string }>()
+    for (const s of allSlots ?? []) {
+      const cur = map.get(s.doctor_id)
+      map.set(s.doctor_id, {
+        id: s.doctor_id, name: s.doctor_name, spec: s.specialization,
+        count: (cur?.count ?? 0) + 1,
+        earliest: cur && cur.earliest < s.appointment_datetime ? cur.earliest : s.appointment_datetime,
+      })
+    }
+    return [...map.values()]
+      .filter(d => !q || d.name.toLowerCase().includes(q) || (d.spec ?? '').toLowerCase().includes(q))
+      .sort((a, b) => a.earliest.localeCompare(b.earliest))
+  }, [allSlots, q])
+
   const matching = useMemo(
-    () => (allSlots ?? []).filter(s => !spec || s.specialization === spec),
-    [allSlots, spec],
+    () => (allSlots ?? [])
+      .filter(s => doctor ? s.doctor_id === doctor.id : (!spec || s.specialization === spec))
+      .filter(s => typeFilter === 'ALL' || s.appointment_type === typeFilter)
+      .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime)),
+    [allSlots, spec, doctor, typeFilter],
   )
-  const slots = matching.slice(0, visibleCount)
+  // terminy pogrupowane po dniach — zamiast jednego zwału danych
+  const days = useMemo(() => {
+    const map = new Map<string, AppointmentOut[]>()
+    for (const s of matching) {
+      const day = s.appointment_datetime.slice(0, 10)
+      map.set(day, [...(map.get(day) ?? []), s])
+    }
+    return [...map.entries()]
+  }, [matching])
+  const earliestId = matching[0]?.appointment_id
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
@@ -113,43 +153,89 @@ export function Umow() {
       {step === 1 && (
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
-          {specs.length === 0 ? (
-            <EmptyState
-              icon={<CalendarDays size={28} strokeWidth={1.5} />}
-              title={t('Brak wolnych terminów')}
-              hint={t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
+          <div className="space-y-3">
+            <input
+              className={inputCls}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={t('Szukaj lekarza lub specjalizacji…')}
+              autoComplete="off"
             />
-          ) : (
-            <ul className="space-y-1.5">
-              {specs.map(([s, count]) => {
-                const earliest = (allSlots ?? [])
-                  .filter(x => x.specialization === s)
-                  .map(x => x.appointment_datetime)
-                  .sort()[0]
-                return (
+            <div className="flex gap-2">
+              {([['spec', 'Specjalizacje'], ['doctor', 'Lekarze']] as const).map(([m, label]) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={cx(
+                    'cursor-pointer rounded-full px-4 py-2 text-xs font-extrabold transition-colors',
+                    mode === m ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-500 hover:text-gray-900',
+                  )}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+
+            {mode === 'spec' && (specs.length === 0 ? (
+              <EmptyState
+                icon={<CalendarDays size={28} strokeWidth={1.5} />}
+                title={t('Brak wolnych terminów')}
+                hint={t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
+              />
+            ) : (
+              <ul className="space-y-1.5">
+                {specs.map(([s, info]) => (
                   <li key={s}>
                     <button
-                      onClick={() => { setSpec(s); setVisibleCount(12); setStep(2) }}
+                      onClick={() => { setSpec(s); setDoctor(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
                       className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
                     >
                       <span>
                         <span className="block font-bold text-gray-900 group-hover:text-primary">{s}</span>
-                        {earliest && (
-                          <span className="block text-xs font-semibold text-emerald-700">
-                            {t('najbliższy:')} {formatDatePL(earliest)}, {formatTime(earliest)}
-                          </span>
-                        )}
+                        <span className="block text-xs font-semibold text-emerald-700">
+                          {t('najbliższy:')} {formatDatePL(info.earliest)}, {formatTime(info.earliest)}
+                        </span>
                       </span>
                       <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
-                        {count} {count === 1 ? t('termin') : t('terminów')}
+                        {info.count} {info.count === 1 ? t('termin') : t('terminów')}
                         <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
                       </span>
                     </button>
                   </li>
-                )
-              })}
-            </ul>
-          )}
+                ))}
+              </ul>
+            ))}
+
+            {mode === 'doctor' && (doctors.length === 0 ? (
+              <EmptyState
+                icon={<CalendarDays size={28} strokeWidth={1.5} />}
+                title={t('Brak wolnych terminów')}
+                hint={t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
+              />
+            ) : (
+              <ul className="space-y-1.5">
+                {doctors.map(d => (
+                  <li key={d.id}>
+                    <button
+                      onClick={() => { setDoctor({ id: d.id, name: d.name }); setSpec(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
+                      className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
+                    >
+                      <span>
+                        <span className="block font-bold text-gray-900 group-hover:text-primary">{d.name}</span>
+                        <span className="block text-xs font-semibold text-gray-500">
+                          {d.spec} · <span className="text-emerald-700">{t('najbliższy:')} {formatDatePL(d.earliest)}, {formatTime(d.earliest)}</span>
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
+                        {d.count} {d.count === 1 ? t('termin') : t('terminów')}
+                        <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ))}
+          </div>
           <p className="mt-4 text-sm font-medium text-gray-500">
             {t('Nie ma specjalisty, którego szukasz?')}{' '}
             <button onClick={() => setWaitlistOpen(true)} className="cursor-pointer font-extrabold text-primary hover:underline">
@@ -164,43 +250,67 @@ export function Umow() {
       {step === 2 && (
         <Tile delay={60}>
           <TileHeader
-            title={`${t('Wolne terminy —')} ${spec}`}
+            title={doctor ? doctor.name : `${spec}`}
             action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>{t('Zmień')}</Button>}
           />
-          <ul className="space-y-2.5">
-            {slots.map((s, i) => (
-              <li key={s.appointment_id} className={cx(
-                'relative flex flex-wrap items-center gap-3 rounded-2xl p-3',
-                i === 0 ? 'bg-primary-soft ring-1 ring-primary/30' : 'bg-gray-50',
-              )}>
-                {i === 0 && (
-                  <span className="absolute -top-2 left-4 rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-white uppercase">
-                    {t('najbliższy')}
-                  </span>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {([['ALL', 'Wszystkie'], ['STATIONARY', 'Stacjonarne'], ['ONLINE', 'Teleporady']] as const).map(([f, label]) => (
+              <button
+                key={f}
+                onClick={() => { setTypeFilter(f); setVisibleDays(4) }}
+                className={cx(
+                  'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
+                  typeFilter === f ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
                 )}
-                <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-extrabold text-gray-900">{s.doctor_name}</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold text-gray-500">
-                    {s.appointment_type === 'ONLINE'
-                      ? <><Video size={12} /> {t('teleporada')}</>
-                      : <><MapPin size={12} /> {s.clinic_name}</>}
-                  </p>
-                </div>
-                <span className={cx('text-sm font-extrabold', s.price ? 'text-gray-900' : 'text-emerald-700')}>
-                  {s.price ? `${s.price} zł` : 'NFZ'}
-                </span>
-                <Button size="sm" onClick={() => { setSlot(s); setStep(3); setError(null); setBooked(null); setPayPhase('idle') }}>
-                  {t('Wybierz')}
-                </Button>
-              </li>
+              >
+                {t(label)}
+              </button>
             ))}
-          </ul>
-          {matching.length > visibleCount && (
-            <div className="mt-3 text-center">
-              <Button variant="ghost" size="sm" onClick={() => setVisibleCount(c => c + 12)}>
-                {t('Pokaż więcej terminów')} ({matching.length - visibleCount})
-              </Button>
+          </div>
+
+          {days.length === 0 ? (
+            <EmptyState
+              icon={<CalendarDays size={28} strokeWidth={1.5} />}
+              title={t('Brak terminów dla wybranych filtrów')}
+              hint={t('Zmień filtr lub wróć do wyboru specjalisty.')}
+            />
+          ) : (
+            <div className="space-y-4">
+              {days.slice(0, visibleDays).map(([day, list]) => (
+                <div key={day}>
+                  <p className="mb-2 text-sm font-extrabold text-gray-900">{formatDatePL(day + 'T00:00:00')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {list.map(s => (
+                      <button
+                        key={s.appointment_id}
+                        onClick={() => { setSlot(s); setStep(3); setError(null); setBooked(null); setPayPhase('idle') }}
+                        className={cx(
+                          'cursor-pointer rounded-2xl px-3.5 py-2 text-left transition-colors hover:bg-primary-soft',
+                          s.appointment_id === earliestId ? 'bg-primary-soft ring-1 ring-primary/40' : 'bg-gray-50',
+                        )}
+                      >
+                        <span className="flex items-center gap-1.5 text-sm font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">
+                          {formatTime(s.appointment_datetime)}
+                          {s.appointment_type === 'ONLINE' && <Video size={13} className="text-sky-600" />}
+                        </span>
+                        <span className="block text-[11px] font-semibold text-gray-500">
+                          {!doctor && `${s.doctor_name.split(' ').slice(-1)[0]} · `}
+                          <span className={s.price ? 'text-gray-900' : 'text-emerald-700'}>
+                            {s.price ? `${s.price} zł` : 'NFZ'}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {days.length > visibleDays && (
+                <div className="text-center">
+                  <Button variant="ghost" size="sm" onClick={() => setVisibleDays(d => d + 4)}>
+                    {t('Pokaż kolejne dni')} ({days.length - visibleDays})
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </Tile>
