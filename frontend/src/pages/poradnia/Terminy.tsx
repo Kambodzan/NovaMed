@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarRange, Plus } from 'lucide-react'
+import { BellRing, CalendarRange, Plus } from 'lucide-react'
 import { Button, DateChip, EmptyState, Field, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { dayNo, formatTime, monthShort } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 
-interface Clinic { clinic_id: number; clinic_name: string }
+interface Clinic { clinic_id: number; clinic_name: string; earlier_notice_min_hours: number }
 interface DoctorRow { doctor_id: number; name: string; specialization: string | null }
 
 export function Terminy() {
@@ -57,6 +57,26 @@ export function Terminy() {
       void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] })
     },
     onError: (e) => { setOk(null); setError(e instanceof ApiError ? e.message : 'Nie udało się dodać terminu.') },
+  })
+
+  const [noticeHours, setNoticeHours] = useState('')
+  const [noticeSaved, setNoticeSaved] = useState(false)
+  useEffect(() => {
+    if (clinic) setNoticeHours(String(clinic.earlier_notice_min_hours))
+  }, [clinic])
+
+  const saveNotice = useMutation({
+    mutationFn: () => api(`/clinics/${clinic!.clinic_id}/settings`, {
+      method: 'PATCH',
+      body: { earlier_notice_min_hours: Number(noticeHours) },
+    }),
+    onSuccess: () => {
+      setError(null)
+      setNoticeSaved(true)
+      setTimeout(() => setNoticeSaved(false), 2500)
+      void queryClient.invalidateQueries({ queryKey: ['clinics'] })
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać ustawienia.'),
   })
 
   const slotsByDoctor = useMemo(() => {
@@ -114,6 +134,26 @@ export function Terminy() {
         </form>
         {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
         {ok && <p className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700">{ok}</p>}
+      </Tile>
+
+      <Tile className="p-5" delay={90}>
+        <TileHeader title={<span className="inline-flex items-center gap-1.5"><BellRing size={13} /> Powiadomienia o wcześniejszych terminach</span>} />
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Min. wyprzedzenie [h]" hint="nie powiadamiamy o terminach bliższych niż tyle godzin">
+            <input
+              type="number" min="0" max="720" className={cx(inputCls, 'w-32')}
+              value={noticeHours} onChange={e => setNoticeHours(e.target.value)}
+            />
+          </Field>
+          <Button size="sm" disabled={saveNotice.isPending || noticeHours === ''} onClick={() => saveNotice.mutate()}>
+            {saveNotice.isPending ? 'Zapisywanie…' : 'Zapisz'}
+          </Button>
+          {noticeSaved && <span className="pb-2 text-xs font-bold text-emerald-700">Zapisano</span>}
+        </div>
+        <p className="mt-2 text-xs font-medium text-gray-400">
+          Pacjenci, którzy przy rezerwacji zaznaczyli „powiadom, jeśli zwolni się wcześniejszy termin",
+          dostaną powiadomienie, gdy u ich lekarza pojawi się wolny termin wcześniejszy niż ich wizyta.
+        </p>
       </Tile>
 
       <Tile className="p-5" delay={120}>

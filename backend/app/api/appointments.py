@@ -26,6 +26,36 @@ def visit_label(db: Session, a: Appointment) -> str:
     doctor_user = db.get(AppUser, a.doctor_id)
     return f"{doctor_user.username}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}"
 
+
+def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot_dt: datetime) -> None:
+    """Slot stał się wolny → powiadom pacjentów z PÓŹNIEJSZĄ wizytą u tego lekarza,
+    którzy zaznaczyli notify_earlier. Limit placówki (earlier_notice_min_hours)
+    chroni przed powiadomieniami o terminach „za 2 godziny"."""
+    clinic = db.get(Clinic, clinic_id)
+    min_hours = clinic.earlier_notice_min_hours if clinic else 24
+    if slot_dt - datetime.now() < timedelta(hours=min_hours):
+        return
+    doctor_user = db.get(AppUser, doctor_id)
+    watchers = db.scalars(select(Appointment).where(
+        Appointment.doctor_id == doctor_id,
+        Appointment.appointment_status == AppointmentStatus.CONFIRMED.value,
+        Appointment.notify_earlier.is_(True),
+        Appointment.patient_id.is_not(None),
+        Appointment.appointment_datetime > slot_dt,
+    )).all()
+    seen: set[int] = set()
+    for w in watchers:
+        if w.patient_id in seen:
+            continue
+        seen.add(w.patient_id)
+        notify(
+            db, w.patient_id,
+            "Zwolnił się wcześniejszy termin",
+            f"U {doctor_user.username} zwolnił się termin {slot_dt.strftime('%d.%m.%Y %H:%M')} — "
+            f"wcześniejszy niż Twoja wizyta ({w.appointment_datetime.strftime('%d.%m %H:%M')}). "
+            "Jeśli Ci pasuje, przełóż wizytę w aplikacji.",
+        )
+
 router = APIRouter(tags=["appointments"])
 
 SLOT_MANAGERS = ("lekarz", "rejestracja", "kierownik", "administrator")
@@ -163,6 +193,8 @@ def create_slots(
         )
         db.add(a)
         created.append(a)
+        # „powiadom o wcześniejszym terminie": nowy slot też się liczy
+        notify_earlier_watchers(db, doctor_id=body.doctor_id, clinic_id=clinic_id, slot_dt=dt)
 
     # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
     doctor = db.get(Doctor, body.doctor_id)
@@ -312,8 +344,10 @@ def pay_appointment(
         assert_transition(a.appointment_status, AppointmentStatus.FREE)
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
+        a.notify_earlier = False
         notify(db, user.user_id, "Płatność odrzucona",
                "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dt=a.appointment_datetime)
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),
@@ -347,6 +381,8 @@ def cancel_appointment(
             pending.payment_status = "FAILED"
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
+        a.notify_earlier = False
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dt=a.appointment_datetime)
         db.commit()
         return appointment_out(db, a)
 
@@ -373,7 +409,9 @@ def cancel_appointment(
             appointment_datetime=a.appointment_datetime,
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=a.appointment_type,
+            price=a.price,
         ))
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dt=a.appointment_datetime)
     db.commit()
     return appointment_out(db, a)
 
@@ -414,9 +452,12 @@ def reschedule_appointment(
         appointment_datetime=old.appointment_datetime,
         appointment_status=AppointmentStatus.FREE.value,
         appointment_type=old.appointment_type,
+        price=old.price,
     ))
     new.patient_id = user.user_id
     new.appointment_status = AppointmentStatus.CONFIRMED.value
+    new.notify_earlier = old.notify_earlier  # preferencja wędruje z wizytą
+    notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dt=old.appointment_datetime)
     db.commit()
     return appointment_out(db, new)
 
