@@ -38,22 +38,37 @@ export function Terminy() {
     time: '09:00',
     type: 'STATIONARY',
     price: '',
+    weeks: '1', // QW-5: 1 = jednorazowo, N = co tydzień przez N tygodni
   })
   const doctorId = form.doctor_id || String(doctors?.[0]?.doctor_id ?? '')
 
   const addSlot = useMutation({
-    mutationFn: () => api(`/clinics/${clinic!.clinic_id}/slots`, {
-      method: 'POST',
-      body: {
-        doctor_id: Number(doctorId),
-        datetimes: [`${form.date}T${form.time}:00`],
-        appointment_type: form.type,
-        price: form.price ? Number(form.price) : null,
-      },
-    }),
+    mutationFn: () => {
+      const weeks = Math.max(1, Number(form.weeks) || 1)
+      const base = new Date(`${form.date}T${form.time}:00`)
+      // lokalna data bez przesunięcia strefy — składamy ręcznie, nie przez toISOString()
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const datetimes = Array.from({ length: weeks }, (_, i) => {
+        const d = new Date(base)
+        d.setDate(d.getDate() + i * 7)
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${form.time}:00`
+      })
+      return api(`/clinics/${clinic!.clinic_id}/slots`, {
+        method: 'POST',
+        body: {
+          doctor_id: Number(doctorId),
+          datetimes,
+          appointment_type: form.type,
+          price: form.price ? Number(form.price) : null,
+        },
+      })
+    },
     onSuccess: () => {
       setError(null)
-      setOk(`Dodano termin ${form.date} ${form.time}.`)
+      const weeks = Math.max(1, Number(form.weeks) || 1)
+      setOk(weeks > 1
+        ? `Dodano ${weeks} terminów (co tydzień od ${form.date}, ${form.time}).`
+        : `Dodano termin ${form.date} ${form.time}.`)
       void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] })
     },
     onError: (e) => { setOk(null); setError(e instanceof ApiError ? e.message : 'Nie udało się dodać terminu.') },
@@ -102,7 +117,7 @@ export function Terminy() {
       <Tile delay={60}>
         <TileHeader title="Dodaj wolny termin" />
         <form
-          className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto]"
+          className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto]"
           onSubmit={e => { e.preventDefault(); addSlot.mutate() }}
         >
           <Field label="Lekarz">
@@ -127,6 +142,14 @@ export function Terminy() {
           <Field label="Cena [zł]" hint="puste = NFZ">
             <input type="number" min="0" step="10" className={inputCls} value={form.price}
               onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="—" />
+          </Field>
+          <Field label="Powtarzanie">
+            <select className={inputCls} value={form.weeks} onChange={e => setForm(f => ({ ...f, weeks: e.target.value }))}>
+              <option value="1">jednorazowo</option>
+              {[2, 3, 4, 6, 8, 12].map(n => (
+                <option key={n} value={n}>co tydzień ×{n}</option>
+              ))}
+            </select>
           </Field>
           <div className="flex items-end">
             <Button disabled={addSlot.isPending || !doctorId} type="submit"><Plus size={15} /> Dodaj</Button>

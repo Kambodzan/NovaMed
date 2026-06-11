@@ -70,3 +70,39 @@ def test_ics_rbac(client, setup, factory):
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
     _, other_token = factory.patient()
     assert client.get(f"/appointments/{slot['appointment_id']}/ics", headers=auth_header(other_token)).status_code == 403
+
+
+def test_seria_cykliczna_tworzy_wszystkie_sloty(client, setup):
+    # frontend rozwija „co tydzień ×N" do listy datetimes — backend przyjmuje całą serię
+    base = (datetime.now() + timedelta(days=7)).replace(hour=8, minute=0, second=0, microsecond=0)
+    dts = [(base + timedelta(weeks=i)).isoformat() for i in range(4)]
+    resp = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": dts},
+        headers=auth_header(setup["reg_token"]),
+    )
+    assert resp.status_code == 201
+    assert len(resp.json()) == 4
+
+
+def test_seria_z_konfliktem_jest_atomowa(client, setup):
+    base = (datetime.now() + timedelta(days=8)).replace(hour=8, minute=30, second=0, microsecond=0)
+    first = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": [(base + timedelta(weeks=1)).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    )
+    assert first.status_code == 201
+
+    # seria 3 terminów, środkowy koliduje → 409 i ŻADEN z serii nie powstaje
+    dts = [(base + timedelta(weeks=i)).isoformat() for i in range(3)]
+    resp = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": dts},
+        headers=auth_header(setup["reg_token"]),
+    )
+    assert resp.status_code == 409
+
+    day0 = base.date().isoformat()
+    slots = client.get(f"/slots?clinic_id={setup['clinic'].clinic_id}", headers=auth_header(setup["patient_token"])).json()
+    assert not any(s["appointment_datetime"].startswith(day0) for s in slots)
