@@ -1,0 +1,61 @@
+// Konta rodzinne (portal pacjenta): aktywny profil (ja / podopieczny) +
+// doklejanie ?as_patient= do zapytań działających „w imieniu".
+import { createContext, useContext, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from './api'
+
+export interface Dependent {
+  patient_id: number
+  first_name: string
+  last_name: string
+  pesel: string
+  birth_date: string
+}
+
+interface FamilyCtx {
+  dependents: Dependent[]
+  /** null = działam jako ja */
+  activeId: number | null
+  setActiveId: (id: number | null) => void
+  active: Dependent | null
+  /** dokleja as_patient= do ścieżki API, gdy aktywny jest podopieczny */
+  asPatient: (path: string) => string
+}
+
+const Ctx = createContext<FamilyCtx>({
+  dependents: [], activeId: null, setActiveId: () => {}, active: null, asPatient: p => p,
+})
+
+const STORAGE_KEY = 'novamed-active-patient'
+
+export function FamilyProvider({ children }: { children: React.ReactNode }) {
+  const [activeId, setActiveIdState] = useState<number | null>(() => {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    return raw ? Number(raw) : null
+  })
+
+  const { data } = useQuery({
+    queryKey: ['family'],
+    queryFn: () => api<Dependent[]>('/family'),
+    staleTime: 60_000,
+  })
+  const dependents = data ?? []
+  const active = dependents.find(d => d.patient_id === activeId) ?? null
+
+  const setActiveId = (id: number | null) => {
+    if (id) sessionStorage.setItem(STORAGE_KEY, String(id))
+    else sessionStorage.removeItem(STORAGE_KEY)
+    setActiveIdState(id)
+  }
+
+  const asPatient = (path: string) =>
+    activeId ? `${path}${path.includes('?') ? '&' : '?'}as_patient=${activeId}` : path
+
+  return (
+    <Ctx.Provider value={{ dependents, activeId, setActiveId, active, asPatient }}>
+      {children}
+    </Ctx.Provider>
+  )
+}
+
+export const useFamily = () => useContext(Ctx)

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CalendarPlus, Check, MapPin, Star, Video } from 'lucide-react'
 import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
+import { useFamily } from '../lib/family'
 
 async function downloadIcs(appointmentId: number) {
   const resp = await fetch(`${API_URL}/appointments/${appointmentId}/ics`, {
@@ -28,9 +29,10 @@ export function Wizyty() {
   const [reviewFor, setReviewFor] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const { activeId, asPatient } = useFamily()
   const { data: visits } = useQuery({
-    queryKey: ['my-appointments'],
-    queryFn: () => api<AppointmentOut[]>('/appointments/my'),
+    queryKey: ['my-appointments', activeId],
+    queryFn: () => api<AppointmentOut[]>(asPatient('/appointments/my')),
   })
 
   const invalidate = () => {

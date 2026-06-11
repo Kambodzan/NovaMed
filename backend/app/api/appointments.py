@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.family import allowed_patient_ids, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.appointments import (
@@ -242,6 +243,7 @@ def search_slots(
 def book_appointment(
     appointment_id: int,
     body: BookIn | None = None,
+    as_patient: int | None = Query(default=None, description="Konta rodzinne: rezerwacja w imieniu podopiecznego"),
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
@@ -251,6 +253,7 @@ def book_appointment(
     Wizyta płatna: FREE→TEMP_LOCK + płatność PENDING u operatora —
     finalizacja przez /appointments/{id}/pay (diagramie stanów wizyty).
     Przy rezerwacji system weryfikuje ubezpieczenie w eWUŚ (best-effort)."""
+    patient_id = resolve_patient_id(db, user, as_patient)
     a = get_appointment_or_404(appointment_id, db)
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
@@ -262,7 +265,7 @@ def book_appointment(
         a.notify_earlier = body.notify_earlier
 
     # eWUŚ — automatyczna weryfikacja przy rejestracji wizyty; awaria nie blokuje rezerwacji
-    patient = db.get(Patient, user.user_id)
+    patient = db.get(Patient, patient_id)
     try:
         patient.insurance_status = ewus.verify(pesel=patient.pesel)
     except IntegrationError:
@@ -270,15 +273,15 @@ def book_appointment(
 
     if a.price is None:
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
-        a.patient_id = user.user_id
+        a.patient_id = patient_id
         a.appointment_status = AppointmentStatus.CONFIRMED.value
-        notify(db, user.user_id, "Wizyta potwierdzona",
+        notify(db, patient_id, "Wizyta potwierdzona",
                f"Twoja wizyta: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
 
     assert_transition(a.appointment_status, AppointmentStatus.TEMP_LOCK)
-    a.patient_id = user.user_id
+    a.patient_id = patient_id
     a.appointment_status = AppointmentStatus.TEMP_LOCK.value
     try:
         provider_ref = payments.create_payment(
@@ -315,7 +318,7 @@ def pay_appointment(
     """Finalizacja płatności (mock symuluje autoryzację klienta u operatora).
     Sukces: TEMP_LOCK→CONFIRMED. Odmowa: TEMP_LOCK→FREE — termin wraca do puli."""
     a = get_appointment_or_404(appointment_id, db)
-    if a.patient_id != user.user_id:
+    if a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja rezerwacja.")
     if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta nie oczekuje na płatność.")
@@ -369,7 +372,7 @@ def cancel_appointment(
     (historia odwołanej wizyty zostaje) — zgodnie z diagramem stanów wizyty."""
     a = get_appointment_or_404(appointment_id, db)
     is_patient = user.role.role_name == "pacjent"
-    if is_patient and a.patient_id != user.user_id:
+    if is_patient and a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
 
     # porzucenie rezerwacji w trakcie płatności: TEMP_LOCK→FREE (ten sam slot wraca do puli)
@@ -425,7 +428,7 @@ def reschedule_appointment(
 ):
     """UC-P9: przełożenie = rezerwacja nowego slotu + zwolnienie starego (ta sama polityka 24 h)."""
     old = get_appointment_or_404(appointment_id, db)
-    if old.patient_id != user.user_id:
+    if old.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
     new = get_appointment_or_404(body.new_appointment_id, db)
     if new.appointment_status != AppointmentStatus.FREE.value:
@@ -454,7 +457,7 @@ def reschedule_appointment(
         appointment_type=old.appointment_type,
         price=old.price,
     ))
-    new.patient_id = user.user_id
+    new.patient_id = old.patient_id  # przełożenie zachowuje pacjenta (także podopiecznego)
     new.appointment_status = AppointmentStatus.CONFIRMED.value
     new.notify_earlier = old.notify_earlier  # preferencja wędruje z wizytą
     notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dt=old.appointment_datetime)
@@ -464,15 +467,17 @@ def reschedule_appointment(
 
 @router.get("/appointments/my", response_model=list[AppointmentOut])
 def my_appointments(
+    as_patient: int | None = Query(default=None),
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
-    """UC-P3/P4: lista wizyt pacjenta (bez wolnych slotów)."""
+    """UC-P3/P4: lista wizyt pacjenta (bez wolnych slotów); konta rodzinne: ?as_patient=."""
     from app.models import Review  # import lokalny — unika cyklu
 
+    patient_id = resolve_patient_id(db, user, as_patient)
     rows = db.scalars(
         select(Appointment)
-        .where(Appointment.patient_id == user.user_id)
+        .where(Appointment.patient_id == patient_id)
         .order_by(Appointment.appointment_datetime.desc())
     ).all()
     reviewed_ids = set(db.scalars(select(Review.appointment_id).where(
@@ -536,7 +541,7 @@ def appointment_ics(
     from fastapi.responses import Response
 
     a = get_appointment_or_404(appointment_id, db)
-    if user.user_id not in (a.patient_id, a.doctor_id):
+    if user.user_id != a.doctor_id and a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do tej wizyty.")
 
     doctor_user = db.get(AppUser, a.doctor_id)

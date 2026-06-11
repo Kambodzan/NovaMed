@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Download, FileSignature, FileText, FlaskConical, FolderOpen, Pill } from 'lucide-react'
 import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
 import { API_URL, api, getAuthToken } from '../lib/api'
+import { useFamily } from '../lib/family'
 import { formatDatePL } from '../lib/format'
 import type { DocumentOut } from '../lib/types'
 
@@ -29,9 +30,10 @@ const docMeta: Record<DocumentOut['document_type'], { icon: typeof FileText; lab
 
 export function Dokumentacja() {
   const [filter, setFilter] = useState<string>('ALL')
+  const { activeId, asPatient } = useFamily()
   const { data: docs } = useQuery({
-    queryKey: ['my-documents'],
-    queryFn: () => api<DocumentOut[]>('/documents/my'),
+    queryKey: ['my-documents', activeId],
+    queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
   })
 
   const filtered = (docs ?? []).filter(d => filter === 'ALL' || d.document_type === filter)

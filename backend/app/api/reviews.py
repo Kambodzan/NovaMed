@@ -50,10 +50,12 @@ def create_review(
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
+    from app.api.family import allowed_patient_ids  # import lokalny — unika cyklu
+
     a = db.get(Appointment, body.appointment_id)
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
-    if a.patient_id != user.user_id:
+    if a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
     if a.appointment_status != AppointmentStatus.COMPLETED.value:
         raise HTTPException(

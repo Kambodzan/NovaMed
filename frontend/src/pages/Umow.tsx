@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, Check, ChevronRight, CreditCard, MapPin, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
 import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
+import { useFamily } from '../lib/family'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
 import type { AppointmentOut, BookOut, WaitlistEntry } from '../lib/types'
 
@@ -19,6 +20,7 @@ export function Umow() {
   const [reason, setReason] = useState('')
   const [notifyEarlier, setNotifyEarlier] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { asPatient, active } = useFamily()
 
   const { data: allSlots } = useQuery({
     queryKey: ['slots'],
@@ -44,7 +46,7 @@ export function Umow() {
   }
 
   const book = useMutation({
-    mutationFn: (id: number) => api<BookOut>(`/appointments/${id}/book`, {
+    mutationFn: (id: number) => api<BookOut>(asPatient(`/appointments/${id}/book`), {
       method: 'POST',
       body: { reason: reason.trim() || null, notify_earlier: notifyEarlier },
     }),
@@ -205,6 +207,11 @@ export function Umow() {
           </div>
 
           <div className="mt-4 space-y-3">
+            {active && (
+              <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-bold text-amber-800">
+                Rezerwujesz dla: {active.first_name} {active.last_name} (podopieczny).
+              </p>
+            )}
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
             {payPhase === 'idle' && (

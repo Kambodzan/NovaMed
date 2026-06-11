@@ -2,11 +2,12 @@ import json
 import secrets
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.family import allowed_patient_ids, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.documents import DocumentStatus, DocumentType, ReferralType
@@ -448,8 +449,8 @@ def patient_documents(
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """UC-P4 (pacjent — tylko własne) / UC-L1, UC-N1 (personel)."""
-    if user.role.role_name == "pacjent" and user.user_id != patient_id:
+    """UC-P4 (pacjent — własne i podopiecznych) / UC-L1, UC-N1 (personel)."""
+    if user.role.role_name == "pacjent" and patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do dokumentacji innego pacjenta.")
     if user.role.role_name != "pacjent" and user.role.role_name not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
@@ -463,12 +464,14 @@ def patient_documents(
 
 @router.get("/documents/my", response_model=list[DocumentOut])
 def my_documents(
+    as_patient: int | None = Query(default=None),
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
+    patient_id = resolve_patient_id(db, user, as_patient)
     rows = db.scalars(
         select(MedicalDocument)
-        .where(MedicalDocument.patient_id == user.user_id)
+        .where(MedicalDocument.patient_id == patient_id)
         .order_by(MedicalDocument.issued_at.desc())
     )
     return [document_out(db, d) for d in rows]
@@ -486,7 +489,7 @@ def document_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nie istnieje.")
     role = user.role.role_name
     if role == "pacjent":
-        if doc.patient_id != user.user_id:
+        if doc.patient_id not in allowed_patient_ids(db, user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do dokumentu innego pacjenta.")
     elif role not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")

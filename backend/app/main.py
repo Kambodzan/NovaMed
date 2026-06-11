@@ -13,6 +13,7 @@ from app.api.auth import router as auth_router
 from app.api.clinics import router as clinics_router
 from app.api.dictionaries import router as dictionaries_router
 from app.api.documents import router as documents_router
+from app.api.family import router as family_router
 from app.api.integrations import router as integrations_router
 from app.api.notifications import router as notifications_router
 from app.api.procedures import router as procedures_router
@@ -75,6 +76,7 @@ app.include_router(admin_router)
 app.include_router(telemed_router)
 app.include_router(shares_router)
 app.include_router(dictionaries_router)
+app.include_router(family_router)
 
 
 @app.get("/health")

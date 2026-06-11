@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { HeartPulse, LogOut } from 'lucide-react'
 import { cx } from '../ui'
 import { useAuth } from '../lib/auth'
+import { useFamily } from '../lib/family'
 import { NotificationsBell } from '../components/NotificationsBell'
 
 const navItems = [
@@ -10,10 +11,12 @@ const navItems = [
   { to: '/wizyty', label: 'Moje wizyty' },
   { to: '/dokumentacja', label: 'Dokumentacja' },
   { to: '/udostepnij', label: 'Udostępnij' },
+  { to: '/rodzina', label: 'Rodzina' },
 ]
 
 export function PortalLayout() {
   const { me, logout } = useAuth()
+  const { dependents, activeId, setActiveId, active } = useFamily()
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-20 sm:px-6">
@@ -40,9 +43,26 @@ export function PortalLayout() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <span className="hidden text-sm font-bold text-gray-700 sm:inline">
-            {me?.first_name ? `${me.first_name} ${me.last_name}` : me?.email}
-          </span>
+          {dependents.length > 0 ? (
+            <select
+              aria-label="Aktywny profil"
+              className={cx(
+                'tile-shadow cursor-pointer rounded-full bg-surface px-3.5 py-2 text-sm font-bold text-gray-700 outline-none',
+                activeId !== null && 'ring-2 ring-amber-400',
+              )}
+              value={activeId ?? ''}
+              onChange={e => setActiveId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">{me?.first_name ? `${me.first_name} ${me.last_name}` : 'Ja'}</option>
+              {dependents.map(d => (
+                <option key={d.patient_id} value={d.patient_id}>{d.first_name} {d.last_name}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="hidden text-sm font-bold text-gray-700 sm:inline">
+              {me?.first_name ? `${me.first_name} ${me.last_name}` : me?.email}
+            </span>
+          )}
           <NotificationsBell />
           <button
             onClick={() => void logout()}
@@ -54,6 +74,11 @@ export function PortalLayout() {
         </div>
       </header>
 
+      {active && (
+        <p className="mb-1 rounded-xl bg-amber-50 px-3.5 py-2 text-sm font-bold text-amber-800">
+          Działasz w imieniu: {active.first_name} {active.last_name}. Wizyty, dokumenty i rezerwacje dotyczą tego profilu.
+        </p>
+      )}
       <div className="pt-3">
         <Outlet />
       </div>

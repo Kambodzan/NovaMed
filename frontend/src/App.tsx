@@ -9,6 +9,8 @@ import { Start } from './pages/Start'
 import { Umow } from './pages/Umow'
 import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
+import { Rodzina } from './pages/Rodzina'
+import { FamilyProvider } from './lib/family'
 import { Telewizyta } from './pages/Telewizyta'
 import { Udostepnij } from './pages/Udostepnij'
 import { KodOdPacjenta } from './pages/KodOdPacjenta'
@@ -108,12 +110,13 @@ export default function App() {
       {token && profileMissing && <Route path="*" element={<Navigate to="/rejestracja" replace />} />}
 
       {token && me && role === 'pacjent' && (
-        <Route path="/" element={<PortalLayout />}>
+        <Route path="/" element={<FamilyProvider><PortalLayout /></FamilyProvider>}>
           <Route index element={<Start />} />
           <Route path="umow" element={<Umow />} />
           <Route path="wizyty" element={<Wizyty />} />
           <Route path="dokumentacja" element={<Dokumentacja />} />
           <Route path="udostepnij" element={<Udostepnij />} />
+          <Route path="rodzina" element={<Rodzina />} />
           <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

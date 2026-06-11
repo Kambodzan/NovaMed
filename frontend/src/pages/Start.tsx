@@ -6,6 +6,7 @@ import {
 import { Button, DateChip, EmptyState, Tile, TileHeader, StatusBadge } from '../ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useFamily } from '../lib/family'
 import { formatDatePL, formatTime, dayNo, monthShort, isFuture } from '../lib/format'
 import type { AppointmentOut, DocumentOut } from '../lib/types'
 
@@ -13,13 +14,14 @@ const docIcon = { PRESCRIPTION: Pill, LAB_RESULT: FlaskConical, REFERRAL: FileTe
 
 export function Start() {
   const { me } = useAuth()
+  const { activeId, asPatient } = useFamily()
   const { data: visits } = useQuery({
-    queryKey: ['my-appointments'],
-    queryFn: () => api<AppointmentOut[]>('/appointments/my'),
+    queryKey: ['my-appointments', activeId],
+    queryFn: () => api<AppointmentOut[]>(asPatient('/appointments/my')),
   })
   const { data: docs } = useQuery({
-    queryKey: ['my-documents'],
-    queryFn: () => api<DocumentOut[]>('/documents/my'),
+    queryKey: ['my-documents', activeId],
+    queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
   })
 
   const next = visits

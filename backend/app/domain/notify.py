@@ -3,12 +3,18 @@
 from sqlalchemy.orm import Session
 
 from app.integrations.sms import get_sms_client
-from app.models import AppUser, Notification
+from app.models import AppUser, Notification, Patient
 
 
 def notify(db: Session, user_id: int, title: str, content: str) -> None:
     """Dopisuje powiadomienie w ramach bieżącej transakcji wywołującego.
-    SMS wysyłany od razu (poza transakcją DB) — jego awaria niczego nie psuje."""
+    SMS wysyłany od razu (poza transakcją DB) — jego awaria niczego nie psuje.
+    Powiadomienia podopiecznego (konta rodzinne) trafiają do opiekuna —
+    podopieczny nie loguje się sam."""
+    patient = db.get(Patient, user_id)
+    if patient is not None and patient.guardian_id is not None:
+        content = f"[{patient.first_name} {patient.last_name}] {content}"
+        user_id = patient.guardian_id
     db.add(Notification(
         user_id=user_id,
         notification_title=title[:100],
