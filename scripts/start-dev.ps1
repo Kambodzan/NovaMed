@@ -44,6 +44,7 @@ Start-Uvicorn (Join-Path $root "mocks\zus")      "main:app" 8102 "mock ZUS e-ZLA
 Start-Uvicorn (Join-Path $root "mocks\ewus")     "main:app" 8103 "mock eWUŚ"
 Start-Uvicorn (Join-Path $root "mocks\lab")      "main:app" 8104 "mock laboratorium"
 Start-Uvicorn (Join-Path $root "mocks\payments") "main:app" 8105 "mock płatności"
+Start-Uvicorn (Join-Path $root "mocks\sms")      "main:app" 8106 "mock SMS"
 
 Write-Host "Backend API:" -ForegroundColor Cyan
 # --host 0.0.0.0: dostęp także z innych urządzeń w sieci lokalnej.
@@ -80,7 +81,7 @@ Write-Host ""
 Write-Host "Status:" -ForegroundColor Cyan
 foreach ($svc in @(
     @(8101, "mock P1"), @(8102, "mock ZUS"), @(8103, "mock eWUS"),
-    @(8104, "mock lab"), @(8105, "mock platnosci"), @(8000, "backend API"), @(5174, "frontend")
+    @(8104, "mock lab"), @(8105, "mock platnosci"), @(8106, "mock SMS"), @(8000, "backend API"), @(5174, "frontend")
 )) {
     $ok = Test-Port $svc[0]
     if ($ok) {

@@ -79,7 +79,8 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
   - serwer: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
   - migracje: `.\.venv\Scripts\python.exe -m alembic upgrade head` (nowa: `... revision --autogenerate -m "..."`)
 - **Mock-serwisy** (venv backendu; z katalogu danego mocka, `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port <PORT>`):
-  - P1 → 8101, ZUS e-ZLA → 8102, eWUŚ → 8103, laboratorium → 8104, płatności → 8105
+  - P1 → 8101, ZUS e-ZLA → 8102, eWUŚ → 8103, laboratorium → 8104, płatności → 8105,
+    SMS → 8106 (podgląd wysłanych: GET /api/v1/outbox)
 - **Frontend** (z `frontend/`): `npm run dev` → localhost:5174 (oczekuje API na :8000).
   Auth: tryb dev (`/auth/dev-token`, hasła niesprawdzane) dopóki `VITE_SUPABASE_URL`
   puste w `frontend/.env.development`; po wpisaniu kluczy Supabase przełącza się sam.

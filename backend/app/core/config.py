@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     ewus_base_url: str = "http://127.0.0.1:8103"
     lab_base_url: str = "http://127.0.0.1:8104"
     payments_base_url: str = "http://127.0.0.1:8105"
+    sms_base_url: str = "http://127.0.0.1:8106"
+    sms_enabled: bool = True
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     # dev: front otwierany z adresów LAN (testy z innych urządzeń w sieci lokalnej)

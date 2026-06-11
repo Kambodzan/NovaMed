@@ -16,6 +16,7 @@ from app.integrations.base import IntegrationError
 from app.integrations.ewus import get_ewus_client
 from app.integrations.lab import get_lab_client
 from app.integrations.payments import get_payments_client
+from app.integrations.sms import set_sms_client
 from app.main import app
 from app.models import AppUser, Clinic, Doctor, Patient, Role, StaffClinic
 
@@ -52,6 +53,14 @@ class FakeLab:
 
     def acknowledge(self, referral_code: str) -> None:
         self.acked.append(referral_code)
+
+
+class FakeSms:
+    def __init__(self):
+        self.sent: list[dict] = []
+
+    def send(self, *, to: str, message: str) -> None:
+        self.sent.append({"to": to, "message": message})
 
 
 class FakePayments:
@@ -94,8 +103,8 @@ def db_session():
 
 @pytest.fixture()
 def integration_fakes():
-    """Fake-klienty integracji M6 — testy są hermetyczne (zero HTTP)."""
-    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments())
+    """Fake-klienty integracji — testy są hermetyczne (zero HTTP)."""
+    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments(), sms=FakeSms())
 
 
 @pytest.fixture()
@@ -110,9 +119,11 @@ def client(db_session, monkeypatch, integration_fakes):
     app.dependency_overrides[get_ewus_client] = lambda: integration_fakes.ewus
     app.dependency_overrides[get_lab_client] = lambda: integration_fakes.lab
     app.dependency_overrides[get_payments_client] = lambda: integration_fakes.payments
+    set_sms_client(integration_fakes.sms)  # SMS nie jest dependency FastAPI — singleton modułu
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    set_sms_client(None)
 
 
 def make_token(sub: str | None = None, email: str = "jan.testowy@example.com", secret: str = TEST_SECRET) -> str:
@@ -156,6 +167,7 @@ def factory(db_session):
 
         def patient(self) -> tuple[AppUser, str]:
             user, token = self.user("pacjent")
+            user.phone_number = "601234567"  # kanał SMS w powiadomieniach
             db_session.add(Patient(
                 patient_id=user.user_id, first_name="Jan", last_name="Testowy",
                 pesel="90010112345", birth_date=date(1990, 1, 1), insurance_status=True,
