@@ -46,6 +46,9 @@ export function ProShell({ brand, nav, children }: {
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-gray-900">{me?.username}</p>
             <p className="truncate text-[11px] font-semibold text-gray-400">{me?.email}</p>
+            {me?.role && (
+              <p className="mt-0.5 text-[10px] font-extrabold tracking-wider text-primary uppercase">{me.role}</p>
+            )}
           </div>
           <button
             onClick={() => void logout()}

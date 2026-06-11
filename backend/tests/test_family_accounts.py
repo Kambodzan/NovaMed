@@ -9,7 +9,7 @@ from tests.conftest import auth_header
 DEPENDENT = {
     "first_name": "Staś",
     "last_name": "Wiśniewski",
-    "pesel": "20210112345",
+    "pesel": "20210112342",  # poprawna suma kontrolna
     "birth_date": "2021-01-01",
 }
 
@@ -50,6 +50,26 @@ def test_dodanie_i_lista_podopiecznych(client, setup):
 
     # duplikat PESEL → 409
     assert client.post("/family", json=DEPENDENT, headers=auth_header(setup["guardian_token"])).status_code == 409
+
+
+def test_pesel_z_bledna_suma_kontrolna_odrzucony(client, setup):
+    resp = client.post("/family", json={**DEPENDENT, "pesel": "20210112345"},
+                       headers=auth_header(setup["guardian_token"]))
+    assert resp.status_code == 422
+    assert "suma kontrolna" in str(resp.json())
+
+
+def test_odpinanie_podopiecznego(client, setup, factory):
+    dep_id = add_dependent(client, setup["guardian_token"])
+    _, stranger_token = factory.patient()
+
+    # obcy nie odepnie cudzego podopiecznego
+    assert client.delete(f"/family/{dep_id}", headers=auth_header(stranger_token)).status_code == 404
+    assert client.delete(f"/family/{dep_id}", headers=auth_header(setup["guardian_token"])).status_code == 204
+    assert client.get("/family", headers=auth_header(setup["guardian_token"])).json() == []
+    # po odpięciu brak dostępu do danych byłego podopiecznego
+    assert client.get(f"/appointments/my?as_patient={dep_id}",
+                      headers=auth_header(setup["guardian_token"])).status_code == 403
 
 
 def test_rezerwacja_w_imieniu_podopiecznego(client, setup):

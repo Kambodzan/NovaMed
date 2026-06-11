@@ -179,7 +179,8 @@ function Stars({ value, onChange }: { value: number; onChange: (v: number) => vo
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map(i => (
-        <button key={i} type="button" aria-label={`${i} gwiazdek`} onClick={() => onChange(i === value ? 0 : i)}
+        <button key={i} type="button" aria-label={`${i} gwiazdek`} aria-pressed={i <= value}
+          onClick={() => onChange(i === value ? 0 : i)}
           className="cursor-pointer p-0.5 transition-transform hover:scale-110">
           <Star size={26} className={i <= value ? 'fill-amber-400 text-amber-400' : 'text-gray-200'} />
         </button>

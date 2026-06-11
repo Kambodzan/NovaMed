@@ -58,7 +58,11 @@ export function AdminUzytkownicy() {
                 </td>
                 <td className="border-t border-gray-100 px-4 py-3.5 text-right">
                   <Button size="sm" variant={u.active_account ? 'ghost' : 'secondary'} disabled={toggle.isPending}
-                    onClick={() => toggle.mutate(u.user_id)}>
+                    onClick={() => {
+                      if (!u.active_account || window.confirm(`Zablokować konto ${u.username}? Użytkownik straci dostęp do systemu do czasu odblokowania.`)) {
+                        toggle.mutate(u.user_id)
+                      }
+                    }}>
                     {u.active_account ? <><Lock size={14} /> Zablokuj</> : <><LockOpen size={14} /> Odblokuj</>}
                   </Button>
                 </td>

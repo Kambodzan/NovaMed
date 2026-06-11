@@ -7,6 +7,7 @@ import { Button, EmptyState, Field, PageHeader, Tile, TileHeader, inputCls } fro
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
+import { peselValid } from '../lib/pesel'
 import { formatDatePL } from '../lib/format'
 
 export function Rodzina() {
@@ -25,6 +26,17 @@ export function Rodzina() {
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się dodać podopiecznego.'),
   })
+
+  const unlink = useMutation({
+    mutationFn: (id: number) => api(`/family/${id}`, { method: 'DELETE' }),
+    onSuccess: (_d, id) => {
+      if (activeId === id) setActiveId(null)
+      void queryClient.invalidateQueries({ queryKey: ['family'] })
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się odpiąć podopiecznego.'),
+  })
+
+  const peselBad = form.pesel.length === 11 && !peselValid(form.pesel)
 
   return (
     <div className="space-y-6">
@@ -57,6 +69,10 @@ export function Rodzina() {
                 ) : (
                   <Button size="sm" onClick={() => setActiveId(d.patient_id)}>{t('Przełącz na ten profil')}</Button>
                 )}
+                <Button size="sm" variant="ghost" disabled={unlink.isPending}
+                  onClick={() => { if (window.confirm(t('Odpiąć podopiecznego? Profil i dokumentacja zostają w placówce — znika tylko dostęp z Twojego konta.'))) unlink.mutate(d.patient_id) }}>
+                  {t('Odepnij')}
+                </Button>
               </li>
             ))}
           </ul>
@@ -77,16 +93,17 @@ export function Rodzina() {
             <input className={inputCls} required minLength={1} value={form.last_name}
               onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
           </Field>
-          <Field label="PESEL">
+          <Field label="PESEL" hint={peselBad ? undefined : '11 cyfr — sprawdzamy sumę kontrolną'}>
             <input className={inputCls} required pattern="\d{11}" title="11 cyfr" value={form.pesel}
               onChange={e => setForm(f => ({ ...f, pesel: e.target.value }))} />
+            {peselBad && <p className="mt-1 text-xs font-bold text-red-600">{t('Nieprawidłowy PESEL (suma kontrolna).')}</p>}
           </Field>
           <Field label={t('Data urodzenia')}>
             <input type="date" className={inputCls} required value={form.birth_date}
               onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} />
           </Field>
           <div className="flex items-end">
-            <Button disabled={add.isPending} type="submit"><Plus size={15} /> {t('Dodaj')}</Button>
+            <Button disabled={add.isPending || peselBad} type="submit"><Plus size={15} /> {t('Dodaj')}</Button>
           </div>
         </form>
         <p className="mt-2 text-xs font-medium text-gray-400">

@@ -69,6 +69,8 @@ export function Telewizyta() {
   const [camOn, setCamOn] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [remoteSpeaking, setRemoteSpeaking] = useState(false)
+  const [wsDown, setWsDown] = useState(false)
+  const intentionalCloseRef = useRef(false)
 
   const addMessage = useCallback((m: ChatMessage) => setMessages(prev => [...prev, m]), [])
 
@@ -136,6 +138,8 @@ export function Telewizyta() {
 
       const ws = new WebSocket(`${WS_URL}/ws/telemed/${id}?token=${getAuthToken()}`)
       wsRef.current = ws
+      // zerwane połączenie ≠ "rozmówca nie dołączył" — pokaż własny komunikat
+      ws.onclose = () => { if (!intentionalCloseRef.current && !cancelled) setWsDown(true) }
       ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data)
         switch (msg.type) {
@@ -176,6 +180,7 @@ export function Telewizyta() {
 
     return () => {
       cancelled = true
+      intentionalCloseRef.current = true
       wsRef.current?.close()
       hangUp()
     }
@@ -222,6 +227,10 @@ export function Telewizyta() {
   }
 
   const endVisit = async () => {
+    if (peerPresent && !window.confirm(isDoctor
+      ? 'Rozmowa wciąż trwa. Zakończyć wizytę?'
+      : 'Rozmowa wciąż trwa. Opuścić wizytę?')) return
+    intentionalCloseRef.current = true
     hangUp() // kamera/mikrofon gasną natychmiast, jeszcze przed nawigacją
     wsRef.current?.close()
     if (isDoctor) {
@@ -262,8 +271,15 @@ export function Telewizyta() {
               <div className="pointer-events-none absolute inset-0 ring-4 ring-emerald-400/70 ring-inset" aria-hidden />
             )}
             {!remoteActive && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-sm font-bold text-gray-400">
-                {peerPresent ? 'Łączenie wideo…' : 'Rozmówca jeszcze nie dołączył'}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900 text-sm font-bold text-gray-400">
+                {wsDown ? (
+                  <>
+                    <span className="text-red-400">Połączenie z wizytą zostało przerwane.</span>
+                    <Button size="sm" variant="secondary" onClick={() => window.location.reload()}>
+                      Połącz ponownie
+                    </Button>
+                  </>
+                ) : peerPresent ? 'Łączenie wideo…' : 'Rozmówca jeszcze nie dołączył'}
               </div>
             )}
             <video

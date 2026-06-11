@@ -6,7 +6,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,12 +16,29 @@ from app.models import AppUser, Patient, Role
 
 router = APIRouter(prefix="/family", tags=["family"])
 
+PESEL_WEIGHTS = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+
+
+def pesel_valid(pesel: str) -> bool:
+    """Suma kontrolna PESEL (mod 10)."""
+    if len(pesel) != 11 or not pesel.isdigit():
+        return False
+    checksum = (10 - sum(int(d) * w for d, w in zip(pesel, PESEL_WEIGHTS)) % 10) % 10
+    return checksum == int(pesel[10])
+
 
 class DependentIn(BaseModel):
     first_name: str = Field(min_length=1, max_length=50)
     last_name: str = Field(min_length=1, max_length=50)
     pesel: str = Field(min_length=11, max_length=11, pattern=r"^\d{11}$")
     birth_date: date
+
+    @field_validator("pesel")
+    @classmethod
+    def check_pesel(cls, v: str) -> str:
+        if not pesel_valid(v):
+            raise ValueError("Nieprawidłowy numer PESEL (błędna suma kontrolna).")
+        return v
 
 
 class DependentOut(BaseModel):
@@ -77,6 +94,21 @@ def add_dependent(
     ))
     db.commit()
     return DependentOut(patient_id=account.user_id, **body.model_dump())
+
+
+@router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_dependent(
+    patient_id: int,
+    user: AppUser = Depends(require_roles("pacjent")),
+    db: Session = Depends(get_db),
+):
+    """Odpięcie podopiecznego od konta opiekuna. Profil i dokumentacja medyczna
+    ZOSTAJĄ w placówce (RODO/dokumentacja) — znika tylko powiązanie."""
+    dependent = db.get(Patient, patient_id)
+    if dependent is None or dependent.guardian_id != user.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="To nie jest Twój podopieczny.")
+    dependent.guardian_id = None
+    db.commit()
 
 
 @router.get("", response_model=list[DependentOut])

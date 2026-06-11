@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, Check, ChevronRight, CreditCard, MapPin, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
 import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
@@ -21,8 +21,16 @@ export function Umow() {
   const [reason, setReason] = useState('')
   const [notifyEarlier, setNotifyEarlier] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { asPatient, active } = useFamily()
+  const { asPatient, active, activeId } = useFamily()
   const { t } = useI18n()
+
+  // zmiana profilu (ja/podopieczny) w trakcie kreatora = powrót na start,
+  // żeby nie zarezerwować po cichu dla niewłaściwej osoby (płatność w toku zostaje)
+  useEffect(() => {
+    setStep(s => (s > 1 && payPhase === 'idle' ? 1 : s))
+    if (payPhase === 'idle') { setSlot(null); setBooked(null) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
 
   const { data: allSlots } = useQuery({
     queryKey: ['slots'],

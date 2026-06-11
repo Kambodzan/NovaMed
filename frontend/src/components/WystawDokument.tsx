@@ -123,7 +123,12 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
               <RotateCcw size={14} /> {resend.isPending ? 'Wysyłanie…' : 'Wyślij ponownie'}
             </Button>
           )}
-          <Button size="sm" variant="secondary" onClick={() => { setResult(null); setError(null) }}>
+          <Button size="sm" variant="secondary" onClick={() => {
+            setResult(null)
+            setError(null)
+            // wyczyść pola treści — rozpoznanie/typ/daty zostają (często te same)
+            setForm(f => ({ ...f, drugs: '', notes: '', test_type: '', test_description: '', content: '' }))
+          }}>
             Wystaw kolejny dokument
           </Button>
         </div>
@@ -133,7 +138,14 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
   }
 
   return (
-    <form className="space-y-3" onSubmit={e => { e.preventDefault(); issue.mutate() }}>
+    <form className="space-y-3" onSubmit={e => {
+      e.preventDefault()
+      if (kind === 'SICK_LEAVE' && form.date_to < form.date_from) {
+        setError('Data „do" nie może być wcześniejsza niż data „od".')
+        return
+      }
+      issue.mutate()
+    }}>
       <Field label="Rodzaj dokumentu">
         <select className={inputCls} value={kind} onChange={e => setKind(e.target.value as DocKind)}>
           {kinds.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}

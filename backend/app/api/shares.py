@@ -128,11 +128,15 @@ def access_by_code(
     """Personel otwiera dokumentację kodem od pacjenta (podgląd w zakresie kodu)."""
     code = body.code.strip().upper()
     share = db.scalar(select(DocumentShare).where(DocumentShare.access_code == code))
-    if share is None or share.revoked or share.expires_at <= datetime.now():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Kod jest nieprawidłowy, wygasł lub został unieważniony.",
-        )
+    if share is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Nie ma takiego kodu — sprawdź pisownię (bez O/0 i I/1).")
+    if share.revoked:
+        raise HTTPException(status_code=status.HTTP_410_GONE,
+                            detail="Ten kod został unieważniony przez pacjenta — poproś o nowy.")
+    if share.expires_at <= datetime.now():
+        raise HTTPException(status_code=status.HTTP_410_GONE,
+                            detail=f"Ten kod wygasł {share.expires_at.strftime('%d.%m.%Y %H:%M')} — poproś pacjenta o nowy.")
 
     q = select(MedicalDocument).where(MedicalDocument.patient_id == share.patient_id)
     if share.scope in ("PRESCRIPTION", "LAB_RESULT"):

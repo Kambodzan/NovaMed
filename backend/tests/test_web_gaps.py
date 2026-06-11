@@ -66,7 +66,10 @@ def test_udostepnianie_kodem_pelny_cykl(client, setup):
     client.delete(f"/shares/{share['share_id']}", headers=auth_header(s["patient_token"]))
     assert client.get("/shares/my", headers=auth_header(s["patient_token"])).json() == []
     resp = client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["doctor_token"]))
-    assert resp.status_code == 404
+    assert resp.status_code == 410  # kod istnieje, ale unieważniony — komunikat odróżnia od literówki
+    assert "unieważniony" in resp.json()["detail"]
+    # kod, którego nigdy nie było → 404
+    assert client.post("/shares/access", json={"code": "XXX-999"}, headers=auth_header(s["doctor_token"])).status_code == 404
 
 
 def test_udostepnianie_zakres_filtruje(client, setup):

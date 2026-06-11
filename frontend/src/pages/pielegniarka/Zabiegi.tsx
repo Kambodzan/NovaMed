@@ -118,7 +118,7 @@ export function Zabiegi() {
           </>}
         >
           <div className="pb-2">
-            <Field label="Przebieg zabiegu" hint="Wpis trafi do dokumentacji pacjenta przy skierowaniu.">
+            <Field label="Przebieg zabiegu" hint="Wymagane (min. 2 znaki) — wpis trafi do dokumentacji pacjenta przy skierowaniu.">
               <textarea
                 className={cx(inputCls, 'h-24 py-2.5')}
                 value={notes}

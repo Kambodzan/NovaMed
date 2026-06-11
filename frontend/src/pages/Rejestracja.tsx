@@ -4,6 +4,7 @@ import { Check, HeartPulse } from 'lucide-react'
 import { Button, Field, Tile, cx, inputCls } from '../ui'
 import { DEV_MODE, useAuth } from '../lib/auth'
 import { api } from '../lib/api'
+import { peselValid } from '../lib/pesel'
 
 export function Rejestracja() {
   const { token, profileMissing, registerAccount, refreshMe } = useAuth()
@@ -54,6 +55,8 @@ export function Rejestracja() {
   const set = (key: keyof typeof profile) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setProfile(p => ({ ...p, [key]: e.target.value }))
 
+  const peselBad = profile.pesel.length === 11 && !peselValid(profile.pesel)
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
       <div className="fade-up mb-8 text-center">
@@ -99,6 +102,7 @@ export function Rejestracja() {
             </div>
             <Field label="PESEL" hint="11 cyfr — potrzebny do e-recept i weryfikacji eWUŚ.">
               <input className={inputCls} required pattern="\d{11}" value={profile.pesel} onChange={set('pesel')} />
+              {peselBad && <p className="mt-1 text-xs font-bold text-red-600">Nieprawidłowy PESEL (suma kontrolna).</p>}
             </Field>
             <Field label="Data urodzenia">
               <input className={inputCls} type="date" required value={profile.birth_date} onChange={set('birth_date')} />

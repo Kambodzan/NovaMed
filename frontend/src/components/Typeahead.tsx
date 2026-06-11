@@ -23,6 +23,7 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
 }) {
   const [open, setOpen] = useState(false)
   const [debounced, setDebounced] = useState('')
+  const [activeIdx, setActiveIdx] = useState(-1)
   useEffect(() => {
     const t = setTimeout(() => setDebounced(value), 250)
     return () => clearTimeout(t)
@@ -39,6 +40,15 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
     if (onPick) onPick(item)
     else onChange(item.insert)
     setOpen(false)
+    setActiveIdx(-1)
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open || !items || items.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => (i + 1) % items.length) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => (i <= 0 ? items.length - 1 : i - 1)) }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); pick(items[activeIdx]) }
+    else if (e.key === 'Escape') { setOpen(false); setActiveIdx(-1) }
   }
 
   return (
@@ -46,20 +56,24 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
       <input
         className={inputCls}
         value={value}
-        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onChange={e => { onChange(e.target.value); setOpen(true); setActiveIdx(-1) }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         required={required}
         autoComplete="off"
+        role="combobox"
+        aria-expanded={open && !!items?.length}
+        aria-autocomplete="list"
       />
       {open && items && items.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-2xl border border-gray-100 bg-white p-1 shadow-lg">
-          {items.map(item => (
-            <li key={item.key}>
+        <ul role="listbox" className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-2xl border border-gray-100 bg-white p-1 shadow-lg">
+          {items.map((item, i) => (
+            <li key={item.key} role="option" aria-selected={i === activeIdx}>
               <button
                 type="button"
-                className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className={`w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50 ${i === activeIdx ? 'bg-gray-100' : ''}`}
                 onMouseDown={e => { e.preventDefault(); pick(item) }}
               >
                 {item.label}
