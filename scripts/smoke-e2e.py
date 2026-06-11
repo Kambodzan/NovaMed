@@ -29,8 +29,10 @@ ANON = next(
     "",
 )
 
-# unikalna minuta per bieg — sloty nie kolidują przy ponownym uruchomieniu
-MINUTE = int(time.time()) % 56 + 1
+# sloty na siatce 15 min; unikalność między biegami przez jitter minuty i dnia
+RUN = int(time.time() // 60)
+MINUTE = (RUN % 4) * 15
+DAY_JITTER = RUN % 11
 
 passed, failed = [], []
 
@@ -62,7 +64,8 @@ def api(method: str, path: str, token: str | None = None, **kw) -> httpx.Respons
 
 
 def at(days: int, hour: int) -> datetime:
-    return (datetime.now() + timedelta(days=days)).replace(hour=hour, minute=MINUTE, second=0, microsecond=0)
+    return (datetime.now() + timedelta(days=days + DAY_JITTER)).replace(
+        hour=hour, minute=MINUTE, second=0, microsecond=0)
 
 
 def main() -> None:

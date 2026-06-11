@@ -106,6 +106,40 @@ def test_opiekun_ma_dostep_do_zalacznikow_telewizyty_podopiecznego(client, setup
     assert client.get(url, headers=auth_header(other_token)).status_code == 403
 
 
+def test_slot_poza_siatka_odrzucony(client, setup):
+    # domyślna siatka 15 min — 10:07 nie przejdzie, 10:15 tak
+    base = (datetime.now() + timedelta(days=9)).replace(hour=10, minute=7, second=0, microsecond=0)
+    bad = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": [base.isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    )
+    assert bad.status_code == 422
+    assert "siatce" in bad.json()["detail"]
+    ok = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": [base.replace(minute=15).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    )
+    assert ok.status_code == 201
+
+    # zmiana siatki na 20 min: 10:15 już nie przejdzie, 10:20 tak
+    client.patch(f"/clinics/{setup['clinic'].clinic_id}/settings",
+                 json={"earlier_notice_min_hours": 24, "slot_interval_min": 20},
+                 headers=auth_header(setup["reg_token"]))
+    day2 = base + timedelta(days=1)
+    assert client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": [day2.replace(minute=15).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    ).status_code == 422
+    assert client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": [day2.replace(minute=20).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    ).status_code == 201
+
+
 def test_usuwanie_wolnego_slotu(client, setup):
     dt = (datetime.now() + timedelta(days=3)).replace(hour=14, minute=0, second=0, microsecond=0)
     free = make_slots(client, setup, [dt.isoformat()])[0]

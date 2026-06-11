@@ -6,7 +6,7 @@ import { api, ApiError } from '../../lib/api'
 import { dayNo, formatTime, monthShort } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 
-interface Clinic { clinic_id: number; clinic_name: string; earlier_notice_min_hours: number }
+interface Clinic { clinic_id: number; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number }
 interface DoctorRow { doctor_id: number; name: string; specialization: string | null }
 
 export function Terminy() {
@@ -75,15 +75,19 @@ export function Terminy() {
   })
 
   const [noticeHours, setNoticeHours] = useState('')
+  const [intervalMin, setIntervalMin] = useState('15')
   const [noticeSaved, setNoticeSaved] = useState(false)
   useEffect(() => {
-    if (clinic) setNoticeHours(String(clinic.earlier_notice_min_hours))
+    if (clinic) {
+      setNoticeHours(String(clinic.earlier_notice_min_hours))
+      setIntervalMin(String(clinic.slot_interval_min))
+    }
   }, [clinic])
 
   const saveNotice = useMutation({
     mutationFn: () => api(`/clinics/${clinic!.clinic_id}/settings`, {
       method: 'PATCH',
-      body: { earlier_notice_min_hours: Number(noticeHours) },
+      body: { earlier_notice_min_hours: Number(noticeHours), slot_interval_min: Number(intervalMin) },
     }),
     onSuccess: () => {
       setError(null)
@@ -138,8 +142,10 @@ export function Terminy() {
           <Field label="Data">
             <input type="date" className={inputCls} required value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </Field>
-          <Field label="Godzina">
-            <input type="time" className={inputCls} required value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+          <Field label="Godzina" hint={`siatka co ${clinic?.slot_interval_min ?? 15} min`}>
+            <input type="time" className={inputCls} required value={form.time}
+              step={(clinic?.slot_interval_min ?? 15) * 60}
+              onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
           </Field>
           <Field label="Forma">
             <select className={inputCls} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
@@ -168,9 +174,14 @@ export function Terminy() {
       </Tile>
 
       <Tile className="p-5" delay={90}>
-        <TileHeader title={<span className="inline-flex items-center gap-1.5"><BellRing size={13} /> Powiadomienia o wcześniejszych terminach</span>} />
+        <TileHeader title={<span className="inline-flex items-center gap-1.5"><BellRing size={13} /> Ustawienia placówki</span>} />
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Min. wyprzedzenie [h]" hint="nie powiadamiamy o terminach bliższych niż tyle godzin">
+          <Field label="Siatka terminów [min]" hint="godziny slotów co 15/20/30 min">
+            <select className={cx(inputCls, 'w-32')} value={intervalMin} onChange={e => setIntervalMin(e.target.value)}>
+              {[5, 10, 15, 20, 30, 60].map(n => <option key={n} value={n}>{n} min</option>)}
+            </select>
+          </Field>
+          <Field label="Min. wyprzedzenie [h]" hint="powiadomienia o wcześniejszym terminie">
             <input
               type="number" min="0" max="720" className={cx(inputCls, 'w-32')}
               value={noticeHours} onChange={e => setNoticeHours(e.target.value)}

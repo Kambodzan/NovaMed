@@ -17,6 +17,9 @@ class Clinic(Base):
     # Minimalne wyprzedzenie [h] powiadomień o wcześniejszym terminie
     # (rozszerzenie ERD): nie powiadamiamy o slotach „za 2h".
     earlier_notice_min_hours: Mapped[int] = mapped_column(Integer, default=24)
+    # Siatka terminów [min] — godziny slotów muszą leżeć na wielokrotności
+    # (np. 15 → :00/:15/:30/:45); konfigurowalne per placówka.
+    slot_interval_min: Mapped[int] = mapped_column(Integer, default=15)
 
 
 class PatientClinic(Base):

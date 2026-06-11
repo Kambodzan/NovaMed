@@ -24,10 +24,12 @@ class ClinicIn(BaseModel):
 class ClinicOut(ClinicIn):
     clinic_id: int
     earlier_notice_min_hours: int = 24
+    slot_interval_min: int = 15
 
 
 class ClinicSettingsIn(BaseModel):
     earlier_notice_min_hours: int = Field(ge=0, le=720, description="Min. wyprzedzenie [h] powiadomień o wcześniejszym terminie")
+    slot_interval_min: int = Field(default=15, ge=5, le=120, description="Siatka terminów [min] — np. 15 lub 20")
 
 
 class StaffAssignIn(BaseModel):
@@ -70,7 +72,8 @@ def create_clinic(
     clinic = Clinic(**body.model_dump())
     db.add(clinic)
     db.commit()
-    return ClinicOut(clinic_id=clinic.clinic_id, earlier_notice_min_hours=clinic.earlier_notice_min_hours, **body.model_dump())
+    return ClinicOut(clinic_id=clinic.clinic_id, earlier_notice_min_hours=clinic.earlier_notice_min_hours,
+                     slot_interval_min=clinic.slot_interval_min, **body.model_dump())
 
 
 @router.get("", response_model=list[ClinicOut])
@@ -80,6 +83,7 @@ def list_clinics(db: Session = Depends(get_db), _: AppUser = Depends(get_current
             clinic_id=c.clinic_id, clinic_name=c.clinic_name, address=c.address,
             phone=c.phone, clinic_email=c.clinic_email,
             earlier_notice_min_hours=c.earlier_notice_min_hours,
+            slot_interval_min=c.slot_interval_min,
         )
         for c in db.scalars(select(Clinic).order_by(Clinic.clinic_name))
     ]
@@ -92,14 +96,16 @@ def update_clinic_settings(
     _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
-    """Ustawienia placówki — m.in. limit wyprzedzenia powiadomień o wcześniejszych terminach."""
+    """Ustawienia placówki — limit wyprzedzenia powiadomień + siatka terminów."""
     clinic = get_clinic_or_404(clinic_id, db)
     clinic.earlier_notice_min_hours = body.earlier_notice_min_hours
+    clinic.slot_interval_min = body.slot_interval_min
     db.commit()
     return ClinicOut(
         clinic_id=clinic.clinic_id, clinic_name=clinic.clinic_name, address=clinic.address,
         phone=clinic.phone, clinic_email=clinic.clinic_email,
         earlier_notice_min_hours=clinic.earlier_notice_min_hours,
+        slot_interval_min=clinic.slot_interval_min,
     )
 
 

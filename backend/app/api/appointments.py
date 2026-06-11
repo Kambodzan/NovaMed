@@ -160,9 +160,18 @@ def create_slots(
     user: AppUser = Depends(require_roles(*SLOT_MANAGERS)),
     db: Session = Depends(get_db),
 ):
-    """UC-PP2 / sekwencja-dodanie-terminow: nowe wolne terminy (FREE, patient_id NULL)."""
-    if db.get(Clinic, clinic_id) is None:
+    """UC-PP2 / sekwencja-dodanie-terminow: nowe wolne terminy (FREE, patient_id NULL).
+    Godziny muszą leżeć na siatce placówki (clinic.slot_interval_min, np. co 15 min)."""
+    clinic = db.get(Clinic, clinic_id)
+    if clinic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placówka nie istnieje.")
+    interval = clinic.slot_interval_min or 15
+    for dt in body.datetimes:
+        if dt.minute % interval != 0 or dt.second != 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Godzina {dt.strftime('%H:%M')} nie leży na siatce terminów placówki (co {interval} min).",
+            )
     if db.get(Doctor, body.doctor_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lekarz nie istnieje.")
     # lekarz może dodawać terminy tylko sobie
