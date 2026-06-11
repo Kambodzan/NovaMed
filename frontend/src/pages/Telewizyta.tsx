@@ -19,6 +19,32 @@ const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 }
 
+// Wskaźnik mówienia: analizuje poziom audio strumienia i woła cb(true/false).
+// Zwraca funkcję sprzątającą (rAF + AudioContext).
+function watchSpeaking(stream: MediaStream, cb: (speaking: boolean) => void): () => void {
+  if (stream.getAudioTracks().length === 0) return () => {}
+  const ctx = new AudioContext()
+  void ctx.resume()
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = 512
+  ctx.createMediaStreamSource(stream).connect(analyser)
+  const data = new Uint8Array(analyser.frequencyBinCount)
+  let raf = 0
+  const tick = () => {
+    analyser.getByteTimeDomainData(data)
+    let peak = 0
+    for (const v of data) peak = Math.max(peak, Math.abs(v - 128))
+    cb(peak > 12) // próg odsiewa szum tła
+    raf = requestAnimationFrame(tick)
+  }
+  tick()
+  return () => {
+    cancelAnimationFrame(raf)
+    cb(false)
+    void ctx.close()
+  }
+}
+
 export function Telewizyta() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -31,6 +57,9 @@ export function Telewizyta() {
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
 
+  const stopLocalLevelRef = useRef<(() => void) | null>(null)
+  const stopRemoteLevelRef = useRef<(() => void) | null>(null)
+
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [peerPresent, setPeerPresent] = useState(false)
@@ -38,12 +67,34 @@ export function Telewizyta() {
   const [mediaError, setMediaError] = useState(false)
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
+  const [speaking, setSpeaking] = useState(false)
+  const [remoteSpeaking, setRemoteSpeaking] = useState(false)
 
   const addMessage = useCallback((m: ChatMessage) => setMessages(prev => [...prev, m]), [])
 
   const send = useCallback((payload: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(payload))
   }, [])
+
+  // Zrywa połączenie wideo z rozmówcą; bez śladu po ostatniej klatce (czarny ekran).
+  const teardownPeer = useCallback(() => {
+    stopRemoteLevelRef.current?.()
+    stopRemoteLevelRef.current = null
+    pcRef.current?.close()
+    pcRef.current = null
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null
+    setRemoteActive(false)
+  }, [])
+
+  // Pełne rozłączenie: kamera i mikrofon GASNĄ od razu (nie czekamy na unmount).
+  const hangUp = useCallback(() => {
+    teardownPeer()
+    stopLocalLevelRef.current?.()
+    stopLocalLevelRef.current = null
+    localStreamRef.current?.getTracks().forEach(t => t.stop())
+    localStreamRef.current = null
+    if (localVideoRef.current) localVideoRef.current.srcObject = null
+  }, [teardownPeer])
 
   const ensurePc = useCallback((): RTCPeerConnection => {
     if (pcRef.current) return pcRef.current
@@ -53,6 +104,8 @@ export function Telewizyta() {
       if (remoteVideoRef.current && e.streams[0]) {
         remoteVideoRef.current.srcObject = e.streams[0]
         setRemoteActive(true)
+        stopRemoteLevelRef.current?.()
+        stopRemoteLevelRef.current = watchSpeaking(e.streams[0], setRemoteSpeaking)
       }
     }
     localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!))
@@ -76,6 +129,7 @@ export function Telewizyta() {
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
         localStreamRef.current = stream
         if (localVideoRef.current) localVideoRef.current.srcObject = stream
+        stopLocalLevelRef.current = watchSpeaking(stream, setSpeaking)
       } catch {
         setMediaError(true)  // brak kamery/zgody — zostaje czat (UC-P5 A1)
       }
@@ -92,7 +146,7 @@ export function Telewizyta() {
             break
           case 'peer-left':
             setPeerPresent(false)
-            setRemoteActive(false)
+            teardownPeer() // czarny ekran zamiast zamrożonej ostatniej klatki; ponowne wejście = nowy offer
             addMessage({ kind: 'system', mine: false, text: 'Rozmówca opuścił wizytę.' })
             break
           case 'chat':
@@ -123,8 +177,7 @@ export function Telewizyta() {
     return () => {
       cancelled = true
       wsRef.current?.close()
-      pcRef.current?.close()
-      localStreamRef.current?.getTracks().forEach(t => t.stop())
+      hangUp()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
@@ -169,6 +222,8 @@ export function Telewizyta() {
   }
 
   const endVisit = async () => {
+    hangUp() // kamera/mikrofon gasną natychmiast, jeszcze przed nawigacją
+    wsRef.current?.close()
     if (isDoctor) {
       try { await api(`/appointments/${id}/status`, { method: 'POST', body: { new_status: 'COMPLETED' } }) } catch { /* np. już zakończona */ }
       navigate('/')
@@ -203,14 +258,20 @@ export function Telewizyta() {
         <Tile className="overflow-hidden p-0" delay={60}>
           <div className="relative aspect-video bg-gray-900">
             <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+            {remoteActive && remoteSpeaking && (
+              <div className="pointer-events-none absolute inset-0 ring-4 ring-emerald-400/70 ring-inset" aria-hidden />
+            )}
             {!remoteActive && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gray-400">
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-sm font-bold text-gray-400">
                 {peerPresent ? 'Łączenie wideo…' : 'Rozmówca jeszcze nie dołączył'}
               </div>
             )}
             <video
               ref={localVideoRef} autoPlay playsInline muted
-              className="absolute right-3 bottom-3 w-36 rounded-xl border-2 border-white/30 bg-gray-800 shadow-lg"
+              className={cx(
+                'absolute right-3 bottom-3 w-36 rounded-xl border-2 bg-gray-800 shadow-lg transition-[border-color,box-shadow] duration-150',
+                speaking ? 'border-emerald-400 shadow-emerald-400/40' : 'border-white/30',
+              )}
             />
             {mediaError && (
               <p className="absolute top-3 left-3 rounded-xl bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
@@ -221,7 +282,9 @@ export function Telewizyta() {
           <div className="flex items-center justify-center gap-2 px-4 py-3">
             <Button size="sm" variant={micOn ? 'secondary' : 'danger'} disabled={mediaError}
               onClick={() => { toggleTrack('audio', !micOn); setMicOn(!micOn) }}>
-              {micOn ? <Mic size={15} /> : <MicOff size={15} />} {micOn ? 'Mikrofon' : 'Wyciszony'}
+              {micOn
+                ? <Mic size={15} className={cx('transition-colors', speaking && 'text-emerald-500')} />
+                : <MicOff size={15} />} {micOn ? 'Mikrofon' : 'Wyciszony'}
             </Button>
             <Button size="sm" variant={camOn ? 'secondary' : 'danger'} disabled={mediaError}
               onClick={() => { toggleTrack('video', !camOn); setCamOn(!camOn) }}>
