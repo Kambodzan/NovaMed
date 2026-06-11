@@ -12,7 +12,7 @@ async function downloadPdf(documentId: number) {
   const resp = await fetch(`${API_URL}/documents/${documentId}/pdf`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   })
-  if (!resp.ok) return
+  if (!resp.ok) throw new Error(`PDF HTTP ${resp.status}`)
   const blob = await resp.blob()
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
@@ -31,6 +31,7 @@ const docMeta: Record<DocumentOut['document_type'], { icon: typeof FileText; lab
 
 export function Dokumentacja() {
   const [filter, setFilter] = useState<string>('ALL')
+  const [error, setError] = useState<string | null>(null)
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()
   const { data: docs } = useQuery({
@@ -43,6 +44,8 @@ export function Dokumentacja() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Moja dokumentacja')}</h1>
+
+      {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       <div className="fade-up flex flex-wrap gap-2" style={{ animationDelay: '50ms' }}>
         {['ALL', ...Object.keys(docMeta)].map(kind => (
@@ -88,7 +91,8 @@ export function Dokumentacja() {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={doc.document_status} />
-                      <Button size="sm" variant="secondary" onClick={() => void downloadPdf(doc.document_id)}>
+                      <Button size="sm" variant="secondary"
+                        onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
                         <Download size={14} /> {t('Pobierz PDF')}
                       </Button>
                     </div>

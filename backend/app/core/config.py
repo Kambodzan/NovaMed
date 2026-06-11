@@ -32,5 +32,8 @@ class Settings(BaseSettings):
     reminders_enabled: bool = True
     reminders_interval_seconds: int = 600
 
+    # Po ilu minutach porzucona płatność (TEMP_LOCK) zwalnia termin z powrotem do puli
+    temp_lock_minutes: int = 15
+
 
 settings = Settings()

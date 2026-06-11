@@ -11,7 +11,7 @@ async function downloadIcs(appointmentId: number) {
   const resp = await fetch(`${API_URL}/appointments/${appointmentId}/ics`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   })
-  if (!resp.ok) return
+  if (!resp.ok) throw new Error(`ICS HTTP ${resp.status}`)
   const blob = await resp.blob()
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
@@ -19,8 +19,8 @@ async function downloadIcs(appointmentId: number) {
   a.click()
   URL.revokeObjectURL(a.href)
 }
-import { dayNo, formatTime, isFuture, monthShort } from '../lib/format'
-import type { AppointmentOut } from '../lib/types'
+import { dayNo, formatDatePL, formatTime, isFuture, monthShort } from '../lib/format'
+import type { AppointmentOut, BookOut } from '../lib/types'
 
 export function Wizyty() {
   const queryClient = useQueryClient()
@@ -28,6 +28,7 @@ export function Wizyty() {
   const [cancelFor, setCancelFor] = useState<AppointmentOut | null>(null)
   const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
   const [reviewFor, setReviewFor] = useState<AppointmentOut | null>(null)
+  const [payFor, setPayFor] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const { activeId, asPatient } = useFamily()
@@ -76,7 +77,8 @@ export function Wizyty() {
               </Button>
             )}
             <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setError(null) }}>{t('Zmień termin')}</Button>
-            <Button size="sm" variant="ghost" title={t('Dodaj do kalendarza (ICS)')} onClick={() => void downloadIcs(v.appointment_id)}>
+            <Button size="sm" variant="ghost" title={t('Dodaj do kalendarza (ICS)')}
+              onClick={() => downloadIcs(v.appointment_id).catch(() => setError(t('Nie udało się pobrać pliku z wizytą — spróbuj ponownie.')))}>
               <CalendarPlus size={14} /> {t('Do kalendarza')}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>{t('Anuluj')}</Button>
@@ -88,7 +90,10 @@ export function Wizyty() {
           </Button>
         )}
         {actions && v.appointment_status === 'TEMP_LOCK' && (
-          <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>{t('Zwolnij rezerwację')}</Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => { setPayFor(v); setError(null) }}>{t('Dokończ płatność')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>{t('Zwolnij rezerwację')}</Button>
+          </div>
         )}
         {!actions && v.appointment_status === 'COMPLETED' && !v.reviewed && (
           <Button size="sm" variant="secondary" onClick={() => setReviewFor(v)}>
@@ -137,7 +142,7 @@ export function Wizyty() {
           </>}
         >
           <p className="text-sm leading-relaxed font-medium text-gray-600">
-            {cancelFor.doctor_name}, {formatTime(cancelFor.appointment_datetime)}. {t('Termin wróci do puli wolnych terminów.')}
+            {cancelFor.doctor_name} — {formatDatePL(cancelFor.appointment_datetime)}, {formatTime(cancelFor.appointment_datetime)}. {t('Termin wróci do puli wolnych terminów.')}
           </p>
           {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
         </Modal>
@@ -148,6 +153,14 @@ export function Wizyty() {
           visit={rescheduleFor}
           onClose={() => setRescheduleFor(null)}
           onDone={() => { invalidate(); setRescheduleFor(null) }}
+        />
+      )}
+
+      {payFor && (
+        <PayModal
+          visit={payFor}
+          onClose={() => setPayFor(null)}
+          onDone={() => { invalidate(); setPayFor(null) }}
         />
       )}
 
@@ -231,6 +244,62 @@ function ReviewModal({ visit, onClose, onDone }: {
         </div>
         <p className="text-xs font-medium text-gray-400">{t('Możesz ocenić lekarza, placówkę lub oboje.')}</p>
         {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+      </div>
+    </Modal>
+  )
+}
+
+function PayModal({ visit, onClose, onDone }: {
+  visit: AppointmentOut
+  onClose: () => void
+  onDone: () => void
+}) {
+  const { t } = useI18n()
+  const [error, setError] = useState<string | null>(null)
+  const [declined, setDeclined] = useState(false)
+
+  const pay = useMutation({
+    mutationFn: (outcome: 'success' | 'failure') =>
+      api<BookOut>(`/appointments/${visit.appointment_id}/pay`, { method: 'POST', body: { outcome } }),
+    onSuccess: (data) => {
+      if (data.payment?.payment_status === 'PAID') onDone()
+      else { setDeclined(true); setError(null) }
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : t('Płatność nie powiodła się.')),
+  })
+
+  return (
+    <Modal
+      overline={`${visit.doctor_name} · ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)}`}
+      title={t('Dokończ płatność')}
+      onClose={onClose}
+    >
+      <div className="space-y-3 pb-4">
+        {declined ? (
+          <>
+            <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">
+              {t('Płatność odrzucona')}. {t('Termin wrócił do puli wolnych terminów. Możesz spróbować ponownie lub wybrać inny termin.')}
+            </p>
+            <Button variant="secondary" onClick={onDone}>{t('Wróć')}</Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-gray-500">
+              {t('Termin zablokowany. Do zapłaty:')}{' '}
+              <span className="font-extrabold text-gray-900">{visit.price} zł</span>.{' '}
+              {t('Operator płatności jest symulowany — wybierz wynik autoryzacji.')}
+            </p>
+            {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button disabled={pay.isPending} onClick={() => pay.mutate('success')}>
+                {t('Zapłać kartą (symulacja)')}
+              </Button>
+              <Button variant="secondary" disabled={pay.isPending} onClick={() => pay.mutate('failure')}>
+                {t('Symuluj odmowę płatności')}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   )

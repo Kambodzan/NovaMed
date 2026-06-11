@@ -1,4 +1,5 @@
 // Lista dokumentów pacjenta (widok personelu) z pobieraniem PDF.
+import { useState } from 'react'
 import { Download, FileSignature, FileText, FlaskConical, Pill } from 'lucide-react'
 import { Button, EmptyState, StatusBadge } from '../ui'
 import { API_URL, getAuthToken } from '../lib/api'
@@ -15,7 +16,7 @@ async function downloadPdf(documentId: number) {
   const resp = await fetch(`${API_URL}/documents/${documentId}/pdf`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   })
-  if (!resp.ok) return
+  if (!resp.ok) throw new Error(`PDF HTTP ${resp.status}`)
   const blob = await resp.blob()
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
@@ -28,6 +29,7 @@ export function DokumentyLista({ documents, emptyHint }: {
   documents: DocumentOut[]
   emptyHint?: string
 }) {
+  const [error, setError] = useState<string | null>(null)
   if (documents.length === 0) {
     return (
       <EmptyState
@@ -38,6 +40,8 @@ export function DokumentyLista({ documents, emptyHint }: {
     )
   }
   return (
+    <>
+    {error && <p className="mb-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
     <ul className="space-y-2">
       {documents.map(d => {
         const Icon = docIcon[d.document_type] ?? FileText
@@ -57,7 +61,8 @@ export function DokumentyLista({ documents, emptyHint }: {
             </div>
             <div className="flex flex-col items-end gap-1.5">
               <StatusBadge status={d.document_status} />
-              <Button size="sm" variant="ghost" onClick={() => void downloadPdf(d.document_id)}>
+              <Button size="sm" variant="ghost"
+                onClick={() => downloadPdf(d.document_id).then(() => setError(null), () => setError('Nie udało się pobrać PDF — spróbuj ponownie.'))}>
                 <Download size={13} /> PDF
               </Button>
             </div>
@@ -65,5 +70,6 @@ export function DokumentyLista({ documents, emptyHint }: {
         )
       })}
     </ul>
+    </>
   )
 }

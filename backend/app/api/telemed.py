@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.family import allowed_patient_ids
 from app.core.auth import decode_supabase_token, get_current_user
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus
@@ -30,11 +31,16 @@ MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_VISIT_STATUSES = {AppointmentStatus.CONFIRMED.value, AppointmentStatus.IN_PROGRESS.value}
 
 
+def is_participant(db: Session, a: Appointment, user: AppUser) -> bool:
+    """Uczestnik = lekarz wizyty, pacjent albo jego opiekun (konta rodzinne)."""
+    return user.user_id == a.doctor_id or a.patient_id in allowed_patient_ids(db, user)
+
+
 def assert_participant(db: Session, appointment_id: int, user: AppUser) -> Appointment:
     a = db.get(Appointment, appointment_id)
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
-    if user.user_id not in (a.patient_id, a.doctor_id):
+    if not is_participant(db, a, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nie jesteś uczestnikiem tej wizyty.")
     return a
 
@@ -85,7 +91,7 @@ async def telemed_ws(
         await ws.close(code=4401)
         return
     a = db.get(Appointment, appointment_id)
-    if a is None or user.user_id not in (a.patient_id, a.doctor_id):
+    if a is None or not is_participant(db, a, user):
         await ws.close(code=4403)
         return
     if a.appointment_type != "ONLINE" or a.appointment_status not in ALLOWED_VISIT_STATUSES:

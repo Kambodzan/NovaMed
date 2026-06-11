@@ -1,13 +1,14 @@
-# Przypomnienia o wizytach (UC-P7): powiadomienie 24h przed terminem.
+# Przypomnienia o wizytach (UC-P7) + sprzątanie porzuconych płatności.
 # Wywoływane pętlą w lifespan aplikacji (main.py) lub ręcznie w testach.
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.domain.appointments import AppointmentStatus
 from app.domain.notify import notify
-from app.models import Appointment, AppUser
+from app.models import Appointment, AppUser, Payment
 
 
 def send_due_reminders(db: Session) -> int:
@@ -30,5 +31,37 @@ def send_due_reminders(db: Session) -> int:
             f"{' (teleporada — połączysz się z portalu)' if a.appointment_type == 'ONLINE' else ''}.",
         )
         a.reminder_sent = True
+    db.commit()
+    return len(rows)
+
+
+def release_expired_temp_locks(db: Session) -> int:
+    """Porzucona płatność: TEMP_LOCK starszy niż temp_lock_minutes wraca do puli
+    (FREE), płatność oznaczana FAILED, pacjent dostaje powiadomienie. Bez tego
+    slot zablokowany zamkniętą przeglądarką wisiałby zajęty w nieskończoność."""
+    from app.api.appointments import notify_earlier_watchers, visit_label  # import lokalny — unika cyklu
+
+    cutoff = datetime.now() - timedelta(minutes=settings.temp_lock_minutes)
+    rows = db.execute(
+        select(Appointment, Payment)
+        .join(Payment, Payment.appointment_id == Appointment.appointment_id)
+        .where(
+            Appointment.appointment_status == AppointmentStatus.TEMP_LOCK.value,
+            Payment.payment_status == "PENDING",
+            Payment.created_at < cutoff,
+        )
+    ).all()
+    for a, payment in rows:
+        payment.payment_status = "FAILED"
+        patient_id = a.patient_id
+        label = visit_label(db, a)
+        a.appointment_status = AppointmentStatus.FREE.value
+        a.patient_id = None
+        a.notify_earlier = False
+        if patient_id:
+            notify(db, patient_id, "Rezerwacja wygasła",
+                   f"Płatność za wizytę ({label}) nie została dokończona w {settings.temp_lock_minutes} min "
+                   "— termin wrócił do puli. Jeśli nadal chcesz, zarezerwuj go ponownie.")
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
     db.commit()
     return len(rows)

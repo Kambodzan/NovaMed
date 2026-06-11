@@ -28,13 +28,16 @@ def visit_label(db: Session, a: Appointment) -> str:
     return f"{doctor_user.username}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}"
 
 
-def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot_dt: datetime) -> None:
-    """Slot stał się wolny → powiadom pacjentów z PÓŹNIEJSZĄ wizytą u tego lekarza,
+def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot_dts: list[datetime]) -> None:
+    """Sloty stały się wolne → powiadom pacjentów z PÓŹNIEJSZĄ wizytą u tego lekarza,
     którzy zaznaczyli notify_earlier. Limit placówki (earlier_notice_min_hours)
-    chroni przed powiadomieniami o terminach „za 2 godziny"."""
+    chroni przed powiadomieniami o terminach „za 2 godziny". Cała paczka slotów
+    (np. seria cykliczna ×12) = JEDNO powiadomienie per pacjent, nie 12."""
     clinic = db.get(Clinic, clinic_id)
     min_hours = clinic.earlier_notice_min_hours if clinic else 24
-    if slot_dt - datetime.now() < timedelta(hours=min_hours):
+    cutoff = datetime.now() + timedelta(hours=min_hours)
+    eligible = sorted(dt for dt in slot_dts if dt >= cutoff)
+    if not eligible:
         return
     doctor_user = db.get(AppUser, doctor_id)
     watchers = db.scalars(select(Appointment).where(
@@ -42,19 +45,23 @@ def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot
         Appointment.appointment_status == AppointmentStatus.CONFIRMED.value,
         Appointment.notify_earlier.is_(True),
         Appointment.patient_id.is_not(None),
-        Appointment.appointment_datetime > slot_dt,
+        Appointment.appointment_datetime > eligible[0],
     )).all()
     seen: set[int] = set()
     for w in watchers:
         if w.patient_id in seen:
             continue
+        mine = [dt for dt in eligible if dt < w.appointment_datetime]
+        if not mine:
+            continue
         seen.add(w.patient_id)
+        extra = f" i {len(mine) - 1} kolejnych" if len(mine) > 1 else ""
         notify(
             db, w.patient_id,
             "Zwolnił się wcześniejszy termin",
-            f"U {doctor_user.username} zwolnił się termin {slot_dt.strftime('%d.%m.%Y %H:%M')} — "
-            f"wcześniejszy niż Twoja wizyta ({w.appointment_datetime.strftime('%d.%m %H:%M')}). "
-            "Jeśli Ci pasuje, przełóż wizytę w aplikacji.",
+            f"U {doctor_user.username} zwolnił się termin {mine[0].strftime('%d.%m.%Y %H:%M')}{extra} — "
+            f"wcześniej niż Twoja wizyta ({w.appointment_datetime.strftime('%d.%m %H:%M')}). "
+            "Jeśli Ci pasuje, wejdź w Moje wizyty → Zmień termin (do 24 h przed wizytą, terminy bezpłatne).",
         )
 
 router = APIRouter(tags=["appointments"])
@@ -194,8 +201,11 @@ def create_slots(
         )
         db.add(a)
         created.append(a)
-        # „powiadom o wcześniejszym terminie": nowy slot też się liczy
-        notify_earlier_watchers(db, doctor_id=body.doctor_id, clinic_id=clinic_id, slot_dt=dt)
+
+    # „powiadom o wcześniejszym terminie": nowe sloty też się liczą (jedno
+    # powiadomienie dla całej serii — bez spamu przy slotach cyklicznych)
+    notify_earlier_watchers(db, doctor_id=body.doctor_id, clinic_id=clinic_id,
+                            slot_dts=[a.appointment_datetime for a in created])
 
     # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
     doctor = db.get(Doctor, body.doctor_id)
@@ -295,6 +305,9 @@ def book_appointment(
         amount=a.price,
         payment_status="PENDING",
         provider_ref=provider_ref,
+        # jawnie czas lokalny — server_default w sqlite dawałby UTC i psuł
+        # liczenie timeoutu TEMP_LOCK (release_expired_temp_locks)
+        created_at=datetime.now(),
     )
     db.add(payment)
     db.commit()
@@ -350,7 +363,7 @@ def pay_appointment(
         a.notify_earlier = False
         notify(db, user.user_id, "Płatność odrzucona",
                "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
-        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dt=a.appointment_datetime)
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),
@@ -385,7 +398,7 @@ def cancel_appointment(
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
         a.notify_earlier = False
-        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dt=a.appointment_datetime)
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
         db.commit()
         return appointment_out(db, a)
 
@@ -414,7 +427,7 @@ def cancel_appointment(
             appointment_type=a.appointment_type,
             price=a.price,
         ))
-        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dt=a.appointment_datetime)
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
     db.commit()
     return appointment_out(db, a)
 
@@ -460,7 +473,7 @@ def reschedule_appointment(
     new.patient_id = old.patient_id  # przełożenie zachowuje pacjenta (także podopiecznego)
     new.appointment_status = AppointmentStatus.CONFIRMED.value
     new.notify_earlier = old.notify_earlier  # preferencja wędruje z wizytą
-    notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dt=old.appointment_datetime)
+    notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
     db.commit()
     return appointment_out(db, new)
 
