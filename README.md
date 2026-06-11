@@ -20,7 +20,8 @@ mobilna pacjenta + integracje z systemami krajowymi (mockowane).
 - **Backend**: Python, FastAPI + SQLAlchemy 2.x + Alembic, PostgreSQL
 - **Auth**: **Supabase Auth** (cloud) — rejestracja/logowanie/reset/2FA po stronie Supabase;
   backend weryfikuje JWT (Bearer) i mapuje `sub` → `app_user.supabase_uid`; role/RBAC nasze
-  (tabela `role`). Sekrety w `backend/.env`: `SUPABASE_URL`, `SUPABASE_JWT_SECRET`
+  (tabela `role`). Sekrety w `backend/.env`: `SUPABASE_URL`, `SUPABASE_JWT_SECRET`,
+  `SUPABASE_SERVICE_ROLE_KEY` (tylko dla `scripts/provision-users.py`)
 - **Frontend web**: React (Vite + TypeScript) — 5 portali w jednej aplikacji, routing per rola
 - **Mobile**: React Native (Expo) — aplikacja pacjenta (push, offline cache)
 - **Integracje zewnętrzne** (P1, ZUS e-ZLA, eWUŚ, laboratoria, płatności): **własne
@@ -84,8 +85,13 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
 - **Frontend** (z `frontend/`): `npm run dev` → localhost:5174 (oczekuje API na :8000).
   Auth: tryb dev (`/auth/dev-token`, hasła niesprawdzane) dopóki `VITE_SUPABASE_URL`
   puste w `frontend/.env.development`; po wpisaniu kluczy Supabase przełącza się sam.
-  Konto demo: `janina.wisniewska@novamed.dev` (pacjentka, z seedu).
-- **Seed danych demo**: `backend> .\.venv\Scripts\python.exe -m app.seed_dev` (idempotentny)
+- **Konta testowe**: `backend> .\.venv\Scripts\python.exe ..\scripts\provision-users.py`
+  (idempotentny; admin/3 lekarzy/pielęgniarka/rejestracja/2 pacjentów, np.
+  `janina.wisniewska@novamed.dev`). Bez kluczy Supabase: tryb dev-token (hasło dowolne).
+  Z kluczami (`SUPABASE_URL`+`SUPABASE_SERVICE_ROLE_KEY` w backend/.env): konta
+  zakładane w Supabase (hasło `NovaMed.Test1`), ponowny bieg podmienia uid-y dev→Supabase.
+  Demo-seed usunięty — wizyty/terminy/dokumenty tworzy się normalnie przez aplikację
+  (rejestracja dodaje terminy w Panelu Poradni).
 - **Słowniki ICD-10/leków**: `backend> .\.venv\Scripts\python.exe ..\scripts\import-dictionaries.py`
   (starter z `data/dictionaries/`; pełne oficjalne pliki: `--icd10 plik.csv`, `--rpl plik.csv` z RPL)
 - **Makiety UI** (z `mockupy-ui/`): `npm run dev` → localhost:5173

@@ -62,9 +62,9 @@ if (Test-Port 8000) {
     Write-Host "  [START] NovaMed API ($proto`://:8000)" -ForegroundColor Green
 }
 
-Write-Host "Seed danych demo (idempotentny):" -ForegroundColor Cyan
+Write-Host "Konta testowe + slowniki (idempotentne):" -ForegroundColor Cyan
 Push-Location (Join-Path $root "backend")
-& $py -m app.seed_dev
+& $py (Join-Path $root "scripts\provision-users.py")
 & $py (Join-Path $root "scripts\import-dictionaries.py")
 Pop-Location
 

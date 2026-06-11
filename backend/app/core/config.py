@@ -8,10 +8,12 @@ class Settings(BaseSettings):
     database_url: str = "***REMOVED***"
 
     # Supabase Auth — backend tylko weryfikuje tokeny (legacy HS256 JWT secret
-    # z dashboardu: Settings → API → JWT Secret)
+    # z dashboardu: Settings → API → JWT Secret). Service role key używany
+    # WYŁĄCZNIE przez scripts/provision-users.py (zakładanie kont testowych).
     supabase_url: str = ""
     supabase_jwt_secret: str = "dev-secret-do-podmiany"
     supabase_jwt_aud: str = "authenticated"
+    supabase_service_role_key: str = ""
 
     # Mock-serwisy integracji (mocks/) — podmiana na realne systemy przez env.
     # 127.0.0.1 zamiast localhost: na Windows localhost próbuje najpierw IPv6 (::1),
