@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, Check, ChevronRight, CreditCard, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
-import { Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
+import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
@@ -10,12 +10,20 @@ import type { AppointmentOut, BookOut, WaitlistEntry } from '../lib/types'
 
 type PayPhase = 'idle' | 'awaiting' | 'success' | 'declined'
 
+// wyszukiwanie bez wrażliwości na polskie znaki ("kardio" ↔ "Kardiolog", "zielinski" ↔ "Zieliński")
+const fold = (s: string) => s.toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').replaceAll('ł', 'l')
+
+const doctorInitials = (name: string) => {
+  const parts = name.replace(/^(dr|lek\.|piel\.)\s+/i, '').split(' ')
+  return parts.map(p => p[0]).slice(0, 2).join('').toUpperCase()
+}
+
 export function Umow() {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [spec, setSpec] = useState<string | null>(null)
   const [doctor, setDoctor] = useState<{ id: number; name: string } | null>(null)
-  const [mode, setMode] = useState<'spec' | 'doctor'>('spec')
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'STATIONARY' | 'ONLINE'>('ALL')
   const [visibleDays, setVisibleDays] = useState(4)
@@ -42,7 +50,7 @@ export function Umow() {
     queryFn: () => api<AppointmentOut[]>('/slots'),
   })
 
-  const q = query.trim().toLowerCase()
+  const q = fold(query.trim())
 
   const specs = useMemo(() => {
     const map = new Map<string, { count: number; earliest: string }>()
@@ -55,7 +63,7 @@ export function Umow() {
       })
     }
     return [...map.entries()]
-      .filter(([name]) => !q || name.toLowerCase().includes(q))
+      .filter(([name]) => !q || fold(name).includes(q))
       .sort((a, b) => a[0].localeCompare(b[0]))
   }, [allSlots, q])
 
@@ -70,7 +78,7 @@ export function Umow() {
       })
     }
     return [...map.values()]
-      .filter(d => !q || d.name.toLowerCase().includes(q) || (d.spec ?? '').toLowerCase().includes(q))
+      .filter(d => !q || fold(d.name).includes(q) || fold(d.spec ?? '').includes(q))
       .sort((a, b) => a.earliest.localeCompare(b.earliest))
   }, [allSlots, q])
 
@@ -153,7 +161,7 @@ export function Umow() {
       {step === 1 && (
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
-          <div className="space-y-3">
+          <div className="space-y-4">
             <input
               className={inputCls}
               value={query}
@@ -161,80 +169,59 @@ export function Umow() {
               placeholder={t('Szukaj lekarza lub specjalizacji…')}
               autoComplete="off"
             />
-            <div className="flex gap-2">
-              {([['spec', 'Specjalizacje'], ['doctor', 'Lekarze']] as const).map(([m, label]) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={cx(
-                    'cursor-pointer rounded-full px-4 py-2 text-xs font-extrabold transition-colors',
-                    mode === m ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-500 hover:text-gray-900',
-                  )}
-                >
-                  {t(label)}
-                </button>
-              ))}
-            </div>
 
-            {mode === 'spec' && (specs.length === 0 ? (
+            {specs.length === 0 && doctors.length === 0 ? (
               <EmptyState
                 icon={<CalendarDays size={28} strokeWidth={1.5} />}
-                title={t('Brak wolnych terminów')}
-                hint={t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
+                title={q ? t('Nic nie pasuje do wyszukiwania') : t('Brak wolnych terminów')}
+                hint={q ? t('Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.')
+                  : t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
               />
             ) : (
-              <ul className="space-y-1.5">
-                {specs.map(([s, info]) => (
-                  <li key={s}>
-                    <button
-                      onClick={() => { setSpec(s); setDoctor(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
-                      className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
-                    >
-                      <span>
-                        <span className="block font-bold text-gray-900 group-hover:text-primary">{s}</span>
-                        <span className="block text-xs font-semibold text-emerald-700">
-                          {t('najbliższy:')} {formatDatePL(info.earliest)}, {formatTime(info.earliest)}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
-                        {info.count} {info.count === 1 ? t('termin') : t('terminów')}
-                        <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ))}
+              <>
+                {specs.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Specjalizacje')}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {specs.map(([s, info]) => (
+                        <button
+                          key={s}
+                          onClick={() => { setSpec(s); setDoctor(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
+                          className="cursor-pointer rounded-full bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-primary-soft hover:text-primary"
+                        >
+                          {s} <span className="font-semibold text-gray-400">({info.count})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {mode === 'doctor' && (doctors.length === 0 ? (
-              <EmptyState
-                icon={<CalendarDays size={28} strokeWidth={1.5} />}
-                title={t('Brak wolnych terminów')}
-                hint={t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
-              />
-            ) : (
-              <ul className="space-y-1.5">
-                {doctors.map(d => (
-                  <li key={d.id}>
-                    <button
-                      onClick={() => { setDoctor({ id: d.id, name: d.name }); setSpec(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
-                      className="group flex w-full cursor-pointer items-center justify-between rounded-2xl bg-gray-50 px-4 py-3.5 text-left hover:bg-primary-soft"
-                    >
-                      <span>
-                        <span className="block font-bold text-gray-900 group-hover:text-primary">{d.name}</span>
-                        <span className="block text-xs font-semibold text-gray-500">
-                          {d.spec} · <span className="text-emerald-700">{t('najbliższy:')} {formatDatePL(d.earliest)}, {formatTime(d.earliest)}</span>
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-400">
-                        {d.count} {d.count === 1 ? t('termin') : t('terminów')}
-                        <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ))}
+                {doctors.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Lekarze')}</p>
+                    <ul className="space-y-1.5">
+                      {doctors.map(d => (
+                        <li key={d.id}>
+                          <button
+                            onClick={() => { setDoctor({ id: d.id, name: d.name }); setSpec(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
+                            className="group flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left hover:bg-primary-soft"
+                          >
+                            <Avatar initials={doctorInitials(d.name)} size="md" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-bold text-gray-900 group-hover:text-primary">{d.name}</span>
+                              <span className="block text-xs font-semibold text-gray-500">
+                                {d.spec} · <span className="text-emerald-700">{t('najbliższy:')} {formatDatePL(d.earliest)}, {formatTime(d.earliest)}</span>
+                              </span>
+                            </span>
+                            <ChevronRight size={16} className="shrink-0 text-gray-300 group-hover:text-primary" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <p className="mt-4 text-sm font-medium text-gray-500">
             {t('Nie ma specjalisty, którego szukasz?')}{' '}

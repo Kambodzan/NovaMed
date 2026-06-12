@@ -194,6 +194,8 @@ const EN: Record<string, string> = {
   'Brak terminów dla wybranych filtrów': 'No slots match the filters',
   'Zmień filtr lub wróć do wyboru specjalisty.': 'Change the filter or go back to specialist selection.',
   'Pokaż kolejne dni': 'Show more days',
+  'Nic nie pasuje do wyszukiwania': 'Nothing matches your search',
+  'Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.': 'Try a different phrase or join the waiting list below.',
 
   // Rodzina
   'Konta rodzinne': 'Family accounts',
