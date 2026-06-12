@@ -113,6 +113,8 @@ class PayIn(BaseModel):
 class BookIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500, description="Powód wizyty (opcjonalnie)")
     notify_earlier: bool = Field(default=False, description="Powiadom, gdy zwolni się wcześniejszy termin")
+    # teleporada to WYBÓR PACJENTA przy rezerwacji, nie cecha slotu
+    online: bool = Field(default=False, description="Pacjent woli teleporadę (wizyta online)")
 
 
 class RescheduleIn(BaseModel):
@@ -298,6 +300,8 @@ def book_appointment(
         if body.reason:
             a.appointment_notes = body.reason.strip()[:500]
         a.notify_earlier = body.notify_earlier
+        if body.online:
+            a.appointment_type = AppointmentType.ONLINE.value
 
     # eWUŚ — automatyczna weryfikacja przy rejestracji wizyty; awaria nie blokuje rezerwacji
     patient = db.get(Patient, patient_id)

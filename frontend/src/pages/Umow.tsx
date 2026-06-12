@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronRight, CreditCard, Trash2, Video, CalendarDays, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, XCircle } from 'lucide-react'
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -19,14 +19,97 @@ const doctorInitials = (name: string) => {
   return parts.map(p => p[0]).slice(0, 2).join('').toUpperCase()
 }
 
+const shortLoc = (clinicName: string) => clinicName.split('—').pop()!.trim()
+
+interface DoctorCardData {
+  id: number
+  name: string
+  spec: string | null
+  clinics: string[]
+  days: ReadonlyArray<readonly [string, AppointmentOut[]]>
+}
+
+// Mini-kalendarz lekarza: 3 dni naraz, strzałki ‹ ›, godziny jako punkty.
+function DoctorCard({ d, multiClinic, onPick }: {
+  d: DoctorCardData
+  multiClinic: boolean
+  onPick: (s: AppointmentOut) => void
+}) {
+  const { t } = useI18n()
+  const [offset, setOffset] = useState(0)
+  const [showAll, setShowAll] = useState(false)
+  const visible = d.days.slice(offset, offset + 3)
+  const dayLabel = (day: string) =>
+    `${formatDatePL(day + 'T00:00:00').split(',')[0]} ${dayNo(day + 'T00:00:00')} ${monthShort(day + 'T00:00:00')}`
+
+  return (
+    <div className="rounded-2xl bg-gray-50 p-4">
+      <div className="flex items-center gap-3">
+        <Avatar initials={doctorInitials(d.name)} size="md" />
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-gray-900">{d.name}</p>
+          <p className="truncate text-xs font-semibold text-gray-500">
+            {d.spec}{multiClinic && <> · {d.clinics.map(shortLoc).join(', ')}</>}
+          </p>
+        </div>
+        <div className="flex gap-1">
+          <button aria-label={t('Wcześniejsze dni')} disabled={offset === 0}
+            onClick={() => setOffset(o => Math.max(0, o - 3))}
+            className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+            <ChevronLeft size={16} />
+          </button>
+          <button aria-label={t('Kolejne dni')} disabled={offset + 3 >= d.days.length}
+            onClick={() => setOffset(o => o + 3)}
+            className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {visible.map(([day, list]) => (
+          <div key={day} className="min-w-0">
+            <p className="mb-1.5 text-center text-[11px] font-extrabold tracking-wide text-gray-400 uppercase">
+              {dayLabel(day)}
+            </p>
+            <div className="flex flex-col items-stretch gap-1">
+              {(showAll ? list : list.slice(0, 5)).map(s => (
+                <button
+                  key={s.appointment_id}
+                  onClick={() => onPick(s)}
+                  title={s.clinic_name}
+                  className="cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-sm font-bold text-primary shadow-sm transition-colors hover:bg-primary hover:text-white"
+                >
+                  {formatTime(s.appointment_datetime)}
+                  {(s.price || multiClinic) && (
+                    <span className="block text-[10px] font-semibold opacity-70">
+                      {[multiClinic ? shortLoc(s.clinic_name) : null, s.price ? `${s.price} zł` : null]
+                        .filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </button>
+              ))}
+              {!showAll && list.length > 5 && (
+                <button onClick={() => setShowAll(true)}
+                  className="cursor-pointer rounded-lg py-1 text-xs font-extrabold text-primary hover:underline">
+                  +{list.length - 5}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function Umow() {
   const queryClient = useQueryClient()
   const [step, setStep] = useState(1)
   const [spec, setSpec] = useState<string | null>(null)
-  const [doctor, setDoctor] = useState<{ id: number; name: string } | null>(null)
+  const [clinicFilter, setClinicFilter] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'STATIONARY' | 'ONLINE'>('ALL')
-  const [visibleDays, setVisibleDays] = useState(4)
+  const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
@@ -41,7 +124,7 @@ export function Umow() {
   // żeby nie zarezerwować po cichu dla niewłaściwej osoby (płatność w toku zostaje)
   useEffect(() => {
     setStep(s => (s > 1 && payPhase === 'idle' ? 1 : s))
-    if (payPhase === 'idle') { setSlot(null); setBooked(null); setDoctor(null); setSpec(null) }
+    if (payPhase === 'idle') { setSlot(null); setBooked(null); setSpec(null); setClinicFilter(null) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
@@ -52,53 +135,47 @@ export function Umow() {
 
   const q = fold(query.trim())
 
-  const specs = useMemo(() => {
-    const map = new Map<string, { count: number; earliest: string }>()
-    for (const s of allSlots ?? []) {
-      if (!s.specialization) continue
-      const cur = map.get(s.specialization)
-      map.set(s.specialization, {
-        count: (cur?.count ?? 0) + 1,
-        earliest: cur && cur.earliest < s.appointment_datetime ? cur.earliest : s.appointment_datetime,
-      })
-    }
-    return [...map.entries()]
-      .filter(([name]) => !q || fold(name).includes(q))
-      .sort((a, b) => a[0].localeCompare(b[0]))
-  }, [allSlots, q])
+  const clinicNames = useMemo(
+    () => [...new Set((allSlots ?? []).map(s => s.clinic_name))].sort(),
+    [allSlots],
+  )
+  const specNames = useMemo(
+    () => [...new Set((allSlots ?? []).map(s => s.specialization).filter(Boolean) as string[])].sort(),
+    [allSlots],
+  )
 
-  const doctors = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; spec: string | null; count: number; earliest: string }>()
+  // karty lekarzy z mini-kalendarzem: dni → godziny (jak na portalach rezerwacyjnych)
+  const doctorCards = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; spec: string | null; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
+      if (spec && s.specialization !== spec) continue
+      if (clinicFilter && s.clinic_name !== clinicFilter) continue
       const cur = map.get(s.doctor_id)
-      map.set(s.doctor_id, {
-        id: s.doctor_id, name: s.doctor_name, spec: s.specialization,
-        count: (cur?.count ?? 0) + 1,
-        earliest: cur && cur.earliest < s.appointment_datetime ? cur.earliest : s.appointment_datetime,
-      })
+        ?? { id: s.doctor_id, name: s.doctor_name, spec: s.specialization, clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>() }
+      cur.clinics.add(s.clinic_name)
+      const day = s.appointment_datetime.slice(0, 10)
+      cur.byDay.set(day, [...(cur.byDay.get(day) ?? []), s])
+      map.set(s.doctor_id, cur)
     }
     return [...map.values()]
       .filter(d => !q || fold(d.name).includes(q) || fold(d.spec ?? '').includes(q))
-      .sort((a, b) => a.earliest.localeCompare(b.earliest))
-  }, [allSlots, q])
+      .map(d => ({
+        id: d.id, name: d.name, spec: d.spec, clinics: [...d.clinics],
+        days: [...d.byDay.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([day, list]) => [day, list.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
+      }))
+      .sort((a, b) => a.days[0][1][0].appointment_datetime.localeCompare(b.days[0][1][0].appointment_datetime))
+  }, [allSlots, q, spec, clinicFilter])
 
-  const matching = useMemo(
-    () => (allSlots ?? [])
-      .filter(s => doctor ? s.doctor_id === doctor.id : (!spec || s.specialization === spec))
-      .filter(s => typeFilter === 'ALL' || s.appointment_type === typeFilter)
-      .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime)),
-    [allSlots, spec, doctor, typeFilter],
-  )
-  // terminy pogrupowane po dniach — zamiast jednego zwału danych
-  const days = useMemo(() => {
-    const map = new Map<string, AppointmentOut[]>()
-    for (const s of matching) {
-      const day = s.appointment_datetime.slice(0, 10)
-      map.set(day, [...(map.get(day) ?? []), s])
-    }
-    return [...map.entries()]
-  }, [matching])
-  const earliestId = matching[0]?.appointment_id
+  const pickSlot = (s: AppointmentOut) => {
+    setSlot(s)
+    setOnline(s.appointment_type === 'ONLINE')
+    setStep(2)
+    setError(null)
+    setBooked(null)
+    setPayPhase('idle')
+  }
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
@@ -108,7 +185,7 @@ export function Umow() {
   const book = useMutation({
     mutationFn: (id: number) => api<BookOut>(asPatient(`/appointments/${id}/book`), {
       method: 'POST',
-      body: { reason: reason.trim() || null, notify_earlier: notifyEarlier },
+      body: { reason: reason.trim() || null, notify_earlier: notifyEarlier, online },
     }),
     onSuccess: (data) => {
       setBooked(data)
@@ -134,7 +211,7 @@ export function Umow() {
     setBooked(null)
     setPayPhase('idle')
     setError(null)
-    setStep(2)
+    setStep(1)
     book.reset()
     pay.reset()
   }
@@ -144,7 +221,7 @@ export function Umow() {
       <div className="fade-up flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900">{t('Umów wizytę')}</h1>
         <ol className="flex items-center gap-2">
-          {[t('Specjalista'), t('Termin'), t('Potwierdzenie')].map((s, i) => (
+          {[t('Termin'), t('Potwierdzenie')].map((s, i) => (
             <li key={s} className="flex items-center gap-2">
               <span className={cx(
                 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold',
@@ -170,57 +247,51 @@ export function Umow() {
               autoComplete="off"
             />
 
-            {specs.length === 0 && doctors.length === 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {clinicNames.length > 1 && (
+                <>
+                  {[null, ...clinicNames].map(c => (
+                    <button
+                      key={c ?? 'all'}
+                      onClick={() => setClinicFilter(c)}
+                      className={cx(
+                        'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
+                        clinicFilter === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
+                      )}
+                    >
+                      {c ? shortLoc(c) : t('Wszystkie placówki')}
+                    </button>
+                  ))}
+                  <span className="mx-1 hidden w-px bg-gray-200 sm:block" />
+                </>
+              )}
+              {specNames.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSpec(cur => cur === s ? null : s)}
+                  className={cx(
+                    'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
+                    spec === s ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {doctorCards.length === 0 ? (
               <EmptyState
                 icon={<CalendarDays size={28} strokeWidth={1.5} />}
-                title={q ? t('Nic nie pasuje do wyszukiwania') : t('Brak wolnych terminów')}
-                hint={q ? t('Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.')
+                title={q || spec || clinicFilter ? t('Nic nie pasuje do wyszukiwania') : t('Brak wolnych terminów')}
+                hint={q || spec || clinicFilter ? t('Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.')
                   : t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
               />
             ) : (
-              <>
-                {specs.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Specjalizacje')}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {specs.map(([s, info]) => (
-                        <button
-                          key={s}
-                          onClick={() => { setSpec(s); setDoctor(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
-                          className="cursor-pointer rounded-full bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-primary-soft hover:text-primary"
-                        >
-                          {s} <span className="font-semibold text-gray-400">({info.count})</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {doctors.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Lekarze')}</p>
-                    <ul className="space-y-1.5">
-                      {doctors.map(d => (
-                        <li key={d.id}>
-                          <button
-                            onClick={() => { setDoctor({ id: d.id, name: d.name }); setSpec(null); setTypeFilter('ALL'); setVisibleDays(4); setStep(2) }}
-                            className="group flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left hover:bg-primary-soft"
-                          >
-                            <Avatar initials={doctorInitials(d.name)} size="md" />
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-bold text-gray-900 group-hover:text-primary">{d.name}</span>
-                              <span className="block text-xs font-semibold text-gray-500">
-                                {d.spec} · <span className="text-emerald-700">{t('najbliższy:')} {formatDatePL(d.earliest)}, {formatTime(d.earliest)}</span>
-                              </span>
-                            </span>
-                            <ChevronRight size={16} className="shrink-0 text-gray-300 group-hover:text-primary" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
+              <div className="space-y-3">
+                {doctorCards.map(d => (
+                  <DoctorCard key={d.id} d={d} multiClinic={clinicNames.length > 1} onPick={pickSlot} />
+                ))}
+              </div>
             )}
           </div>
           <p className="mt-4 text-sm font-medium text-gray-500">
@@ -234,76 +305,7 @@ export function Umow() {
 
       {waitlistOpen && <WaitlistModal onClose={() => setWaitlistOpen(false)} />}
 
-      {step === 2 && (
-        <Tile delay={60}>
-          <TileHeader
-            title={doctor ? doctor.name : `${spec}`}
-            action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>{t('Zmień')}</Button>}
-          />
-          <div className="mb-4 flex flex-wrap gap-2">
-            {([['ALL', 'Wszystkie'], ['STATIONARY', 'Stacjonarne'], ['ONLINE', 'Teleporady']] as const).map(([f, label]) => (
-              <button
-                key={f}
-                onClick={() => { setTypeFilter(f); setVisibleDays(4) }}
-                className={cx(
-                  'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
-                  typeFilter === f ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
-                )}
-              >
-                {t(label)}
-              </button>
-            ))}
-          </div>
-
-          {days.length === 0 ? (
-            <EmptyState
-              icon={<CalendarDays size={28} strokeWidth={1.5} />}
-              title={t('Brak terminów dla wybranych filtrów')}
-              hint={t('Zmień filtr lub wróć do wyboru specjalisty.')}
-            />
-          ) : (
-            <div className="space-y-4">
-              {days.slice(0, visibleDays).map(([day, list]) => (
-                <div key={day}>
-                  <p className="mb-2 text-sm font-extrabold text-gray-900">{formatDatePL(day + 'T00:00:00')}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {list.map(s => (
-                      <button
-                        key={s.appointment_id}
-                        onClick={() => { setSlot(s); setStep(3); setError(null); setBooked(null); setPayPhase('idle') }}
-                        className={cx(
-                          'cursor-pointer rounded-2xl px-3.5 py-2 text-left transition-colors hover:bg-primary-soft',
-                          s.appointment_id === earliestId ? 'bg-primary-soft ring-1 ring-primary/40' : 'bg-gray-50',
-                        )}
-                      >
-                        <span className="flex items-center gap-1.5 text-sm font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">
-                          {formatTime(s.appointment_datetime)}
-                          {s.appointment_type === 'ONLINE' && <Video size={13} className="text-sky-600" />}
-                        </span>
-                        <span className="block text-[11px] font-semibold text-gray-500">
-                          {!doctor && `${s.doctor_name.split(' ').slice(-1)[0]} · `}
-                          <span className={s.price ? 'text-gray-900' : 'text-emerald-700'}>
-                            {s.price ? `${s.price} zł` : 'NFZ'}
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {days.length > visibleDays && (
-                <div className="text-center">
-                  <Button variant="ghost" size="sm" onClick={() => setVisibleDays(d => d + 4)}>
-                    {t('Pokaż kolejne dni')} ({days.length - visibleDays})
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </Tile>
-      )}
-
-      {step === 3 && slot && (
+      {step === 2 && slot && (
         <Tile delay={60}>
           <TileHeader
             title={booked ? t('Płatność') : t('Potwierdzenie rezerwacji')}
@@ -314,7 +316,7 @@ export function Umow() {
             <div className="min-w-0 flex-1">
               <p className="font-extrabold text-gray-900">{slot.doctor_name}</p>
               <p className="text-sm font-semibold text-gray-500">
-                {slot.specialization} · {slot.appointment_type === 'ONLINE' ? t('teleporada') : slot.clinic_name}
+                {slot.specialization} · {online ? t('teleporada') : slot.clinic_name}
               </p>
             </div>
             <span className={cx('text-xl font-extrabold', slot.price ? 'text-gray-900' : 'text-emerald-700')}>
@@ -341,6 +343,19 @@ export function Umow() {
                     placeholder={t('np. od tygodnia duszności przy wysiłku…')}
                   />
                 </Field>
+                {slot.appointment_type !== 'ONLINE' && (
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                      checked={online}
+                      onChange={e => setOnline(e.target.checked)}
+                    />
+                    <span className="text-sm font-semibold text-gray-700">
+                      {t('Wolę teleporadę (wideo) — bez przychodzenia do placówki')}
+                    </span>
+                  </label>
+                )}
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
                   <input
                     type="checkbox"

@@ -18,7 +18,9 @@ export function Terminy() {
     queryKey: ['clinics'],
     queryFn: () => api<Clinic[]>('/clinics'),
   })
-  const clinic = clinics?.[0]
+  // przychodnia = wiele placówek; rejestracja wybiera, którą obsługuje
+  const [clinicId, setClinicId] = useState<number | null>(null)
+  const clinic = (clinics ?? []).find(c => c.clinic_id === clinicId) ?? clinics?.[0]
 
   const { data: doctors } = useQuery({
     queryKey: ['clinic-doctors', clinic?.clinic_id],
@@ -123,6 +125,16 @@ export function Terminy() {
           overline={clinic?.clinic_name ?? '…'}
           title="Terminy wizyt"
           sub="Dodawanie wolnych terminów do kalendarzy lekarzy (UC-PP2)"
+          action={(clinics ?? []).length > 1 && (
+            <select
+              aria-label="Placówka"
+              className={cx(inputCls, 'w-56')}
+              value={clinic?.clinic_id ?? ''}
+              onChange={e => setClinicId(Number(e.target.value))}
+            >
+              {(clinics ?? []).map(c => <option key={c.clinic_id} value={c.clinic_id}>{c.clinic_name}</option>)}
+            </select>
+          )}
         />
       </div>
 

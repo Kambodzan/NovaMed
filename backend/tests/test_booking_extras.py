@@ -72,6 +72,15 @@ def test_ics_rbac(client, setup, factory):
     assert client.get(f"/appointments/{slot['appointment_id']}/ics", headers=auth_header(other_token)).status_code == 403
 
 
+def test_teleporada_jako_wybor_pacjenta(client, setup):
+    # slot stacjonarny, pacjent przy rezerwacji wybiera online
+    slot = make_slot(client, setup, days_ahead=8, hour=13)
+    resp = client.post(f"/appointments/{slot['appointment_id']}/book",
+                       json={"online": True}, headers=auth_header(setup["patient_token"]))
+    assert resp.status_code == 200
+    assert resp.json()["appointment"]["appointment_type"] == "ONLINE"
+
+
 def test_przelozenie_zachowuje_powod_wizyty(client, setup):
     slot = make_slot(client, setup, days_ahead=6, hour=9)
     target = make_slot(client, setup, days_ahead=6, hour=10)

@@ -195,6 +195,10 @@ const EN: Record<string, string> = {
   'Zmień filtr lub wróć do wyboru specjalisty.': 'Change the filter or go back to specialist selection.',
   'Pokaż kolejne dni': 'Show more days',
   'Nic nie pasuje do wyszukiwania': 'Nothing matches your search',
+  'Wszystkie placówki': 'All locations',
+  'Wcześniejsze dni': 'Earlier days',
+  'Kolejne dni': 'Later days',
+  'Wolę teleporadę (wideo) — bez przychodzenia do placówki': 'I prefer a video visit — no need to come in',
   'Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.': 'Try a different phrase or join the waiting list below.',
 
   // Rodzina

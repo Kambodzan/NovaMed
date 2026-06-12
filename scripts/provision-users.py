@@ -30,12 +30,21 @@ from app.models import (  # noqa: E402
 
 TEST_PASSWORD = "NovaMed.Test1"  # wspólne hasło kont testowych (tryb Supabase)
 
-CLINIC = {
-    "clinic_name": "Przychodnia „Zdrowa Rodzina”",
-    "address": "ul. Słowackiego 12, 05-820 Piastów",
-    "phone": "22 723 45 67",
-    "clinic_email": "kontakt@zdrowarodzina.pl",
-}
+# Jedna przychodnia = wiele placówek; personel może pracować w kilku naraz.
+CLINICS = [
+    {
+        "clinic_name": "Zdrowa Rodzina — Piastów",
+        "address": "ul. Słowackiego 12, 05-820 Piastów",
+        "phone": "22 723 45 67",
+        "clinic_email": "piastow@zdrowarodzina.pl",
+    },
+    {
+        "clinic_name": "Zdrowa Rodzina — Ursus",
+        "address": "ul. Traktorzystów 4, 02-495 Warszawa",
+        "phone": "22 478 12 00",
+        "clinic_email": "ursus@zdrowarodzina.pl",
+    },
+]
 
 # (email, imię i nazwisko, rola, extra)
 USERS = [
@@ -111,12 +120,20 @@ def main() -> None:
 
     db = SessionLocal()
     try:
-        clinic = db.scalar(select(Clinic).where(Clinic.clinic_name == CLINIC["clinic_name"]))
-        if clinic is None:
-            clinic = Clinic(**CLINIC)
-            db.add(clinic)
-            db.flush()
-            print(f"+ placowka: {clinic.clinic_name}")
+        # migracja nazwy z czasów jednej placówki
+        legacy = db.scalar(select(Clinic).where(Clinic.clinic_name == "Przychodnia „Zdrowa Rodzina”"))
+        if legacy:
+            legacy.clinic_name = CLINICS[0]["clinic_name"]
+            legacy.clinic_email = CLINICS[0]["clinic_email"]
+        clinics = []
+        for spec in CLINICS:
+            c = db.scalar(select(Clinic).where(Clinic.clinic_name == spec["clinic_name"]))
+            if c is None:
+                c = Clinic(**spec)
+                db.add(c)
+                db.flush()
+                print(f"+ placowka: {c.clinic_name}")
+            clinics.append(c)
 
         roles = {r.role_name: r.role_id for r in db.scalars(select(Role))}
 
@@ -154,18 +171,19 @@ def main() -> None:
                     pesel=pesel_full(extra["pesel_base"]), birth_date=extra["birth_date"],
                 ))
 
-            # przypisania do placówki
-            if role_name in ("lekarz", "pielegniarka", "rejestracja"):
-                if not db.scalar(select(StaffClinic).where(
-                    StaffClinic.clinic_id == clinic.clinic_id, StaffClinic.user_id == user.user_id,
-                )):
-                    db.add(StaffClinic(clinic_id=clinic.clinic_id, user_id=user.user_id, start_date=date.today()))
-            elif role_name == "pacjent":
-                if not db.scalar(select(PatientClinic).where(
-                    PatientClinic.clinic_id == clinic.clinic_id, PatientClinic.patient_id == user.user_id,
-                )):
-                    db.add(PatientClinic(clinic_id=clinic.clinic_id, patient_id=user.user_id,
-                                         assigned_date=date.today()))
+            # przypisania: personel i pacjenci do OBU placówek (lekarz raz tu, raz tam)
+            for clinic in clinics:
+                if role_name in ("lekarz", "pielegniarka", "rejestracja"):
+                    if not db.scalar(select(StaffClinic).where(
+                        StaffClinic.clinic_id == clinic.clinic_id, StaffClinic.user_id == user.user_id,
+                    )):
+                        db.add(StaffClinic(clinic_id=clinic.clinic_id, user_id=user.user_id, start_date=date.today()))
+                elif role_name == "pacjent":
+                    if not db.scalar(select(PatientClinic).where(
+                        PatientClinic.clinic_id == clinic.clinic_id, PatientClinic.patient_id == user.user_id,
+                    )):
+                        db.add(PatientClinic(clinic_id=clinic.clinic_id, patient_id=user.user_id,
+                                             assigned_date=date.today()))
 
         db.commit()
         print("\nKonta testowe gotowe:")
