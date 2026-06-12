@@ -213,7 +213,7 @@ const EN: Record<string, string> = {
   'Wcześniejsze dni': 'Earlier days',
   'Kolejne dni': 'Later days',
   'Wolę teleporadę (wideo) — bez przychodzenia do placówki': 'I prefer a video visit — no need to come in',
-  'Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.': 'Try a different phrase or join the waiting list below.',
+  'Spróbuj zmienić kryteria — albo daj znać, że czekasz:': 'Try different criteria — or let us know you are waiting:',
 
   // Rodzina
   'Konta rodzinne': 'Family accounts',

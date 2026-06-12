@@ -380,12 +380,17 @@ export function Umow() {
             )}
 
             {doctorCards.length === 0 ? (
-              <EmptyState
-                icon={<CalendarDays size={28} strokeWidth={1.5} />}
-                title={q || spec || clinicFilter ? t('Nic nie pasuje do wyszukiwania') : t('Brak wolnych terminów')}
-                hint={q || spec || clinicFilter ? t('Spróbuj inaczej albo zapisz się na listę oczekujących poniżej.')
-                  : t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
-              />
+              <div className="space-y-3 text-center">
+                <EmptyState
+                  icon={<CalendarDays size={28} strokeWidth={1.5} />}
+                  title={q || spec || clinicFilter ? t('Nic nie pasuje do wyszukiwania') : t('Brak wolnych terminów')}
+                  hint={q || spec || clinicFilter ? t('Spróbuj zmienić kryteria — albo daj znać, że czekasz:')
+                    : t('Wróć później — placówki na bieżąco dodają nowe terminy.')}
+                />
+                <Button variant="secondary" onClick={() => setWaitlistOpen(true)}>
+                  <BellPlus size={15} /> {t('Zapisz się na listę oczekujących')}
+                </Button>
+              </div>
             ) : (
               <div className="space-y-3">
                 {doctorCards.map(d => (
@@ -394,12 +399,6 @@ export function Umow() {
               </div>
             )}
           </div>
-          <p className="mt-4 text-sm font-medium text-gray-500">
-            {t('Nie ma specjalisty, którego szukasz?')}{' '}
-            <button onClick={() => setWaitlistOpen(true)} className="cursor-pointer font-extrabold text-primary hover:underline">
-              {t('Zapisz się na listę oczekujących')}
-            </button>
-          </p>
         </Tile>
       )}
 
