@@ -1,9 +1,19 @@
 // Mapa placówek (Leaflet + OpenStreetMap): pinezki klikalne = filtr lokalizacji.
 // Wybór miasta/placówki z wyszukiwarki dolatuje mapą do celu.
 import { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+
+export interface GeoArea { lat: number; lng: number; km: number }
+
+// odległość po kuli ziemskiej [km]
+export function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const rad = Math.PI / 180
+  const a = Math.sin(((lat2 - lat1) * rad) / 2) ** 2
+    + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lng2 - lng1) * rad) / 2) ** 2
+  return 6371 * 2 * Math.asin(Math.sqrt(a))
+}
 
 export interface MapClinic {
   clinic_id: number
@@ -36,10 +46,18 @@ function FitTo({ points }: { points: [number, number][] }) {
   return null
 }
 
-export function ClinicMap({ clinics, selected, onSelect }: {
+function ClickArea({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({ click: e => onPick(e.latlng.lat, e.latlng.lng) })
+  return null
+}
+
+export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick }: {
   clinics: MapClinic[]
   selected: string | null
   onSelect: (filter: string) => void
+  /** zaznaczony obszar (punkt + promień) — klik w mapę poza pinem */
+  geo?: GeoArea | null
+  onGeoPick?: (lat: number, lng: number) => void
 }) {
   const pts = clinics.filter(c => c.lat != null && c.lng != null)
   if (pts.length === 0) return null
@@ -48,7 +66,9 @@ export function ClinicMap({ clinics, selected, onSelect }: {
     ? pts.filter(c => c.clinic_name === selected.slice(4))
     : selected?.startsWith('city:')
       ? pts.filter(c => c.city === selected.slice(5))
-      : pts
+      : geo
+        ? pts.filter(c => distanceKm(geo.lat, geo.lng, c.lat!, c.lng!) <= geo.km)
+        : pts
 
   return (
     <div className="overflow-hidden rounded-2xl">
@@ -64,6 +84,14 @@ export function ClinicMap({ clinics, selected, onSelect }: {
           attribution='&copy; OpenStreetMap &copy; CARTO'
         />
         <FitTo points={(focus.length ? focus : pts).map(c => [c.lat!, c.lng!])} />
+        {onGeoPick && <ClickArea onPick={onGeoPick} />}
+        {geo && (
+          <Circle
+            center={[geo.lat, geo.lng]}
+            radius={geo.km * 1000}
+            pathOptions={{ color: '#0D9488', fillColor: '#0D9488', fillOpacity: 0.12, weight: 2 }}
+          />
+        )}
         {pts.map(c => (
           <Marker
             key={c.clinic_id}

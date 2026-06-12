@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
-import { ClinicMap, type MapClinic } from '../components/ClinicMap'
+import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
+
+const parseGeo = (filter: string | null): GeoArea | null => {
+  if (!filter?.startsWith('geo:')) return null
+  const [lat, lng, km] = filter.slice(4).split(',').map(Number)
+  return { lat, lng, km }
+}
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -153,6 +159,7 @@ export function Umow() {
   const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
   const [showAllDocs, setShowAllDocs] = useState(false)
+  const [radiusKm, setRadiusKm] = useState(10)
   const [locQuery, setLocQuery] = useState('')
   const [query, setQuery] = useState('')
   const [online, setOnline] = useState(false)
@@ -206,6 +213,11 @@ export function Umow() {
       if (spec && s.specialization !== spec) continue
       if (clinicFilter?.startsWith('city:') && cityOf(s.clinic_name) !== clinicFilter.slice(5)) continue
       if (clinicFilter?.startsWith('cli:') && s.clinic_name !== clinicFilter.slice(4)) continue
+      const geo = parseGeo(clinicFilter)
+      if (geo) {
+        const c = clinicList?.find(x => x.clinic_name === s.clinic_name)
+        if (!c || c.lat == null || c.lng == null || distanceKm(geo.lat, geo.lng, c.lat, c.lng) > geo.km) continue
+      }
       if (doctorFilter && s.doctor_id !== doctorFilter.id) continue
       const cur = map.get(s.doctor_id)
         ?? { id: s.doctor_id, name: s.doctor_name, spec: s.specialization, clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>() }
@@ -290,6 +302,14 @@ export function Umow() {
 
   // lekarze domyślnie schowani — pokazują się po wyborze/wyszukaniu lub „Przeglądaj wszystkich"
   const showResults = !!(q || spec || clinicFilter || doctorFilter || showAllDocs)
+
+  // ocena lekarza na potwierdzeniu (przy zapisie)
+  const { data: slotRating } = useQuery({
+    queryKey: ['doctor-rating', slot?.doctor_id],
+    queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${slot!.doctor_id}`),
+    enabled: !!slot,
+    staleTime: 300_000,
+  })
 
   const pickSlot = (s: AppointmentOut) => {
     setSlot(s)
@@ -380,7 +400,9 @@ export function Umow() {
                 >
                   <MapPin size={15} className={clinicFilter ? 'text-primary' : 'text-gray-400'} />
                   {clinicFilter
-                    ? (clinicFilter.startsWith('city:') ? clinicFilter.slice(5) : shortLoc(clinicFilter.slice(4)))
+                    ? (clinicFilter.startsWith('city:') ? clinicFilter.slice(5)
+                      : clinicFilter.startsWith('geo:') ? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`
+                        : shortLoc(clinicFilter.slice(4)))
                     : t('Lokalizacja')}
                 </button>
               )}
@@ -437,7 +459,9 @@ export function Umow() {
                   <button onClick={() => setClinicFilter(null)}
                     title={clinicFilter.startsWith('cli:') ? addressOf(clinicFilter.slice(4)) : undefined}
                     className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
-                    {clinicFilter.startsWith('city:') ? clinicFilter.slice(5) : clinicFilter.slice(4)} <X size={12} />
+                    {clinicFilter.startsWith('city:') ? clinicFilter.slice(5)
+                      : clinicFilter.startsWith('geo:') ? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`
+                        : clinicFilter.slice(4)} <X size={12} />
                   </button>
                 )}
                 {clinicFilter?.startsWith('cli:') && addressOf(clinicFilter.slice(4)) && (
@@ -500,7 +524,28 @@ export function Umow() {
               clinics={clinicList ?? []}
               selected={clinicFilter}
               onSelect={f => { setClinicFilter(cur => cur === f ? null : f); setMapOpen(false) }}
+              geo={parseGeo(clinicFilter)}
+              onGeoPick={(lat, lng) => setClinicFilter(`geo:${lat.toFixed(4)},${lng.toFixed(4)},${radiusKm}`)}
             />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-gray-400">{t('Kliknij mapę, by zaznaczyć obszar — promień:')}</span>
+              {[5, 10, 25].map(km => (
+                <button
+                  key={km}
+                  onClick={() => {
+                    setRadiusKm(km)
+                    const geo = parseGeo(clinicFilter)
+                    if (geo) setClinicFilter(`geo:${geo.lat},${geo.lng},${km}`)
+                  }}
+                  className={cx(
+                    'cursor-pointer rounded-full px-3 py-1 text-xs font-extrabold transition-colors',
+                    radiusKm === km ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
+                  )}
+                >
+                  {km} km
+                </button>
+              ))}
+            </div>
             <div className="flex justify-between">
               {clinicFilter ? (
                 <Button variant="ghost" size="sm" onClick={() => { setClinicFilter(null) }}>
@@ -522,7 +567,16 @@ export function Umow() {
           <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-gray-50 p-4">
             <DateChip month={monthShort(slot.appointment_datetime)} day={dayNo(slot.appointment_datetime)} time={formatTime(slot.appointment_datetime)} />
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold text-gray-900">{slot.doctor_name}</p>
+              <p className="flex items-center gap-2 font-extrabold text-gray-900">
+                {slot.doctor_name}
+                {slotRating && slotRating.count > 0 && slotRating.average != null && (
+                  <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
+                    <Star size={12} className="fill-amber-400 text-amber-400" />
+                    {slotRating.average.toFixed(1)}
+                    <span className="font-semibold text-gray-400">({slotRating.count})</span>
+                  </span>
+                )}
+              </p>
               <p className="text-sm font-semibold text-gray-500">
                 {slot.specialization} · {online
                   ? t('teleporada')

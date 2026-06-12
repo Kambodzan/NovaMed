@@ -211,6 +211,8 @@ const EN: Record<string, string> = {
   'Wszyscy lekarze': 'All doctors',
   'Przeglądaj wszystkich lekarzy': 'Browse all doctors',
   'prywatnie od': 'private from',
+  'Obszar': 'Area',
+  'Kliknij mapę, by zaznaczyć obszar — promień:': 'Click the map to select an area — radius:',
   'miasto': 'city',
   'Popularne specjalizacje': 'Popular specialties',
   'wszystkie': 'all',
