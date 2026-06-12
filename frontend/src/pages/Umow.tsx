@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, LocateFixed, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
 
@@ -183,7 +183,27 @@ export function Umow() {
   const [mapOpen, setMapOpen] = useState(false)
   const [showAllDocs, setShowAllDocs] = useState(false)
   const [locQuery, setLocQuery] = useState('')
+  const [locError, setLocError] = useState<string | null>(null)
+  const [locating, setLocating] = useState(false)
   const [query, setQuery] = useState('')
+
+  // geolokalizacja przeglądarki → obszar "najbliżej mnie" (HTTPS mamy)
+  const findNearMe = () => {
+    if (!navigator.geolocation) { setLocError(t('Twoja przeglądarka nie udostępnia lokalizacji.')); return }
+    setLocating(true)
+    setLocError(null)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLocating(false)
+        setClinicFilter(`geo:${pos.coords.latitude.toFixed(4)},${pos.coords.longitude.toFixed(4)},10,${t('Najbliżej mnie')}`)
+      },
+      () => {
+        setLocating(false)
+        setLocError(t('Nie udało się pobrać lokalizacji — sprawdź zgodę w przeglądarce.'))
+      },
+      { enableHighAccuracy: false, timeout: 10_000 },
+    )
+  }
   const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [booked, setBooked] = useState<BookOut | null>(null)
@@ -546,6 +566,12 @@ export function Umow() {
               }}
               placeholder={t('Wpisz miasto lub adres…')}
             />
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="secondary" disabled={locating} onClick={findNearMe}>
+                <LocateFixed size={14} /> {locating ? t('Lokalizowanie…') : t('Znajdź najbliżej mnie')}
+              </Button>
+              {locError && <span className="text-xs font-bold text-red-600">{locError}</span>}
+            </div>
             <ClinicMap
               clinics={clinicList ?? []}
               selected={clinicFilter}

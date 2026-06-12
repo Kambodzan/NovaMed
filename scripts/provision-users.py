@@ -42,6 +42,15 @@ CLINICS = [
         "clinic_email": "piastow@zdrowarodzina.pl",
     },
     {
+        "clinic_name": "Zdrowa Rodzina — Praga Północ",
+        "address": "ul. Targowa 25, 03-728 Warszawa",
+        "city": "Warszawa",
+        "lat": 52.2531, "lng": 21.0354,
+        "photo_url": "https://picsum.photos/seed/novamed-praga/320/180",
+        "phone": "22 619 33 44",
+        "clinic_email": "praga@zdrowarodzina.pl",
+    },
+    {
         "clinic_name": "Zdrowa Rodzina — Ursus",
         "address": "ul. Traktorzystów 4, 02-495 Warszawa",
         "city": "Warszawa",
