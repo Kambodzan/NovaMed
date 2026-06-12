@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, LocateFixed, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileSignature, LocateFixed, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
 
@@ -56,6 +56,7 @@ interface DoctorCardData {
   id: number
   name: string
   spec: string | null
+  referralRequired?: boolean
   clinics: string[]
   days: ReadonlyArray<readonly [string, AppointmentOut[]]>
 }
@@ -96,7 +97,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
       >
         <Avatar initials={doctorInitials(d.name)} size="md" />
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2 font-bold text-gray-900">
+          <span className="flex flex-wrap items-center gap-2 font-bold text-gray-900">
             {d.name}
             {rating && rating.count > 0 && rating.average != null && (
               <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
@@ -105,12 +106,21 @@ function DoctorCard({ d, multiClinic, onPick }: {
                 <span className="font-semibold text-gray-400">({rating.count})</span>
               </span>
             )}
+            {d.referralRequired && (
+              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">
+                <FileSignature size={11} /> {t('wymaga skierowania')}
+              </span>
+            )}
           </span>
           <span className="block truncate text-xs font-semibold text-gray-500">
-            {d.spec}
-            {hasNfz && <> · <span className="text-emerald-700">NFZ</span></>}
-            {minPrice != null && <> · {t('prywatnie od')} {minPrice} zł</>}
-            {multiClinic && <> · {d.clinics.map(shortLoc).join(', ')}</>}
+            {[
+              d.spec,
+              hasNfz ? <span key="nfz" className="text-emerald-700">NFZ</span> : null,
+              minPrice != null ? `${t('prywatnie od')} ${minPrice} zł` : null,
+              multiClinic ? d.clinics.map(shortLoc).join(', ') : null,
+            ].filter(Boolean).map((part, i) => (
+              <span key={i}>{i > 0 && ' · '}{part}</span>
+            ))}
           </span>
         </span>
         <span className="text-right">
@@ -257,7 +267,7 @@ export function Umow() {
 
   // karty lekarzy z mini-kalendarzem: dni → godziny (jak na portalach rezerwacyjnych)
   const doctorCards = useMemo(() => {
-    const map = new Map<number | string, { id: number; name: string; spec: string | null; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
+    const map = new Map<number | string, { id: number; name: string; spec: string | null; referralRequired: boolean; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
       // tryb: wizyty lekarskie vs badania (pracownia)
       if (bookKind === 'visit' ? s.service_name != null : s.service_name == null) continue
@@ -276,7 +286,8 @@ export function Umow() {
         ?? {
           id: typeof key === 'number' ? key : 0,
           name: bookKind === 'visit' ? s.doctor_name : s.service_name!,
-          spec: bookKind === 'visit' ? s.specialization : (s.referral_required ? 'wymaga skierowania' : null),
+          spec: bookKind === 'visit' ? s.specialization : null,
+          referralRequired: s.referral_required,
           clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>(),
         }
       cur.clinics.add(s.clinic_name)
@@ -287,7 +298,7 @@ export function Umow() {
     return [...map.values()]
       .filter(d => !q || fold(d.name).includes(q) || fold(d.spec ?? '').includes(q))
       .map(d => ({
-        id: d.id, name: d.name, spec: d.spec, clinics: [...d.clinics],
+        id: d.id, name: d.name, spec: d.spec, referralRequired: d.referralRequired, clinics: [...d.clinics],
         days: [...d.byDay.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([day, list]) => [day, list.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
