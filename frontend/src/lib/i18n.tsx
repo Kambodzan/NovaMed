@@ -147,9 +147,13 @@ const EN: Record<string, string> = {
   'Pobierz PDF': 'Download PDF',
   'Podgląd': 'Preview',
   'Podgląd dokumentu': 'Document preview',
-  'Wczytywanie podglądu…': 'Loading preview…',
-  'Nie udało się wczytać podglądu — spróbuj pobrać PDF.': 'Could not load the preview — try downloading the PDF.',
   'Dokument': 'Document',
+  'kod dokumentu': 'document code',
+  'Pacjent': 'Patient',
+  'Wystawił(a)': 'Issued by',
+  'Data wystawienia': 'Issue date',
+  'Status': 'Status',
+  'Treść': 'Content',
 
   // Udostępnij
   'Udostępnij dokumentację': 'Share your records',

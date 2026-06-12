@@ -77,13 +77,7 @@ export function DokumentyLista({ documents, emptyHint }: {
         )
       })}
     </ul>
-    {previewFor && (
-      <PodgladDokumentu
-        documentId={previewFor.document_id}
-        title={`${KIND_LABEL[previewFor.document_type]}${previewFor.code ? ` · ${previewFor.code}` : ''}`}
-        onClose={() => setPreviewFor(null)}
-      />
-    )}
+    {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} />}
     </>
   )
 }

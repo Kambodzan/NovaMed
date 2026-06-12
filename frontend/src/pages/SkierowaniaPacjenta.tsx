@@ -98,13 +98,7 @@ export function SkierowaniaPacjenta() {
         </ul>
       )}
 
-      {previewFor && (
-        <PodgladDokumentu
-          documentId={previewFor.document_id}
-          title={`${t('E-skierowanie')}${previewFor.code ? ` · ${previewFor.code}` : ''}`}
-          onClose={() => setPreviewFor(null)}
-        />
-      )}
+      {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} />}
     </div>
   )
 }

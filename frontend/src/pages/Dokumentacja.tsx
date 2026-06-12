@@ -112,13 +112,7 @@ export function Dokumentacja() {
         </ul>
       )}
 
-      {previewFor && (
-        <PodgladDokumentu
-          documentId={previewFor.document_id}
-          title={previewFor.details ?? t('Dokument')}
-          onClose={() => setPreviewFor(null)}
-        />
-      )}
+      {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} />}
     </div>
   )
 }

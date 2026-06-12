@@ -82,13 +82,7 @@ export function Recepty() {
         </ul>
       )}
 
-      {previewFor && (
-        <PodgladDokumentu
-          documentId={previewFor.document_id}
-          title={`${t('E-recepta')}${previewFor.code ? ` · ${previewFor.code}` : ''}`}
-          onClose={() => setPreviewFor(null)}
-        />
-      )}
+      {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} />}
     </div>
   )
 }
