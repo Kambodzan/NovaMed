@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
+import { ClinicMap, type MapClinic } from '../components/ClinicMap'
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -154,7 +155,7 @@ export function Umow() {
   })
   const { data: clinicList } = useQuery({
     queryKey: ['clinics'],
-    queryFn: () => api<{ clinic_id: number; clinic_name: string; address: string; city: string | null }[]>('/clinics'),
+    queryFn: () => api<MapClinic[]>('/clinics'),
     staleTime: 300_000,
   })
   const addressOf = (name: string) => clinicList?.find(c => c.clinic_name === name)?.address
@@ -325,33 +326,23 @@ export function Umow() {
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
           <div className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <Typeahead
-                id="umow-search"
-                minLength={0}
-                value={query}
-                onChange={setQuery}
-                onPick={applySuggestion}
-                search={suggest}
-                placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
+            <Typeahead
+              id="umow-search"
+              minLength={0}
+              value={query}
+              onChange={setQuery}
+              onPick={applySuggestion}
+              search={suggest}
+              placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
+            />
+
+            {clinicNames.length > 1 && (
+              <ClinicMap
+                clinics={clinicList ?? []}
+                selected={clinicFilter}
+                onSelect={f => setClinicFilter(cur => cur === f ? null : f)}
               />
-              {clinicNames.length > 1 && (
-                <select
-                  aria-label={t('Lokalizacja')}
-                  className={cx(inputCls, 'sm:w-52')}
-                  value={clinicFilter ?? ''}
-                  onChange={e => setClinicFilter(e.target.value || null)}
-                >
-                  <option value="">{t('Lokalizacja')}: {t('wszystkie')}</option>
-                  {cityGroups.map(([city, names]) => (
-                    <optgroup key={city} label={city}>
-                      {names.length > 1 && <option value={`city:${city}`}>{t('Całe miasto')}: {city}</option>}
-                      {names.map(n => <option key={n} value={`cli:${n}`}>{n}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              )}
-            </div>
+            )}
 
             {(spec || clinicFilter || doctorFilter) && (
               <div className="flex flex-wrap items-center gap-2">

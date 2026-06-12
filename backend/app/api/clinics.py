@@ -18,6 +18,8 @@ class ClinicIn(BaseModel):
     clinic_name: str = Field(min_length=1, max_length=100)
     address: str = Field(min_length=1, max_length=255)
     city: str | None = Field(default=None, max_length=60)
+    lat: float | None = None
+    lng: float | None = None
     phone: str | None = Field(default=None, max_length=20)
     clinic_email: str | None = Field(default=None, max_length=100)
 
@@ -82,7 +84,7 @@ def list_clinics(db: Session = Depends(get_db), _: AppUser = Depends(get_current
     return [
         ClinicOut(
             clinic_id=c.clinic_id, clinic_name=c.clinic_name, address=c.address,
-            phone=c.phone, clinic_email=c.clinic_email, city=c.city,
+            phone=c.phone, clinic_email=c.clinic_email, city=c.city, lat=c.lat, lng=c.lng,
             earlier_notice_min_hours=c.earlier_notice_min_hours,
             slot_interval_min=c.slot_interval_min,
         )

@@ -36,6 +36,7 @@ CLINICS = [
         "clinic_name": "Zdrowa Rodzina — Piastów",
         "address": "ul. Słowackiego 12, 05-820 Piastów",
         "city": "Piastów",
+        "lat": 52.1846, "lng": 20.8395,
         "phone": "22 723 45 67",
         "clinic_email": "piastow@zdrowarodzina.pl",
     },
@@ -43,6 +44,7 @@ CLINICS = [
         "clinic_name": "Zdrowa Rodzina — Ursus",
         "address": "ul. Traktorzystów 4, 02-495 Warszawa",
         "city": "Warszawa",
+        "lat": 52.1957, "lng": 20.8869,
         "phone": "22 478 12 00",
         "clinic_email": "ursus@zdrowarodzina.pl",
     },
@@ -135,7 +137,8 @@ def main() -> None:
                 db.add(c)
                 db.flush()
                 print(f"+ placowka: {c.clinic_name}")
-            c.city = spec["city"]  # uzupełnij/odśwież miasto (idempotentnie)
+            c.city = spec["city"]  # uzupełnij/odśwież miasto i pinezkę (idempotentnie)
+            c.lat, c.lng = spec["lat"], spec["lng"]
             clinics.append(c)
 
         roles = {r.role_name: r.role_id for r in db.scalars(select(Role))}

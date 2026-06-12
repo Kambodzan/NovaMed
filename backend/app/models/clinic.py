@@ -14,6 +14,9 @@ class Clinic(Base):
     address: Mapped[str] = mapped_column(String(255))
     # miasto jako oś filtrowania (sieciówka: 3 placówki w Warszawie, 2 w Krakowie…)
     city: Mapped[str | None] = mapped_column(String(60))
+    # współrzędne pinezki na mapie placówek (wybór lokalizacji przy umawianiu)
+    lat: Mapped[float | None] = mapped_column()
+    lng: Mapped[float | None] = mapped_column()
     phone: Mapped[str | None] = mapped_column(String(20))
     clinic_email: Mapped[str | None] = mapped_column(String(100))
     # Minimalne wyprzedzenie [h] powiadomień o wcześniejszym terminie
