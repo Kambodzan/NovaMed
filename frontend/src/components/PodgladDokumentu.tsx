@@ -16,16 +16,22 @@ export function PodgladDokumentu({ documentId, title, onClose }: {
 
   useEffect(() => {
     let objectUrl: string | null = null
+    let cancelled = false
     fetch(`${API_URL}/documents/${documentId}/pdf`, {
       headers: { Authorization: `Bearer ${getAuthToken()}` },
     })
-      .then(r => { if (!r.ok) throw new Error(); return r.blob() })
-      .then(blob => {
-        objectUrl = URL.createObjectURL(blob)
+      .then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer() })
+      .then(buf => {
+        if (cancelled) return
+        // jawny typ MIME — bez niego przeglądarka pobiera zamiast renderować
+        objectUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }))
         setUrl(objectUrl)
       })
-      .catch(() => setError(true))
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
+      .catch(() => { if (!cancelled) setError(true) })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
   }, [documentId])
 
   return (
@@ -46,7 +52,11 @@ export function PodgladDokumentu({ documentId, title, onClose }: {
             {t('Nie udało się wczytać podglądu — spróbuj pobrać PDF.')}
           </p>
         ) : url ? (
-          <iframe src={url} title={title} className="h-[70vh] w-full rounded-xl bg-gray-100" />
+          <object data={url} type="application/pdf" className="h-[70vh] w-full rounded-xl bg-gray-100">
+            <p className="p-6 text-center text-sm font-semibold text-gray-500">
+              {t('Nie udało się wczytać podglądu — spróbuj pobrać PDF.')}
+            </p>
+          </object>
         ) : (
           <p className="py-16 text-center text-sm font-semibold text-gray-400">{t('Wczytywanie podglądu…')}</p>
         )}
