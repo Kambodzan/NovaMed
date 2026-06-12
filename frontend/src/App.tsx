@@ -10,6 +10,7 @@ import { Umow } from './pages/Umow'
 import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
 import { Rodzina } from './pages/Rodzina'
+import { RezerwacjaPubliczna } from './pages/RezerwacjaPubliczna'
 import { FamilyProvider } from './lib/family'
 import { I18nProvider } from './lib/i18n'
 import { Telewizyta } from './pages/Telewizyta'
@@ -106,6 +107,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={token && me ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/rejestracja" element={<Rejestracja />} />
+      {/* publiczna strona rezerwacji (M8.6) — bez logowania */}
+      <Route path="/rezerwacja" element={<RezerwacjaPubliczna />} />
 
       {!token && <Route path="*" element={<Navigate to="/login" replace />} />}
       {token && profileMissing && <Route path="*" element={<Navigate to="/rejestracja" replace />} />}

@@ -85,6 +85,24 @@ def register_profile(
     if db.scalar(select(AppUser).where(AppUser.supabase_uid == supabase_uid)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Profil już istnieje.")
 
+    # PRZEJĘCIE konta gościa (publiczna rezerwacja bez konta, M8.6): ten sam
+    # e-mail + nieaktywne konto → podpinamy supabase_uid, historia wizyt zostaje
+    guest = db.scalar(select(AppUser).where(AppUser.email == email.lower(), AppUser.active_account.is_(False)))
+    if guest and db.get(Patient, guest.user_id) is not None:
+        patient = db.get(Patient, guest.user_id)
+        if patient.guardian_id is None:  # podopiecznych nie przejmujemy tym trybem
+            guest.supabase_uid = supabase_uid
+            guest.active_account = True
+            guest.phone_number = body.phone_number or guest.phone_number
+            patient.first_name, patient.last_name = body.first_name, body.last_name
+            patient.pesel, patient.birth_date = body.pesel, body.birth_date
+            db.commit()
+            return MeOut(
+                user_id=guest.user_id, email=guest.email, username=guest.username,
+                role=ROLE_PACJENT, active_account=True,
+                first_name=body.first_name, last_name=body.last_name,
+            )
+
     role = db.scalar(select(Role).where(Role.role_name == ROLE_PACJENT))
     if role is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Brak roli 'pacjent' w bazie.")

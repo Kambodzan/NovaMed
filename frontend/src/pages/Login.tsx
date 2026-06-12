@@ -54,6 +54,8 @@ export function Login() {
         <p className="mt-4 text-center text-sm font-medium text-gray-500">
           Nie masz konta?{' '}
           <Link to="/rejestracja" className="font-extrabold text-primary hover:underline">Zarejestruj się</Link>
+          {' '}albo{' '}
+          <Link to="/rezerwacja" className="font-extrabold text-primary hover:underline">umów wizytę bez konta</Link>
         </p>
       </Tile>
 
