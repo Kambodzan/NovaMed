@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, DoorOpen, MapPin, Video } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock, DoorOpen, MapPin, Users, Video, XCircle } from 'lucide-react'
 import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -9,6 +9,22 @@ import type { AppointmentOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
+
+const FINISHED = ['COMPLETED', 'NO_SHOW', 'CANCELLED']
+
+function StatTile({ icon, label, value, sub, delay }: {
+  icon: ReactNode; label: string; value: ReactNode; sub?: string; delay: number
+}) {
+  return (
+    <Tile className="p-4" delay={delay}>
+      <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">
+        {icon} {label}
+      </p>
+      <p className="mt-1 text-xl font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{value}</p>
+      {sub && <p className="truncate text-xs font-semibold text-gray-500">{sub}</p>}
+    </Tile>
+  )
+}
 
 export function LekarzDzien() {
   const queryClient = useQueryClient()
@@ -34,8 +50,23 @@ export function LekarzDzien() {
     navigate(v.appointment_type === 'ONLINE' ? `/telewizyta/${v.appointment_id}` : `/wizyta/${v.appointment_id}`)
   }
 
+  // „teraz" odświeżane co 30 s — przesuwa krechę i statystyki bez przeładowania
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 30_000)
+    return () => clearInterval(t)
+  }, [])
+
   const booked = (visits ?? []).filter(v => v.patient_id !== null)
   const done = booked.filter(v => v.appointment_status === 'COMPLETED').length
+  const isToday = day === todayIso()
+  const now = new Date()
+  const next = booked.find(v =>
+    v.appointment_status === 'CONFIRMED' && (!isToday || new Date(v.appointment_datetime) > now))
+  const online = booked.filter(v =>
+    v.appointment_type === 'ONLINE' && !FINISHED.includes(v.appointment_status)).length
+  // krecha „teraz": przed pierwszym terminem późniejszym niż bieżąca godzina
+  const nowIdx = (visits ?? []).findIndex(v => new Date(v.appointment_datetime) > now)
 
   return (
     <div className="space-y-6">
@@ -43,7 +74,6 @@ export function LekarzDzien() {
         <PageHeader
           overline="Mój dzień"
           title={formatDatePL(day + 'T00:00:00')}
-          sub={`${booked.length} pacjentów · ${done} zakończone`}
           action={<>
             {day !== todayIso() && (
               <Button size="sm" variant="secondary" onClick={() => setDay(todayIso())}>Dziś</Button>
@@ -55,7 +85,20 @@ export function LekarzDzien() {
 
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
-      <Tile className="p-3 sm:p-4" delay={60}>
+      {booked.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile delay={30} icon={<Users size={12} />} label="Pacjenci" value={booked.length} />
+          <StatTile delay={60} icon={<CheckCircle2 size={12} />} label="Zakończone" value={`${done} / ${booked.length}`} />
+          <StatTile
+            delay={90} icon={<Clock size={12} />} label="Następny pacjent"
+            value={next ? formatTime(next.appointment_datetime) : '—'}
+            sub={next?.patient_name ?? undefined}
+          />
+          <StatTile delay={120} icon={<Video size={12} />} label="Teleporady" value={online} />
+        </div>
+      )}
+
+      <Tile className="p-3 sm:p-4" delay={150}>
         {(visits ?? []).length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={28} strokeWidth={1.5} />}
@@ -64,25 +107,45 @@ export function LekarzDzien() {
           />
         ) : (
           <ul className="space-y-1.5">
-            {(visits ?? []).map(v => {
-              const now = v.appointment_status === 'IN_PROGRESS'
+            {(visits ?? []).map((v, i) => {
+              const live = v.appointment_status === 'IN_PROGRESS'
+              const finished = FINISHED.includes(v.appointment_status)
+              const past = new Date(v.appointment_datetime) < now
+              const nowLine = isToday && i === nowIdx && (
+                <li aria-label="Bieżąca godzina" className="flex items-center gap-2 px-1">
+                  <span className="text-[11px] font-extrabold text-red-500 [font-variant-numeric:tabular-nums]">
+                    {`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`}
+                  </span>
+                  <span className="h-0.5 flex-1 rounded-full bg-red-400/70" />
+                </li>
+              )
               if (!v.patient_id) {
                 return (
-                  <li key={v.appointment_id} className="flex items-center gap-4 rounded-2xl border border-dashed border-gray-200 px-4 py-3">
-                    <span className="w-12 text-sm font-bold text-gray-300 [font-variant-numeric:tabular-nums]">{formatTime(v.appointment_datetime)}</span>
-                    <span className="text-sm font-medium text-gray-400">wolny termin</span>
-                  </li>
+                  <Fragment key={v.appointment_id}>
+                    {nowLine}
+                    <li className={cx(
+                      'flex items-center gap-4 rounded-2xl border border-dashed border-gray-200 px-4 py-3',
+                      past && 'opacity-50',
+                    )}>
+                      <span className="w-12 text-sm font-bold text-gray-300 [font-variant-numeric:tabular-nums]">{formatTime(v.appointment_datetime)}</span>
+                      <span className="text-sm font-medium text-gray-400">wolny termin</span>
+                    </li>
+                  </Fragment>
                 )
               }
               return (
+                <Fragment key={v.appointment_id}>
+                {nowLine}
                 <li
-                  key={v.appointment_id}
                   className={cx(
                     'flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3',
-                    now ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50',
+                    live ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50',
+                    finished && 'opacity-60 transition-opacity hover:opacity-100',
                   )}
                 >
-                  <span className={cx('w-12 text-sm font-extrabold [font-variant-numeric:tabular-nums]', now ? 'text-primary' : 'text-gray-400')}>
+                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : 'text-gray-400')}>
+                    {v.appointment_status === 'COMPLETED' && <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />}
+                    {(v.appointment_status === 'NO_SHOW' || v.appointment_status === 'CANCELLED') && <XCircle size={14} className="shrink-0 text-gray-300" />}
                     {formatTime(v.appointment_datetime)}
                   </span>
                   <span className="text-gray-400">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
@@ -112,7 +175,7 @@ export function LekarzDzien() {
                         </Button>
                       </>
                     )}
-                    {now && (
+                    {live && (
                       <>
                         <Button size="sm" onClick={() => navigate(`/wizyta/${v.appointment_id}`)}>
                           <DoorOpen size={14} /> Gabinet
@@ -126,8 +189,17 @@ export function LekarzDzien() {
                     )}
                   </div>
                 </li>
+                </Fragment>
               )
             })}
+            {isToday && nowIdx === -1 && (visits ?? []).length > 0 && (
+              <li aria-label="Bieżąca godzina" className="flex items-center gap-2 px-1">
+                <span className="text-[11px] font-extrabold text-red-500 [font-variant-numeric:tabular-nums]">
+                  {`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`}
+                </span>
+                <span className="h-0.5 flex-1 rounded-full bg-red-400/70" />
+              </li>
+            )}
           </ul>
         )}
       </Tile>

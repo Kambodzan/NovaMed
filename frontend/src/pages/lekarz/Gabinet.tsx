@@ -68,6 +68,9 @@ export function Gabinet() {
 
   const inProgress = visit.appointment_status === 'IN_PROGRESS'
   const confirmed = visit.appointment_status === 'CONFIRMED'
+  const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
+  const visitDocs = (documents ?? []).filter(d => d.appointment_id === Number(id))
+  const historyDocs = (documents ?? []).filter(d => d.appointment_id !== Number(id))
 
   return (
     <div className="space-y-6">
@@ -113,8 +116,17 @@ export function Gabinet() {
             />
             {patient ? (
               <div className="space-y-1.5 text-sm">
+                {/* powód wizyty na samej górze — to pierwszy kontekst, którego szuka lekarz */}
+                {visit.notes && (
+                  <div className="mb-2 rounded-xl bg-amber-50 px-3.5 py-2.5">
+                    <p className="text-xs font-extrabold tracking-wider text-amber-700 uppercase">Powód wizyty (od pacjenta)</p>
+                    <p className="mt-0.5 text-sm font-medium text-amber-900">{visit.notes}</p>
+                  </div>
+                )}
                 <p className="text-lg font-extrabold text-gray-900">{patient.first_name} {patient.last_name}</p>
-                <p className="font-medium text-gray-500">PESEL {patient.pesel} · ur. {formatDatePL(patient.birth_date)}</p>
+                <p className="font-medium text-gray-500">
+                  PESEL {patient.pesel} · ur. {formatDatePL(patient.birth_date)}{age !== null && ` (${age} l.)`}
+                </p>
                 {patient.phone_number && <p className="font-medium text-gray-500">tel. {patient.phone_number}</p>}
                 {patient.guardian_name && (
                   <p className="flex items-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-800">
@@ -127,38 +139,44 @@ export function Gabinet() {
                     ? <Badge tone="success"><ShieldCheck size={12} /> eWUŚ: ubezpieczony</Badge>
                     : <Badge tone="warn"><AlertTriangle size={12} /> eWUŚ: brak potwierdzenia</Badge>}
                 </div>
-                {visit.notes && (
-                  <div className="mt-2 rounded-xl bg-amber-50 px-3.5 py-2.5">
-                    <p className="text-xs font-extrabold tracking-wider text-amber-700 uppercase">Powód wizyty (od pacjenta)</p>
-                    <p className="mt-0.5 text-sm font-medium text-amber-900">{visit.notes}</p>
-                  </div>
-                )}
               </div>
             ) : <p className="text-sm font-medium text-gray-400">Wczytywanie…</p>}
           </Tile>
 
-          {/* notatka — zawsze pod ręką */}
-          <Tile className="p-5" delay={100}>
-            <TileHeader title={<span className="inline-flex items-center gap-1.5"><ClipboardPen size={13} /> Notatka z wizyty</span>} />
-            <textarea
-              className={cx(inputCls, 'h-36 py-2.5')}
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="Wywiad, badanie, rozpoznanie, zalecenia…"
-            />
-            <div className="mt-3 flex items-center gap-3">
-              <Button size="sm" disabled={saveNote.isPending || note.trim().length < 2} onClick={() => saveNote.mutate()}>
-                {saveNote.isPending ? 'Zapisywanie…' : 'Zapisz notatkę'}
-              </Button>
-              {noteSaved && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700"><Check size={13} /> Zapisano w dokumentacji</span>}
-            </div>
-          </Tile>
+          {/* narzędzia wizyty dopiero po rozpoczęciu — przed wizytą lekarz
+              przegląda kontekst, nie wystawia dokumentów */}
+          {inProgress ? (
+            <>
+              <Tile className="p-5" delay={100}>
+                <TileHeader title={<span className="inline-flex items-center gap-1.5"><ClipboardPen size={13} /> Notatka z wizyty</span>} />
+                <textarea
+                  className={cx(inputCls, 'h-36 py-2.5')}
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  placeholder="Wywiad, badanie, rozpoznanie, zalecenia…"
+                />
+                <div className="mt-3 flex items-center gap-3">
+                  <Button size="sm" disabled={saveNote.isPending || note.trim().length < 2} onClick={() => saveNote.mutate()}>
+                    {saveNote.isPending ? 'Zapisywanie…' : 'Zapisz notatkę'}
+                  </Button>
+                  {noteSaved && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700"><Check size={13} /> Zapisano — patrz „Z tej wizyty"</span>}
+                </div>
+              </Tile>
 
-          {/* wystawianie dokumentów */}
-          <Tile className="p-5" delay={140}>
-            <TileHeader title="Wystaw dokument" />
-            {patientId && <WystawDokument patientId={patientId} appointmentId={Number(id)} hideKinds={['NOTE']} />}
-          </Tile>
+              <Tile className="p-5" delay={140}>
+                <TileHeader title="Wystaw dokument" />
+                {patientId && <WystawDokument patientId={patientId} appointmentId={Number(id)} hideKinds={['NOTE']} />}
+              </Tile>
+            </>
+          ) : confirmed ? (
+            <Tile className="p-5" delay={100}>
+              <p className="text-sm leading-relaxed font-medium text-gray-500">
+                Notatka i wystawianie dokumentów otworzą się po kliknięciu
+                <span className="font-extrabold text-gray-900"> „Rozpocznij wizytę"</span> u góry.
+                Do tego czasu możesz przejrzeć dane pacjenta i dokumentację.
+              </p>
+            </Tile>
+          ) : null}
         </div>
 
         {confirm === 'NO_SHOW' && (
@@ -202,11 +220,23 @@ export function Gabinet() {
           </Modal>
         )}
 
-        {/* dokumentacja pacjenta */}
+        {/* dokumentacja: efekty TEJ wizyty osobno, nad resztą historii */}
         <Tile className="p-5" delay={120}>
-          <TileHeader title={<span className="inline-flex items-center gap-1.5"><FolderOpen size={13} /> Dokumentacja pacjenta</span>} />
+          {(inProgress || visitDocs.length > 0) && (
+            <div className="mb-5">
+              <TileHeader title={<span className="inline-flex items-center gap-1.5 text-primary"><ClipboardPen size={13} /> Z tej wizyty</span>} />
+              {visitDocs.length > 0 ? (
+                <DokumentyLista documents={visitDocs} />
+              ) : (
+                <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-sm font-medium text-gray-400">
+                  Zapisane notatki i wystawione dokumenty pojawią się tutaj od razu.
+                </p>
+              )}
+            </div>
+          )}
+          <TileHeader title={<span className="inline-flex items-center gap-1.5"><FolderOpen size={13} /> Wcześniejsza dokumentacja</span>} />
           <div className="max-h-[70vh] overflow-y-auto pr-1">
-            <DokumentyLista documents={documents ?? []} emptyHint="Notatki i dokumenty z tej wizyty pojawią się tutaj od razu po wystawieniu." />
+            <DokumentyLista documents={historyDocs} emptyHint="Ten pacjent nie ma jeszcze wcześniejszych dokumentów." />
           </div>
         </Tile>
       </div>

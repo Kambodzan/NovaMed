@@ -147,11 +147,20 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
       }
       issue.mutate()
     }}>
-      <Field label="Rodzaj dokumentu">
-        <select className={inputCls} value={kind} onChange={e => setKind(e.target.value as DocKind)}>
-          {kinds.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-        </select>
-      </Field>
+      <div role="radiogroup" aria-label="Rodzaj dokumentu" className="flex flex-wrap gap-1.5">
+        {kinds.map(k => (
+          <button
+            key={k} type="button" role="radio" aria-checked={k === kind}
+            onClick={() => { setKind(k); setError(null) }}
+            className={cx(
+              'cursor-pointer rounded-full px-3.5 py-2 text-xs font-extrabold transition-colors',
+              k === kind ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+            )}
+          >
+            {KIND_LABEL[k]}
+          </button>
+        ))}
+      </div>
 
       {(kind === 'PRESCRIPTION' || kind === 'REFERRAL') && (
         <Field label="Rozpoznanie (ICD-10)" hint="zacznij pisać kod lub nazwę rozpoznania">
