@@ -526,6 +526,7 @@ export function Umow() {
               onSelect={f => { setClinicFilter(cur => cur === f ? null : f); setMapOpen(false) }}
               geo={parseGeo(clinicFilter)}
               onGeoPick={(lat, lng) => setClinicFilter(`geo:${lat.toFixed(4)},${lng.toFixed(4)},${radiusKm}`)}
+              selectLabel={t('Wybierz placówkę')}
             />
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-gray-400">{t('Kliknij mapę, by zaznaczyć obszar — promień:')}</span>
@@ -552,7 +553,7 @@ export function Umow() {
                   {t('Wyczyść lokalizację')}
                 </Button>
               ) : <span />}
-              <Button size="sm" variant="secondary" onClick={() => setMapOpen(false)}>{t('Gotowe')}</Button>
+              <Button size="sm" onClick={() => setMapOpen(false)}>{t('Gotowe')}</Button>
             </div>
           </div>
         </Modal>

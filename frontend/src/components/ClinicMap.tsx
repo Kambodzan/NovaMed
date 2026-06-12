@@ -51,13 +51,15 @@ function ClickArea({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   return null
 }
 
-export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick }: {
+export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick, selectLabel }: {
   clinics: MapClinic[]
   selected: string | null
   onSelect: (filter: string) => void
   /** zaznaczony obszar (punkt + promień) — klik w mapę poza pinem */
   geo?: GeoArea | null
   onGeoPick?: (lat: number, lng: number) => void
+  /** etykieta przycisku w dymku pinezki */
+  selectLabel?: string
 }) {
   const pts = clinics.filter(c => c.lat != null && c.lng != null)
   if (pts.length === 0) return null
@@ -69,6 +71,15 @@ export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick }: {
       : geo
         ? pts.filter(c => distanceKm(geo.lat, geo.lng, c.lat!, c.lng!) <= geo.km)
         : pts
+
+  // wybór miasta = zaznacz jego obszar (okrąg wokół placówek miasta)
+  let cityArea: GeoArea | null = null
+  if (selected?.startsWith('city:') && focus.length) {
+    const lat = focus.reduce((a, c) => a + c.lat!, 0) / focus.length
+    const lng = focus.reduce((a, c) => a + c.lng!, 0) / focus.length
+    const km = Math.max(2.5, ...focus.map(c => distanceKm(lat, lng, c.lat!, c.lng!) + 1.2))
+    cityArea = { lat, lng, km }
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl">
@@ -92,16 +103,35 @@ export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick }: {
             pathOptions={{ color: '#0D9488', fillColor: '#0D9488', fillOpacity: 0.12, weight: 2 }}
           />
         )}
+        {cityArea && (
+          <Circle
+            center={[cityArea.lat, cityArea.lng]}
+            radius={cityArea.km * 1000}
+            pathOptions={{ color: '#0D9488', fillColor: '#0D9488', fillOpacity: 0.08, weight: 2, dashArray: '6 6' }}
+          />
+        )}
         {pts.map(c => (
           <Marker
             key={c.clinic_id}
             position={[c.lat!, c.lng!]}
             icon={pinIcon(selected === `cli:${c.clinic_name}`)}
-            eventHandlers={{ click: () => onSelect(`cli:${c.clinic_name}`) }}
           >
+            {/* klik w pin pokazuje info — wybór dopiero przyciskiem w dymku */}
             <Popup>
-              <span style={{ fontWeight: 700 }}>{c.clinic_name}</span><br />
-              {c.address}
+              <div style={{ minWidth: 170 }}>
+                <span style={{ fontWeight: 700 }}>{c.clinic_name}</span><br />
+                {c.address}<br />
+                <button
+                  onClick={() => onSelect(`cli:${c.clinic_name}`)}
+                  style={{
+                    marginTop: 8, background: '#0D9488', color: '#fff', border: 0,
+                    borderRadius: 9999, padding: '6px 14px', fontWeight: 800,
+                    fontSize: 12, cursor: 'pointer',
+                  }}
+                >
+                  {selectLabel ?? 'Wybierz placówkę'}
+                </button>
+              </div>
             </Popup>
           </Marker>
         ))}
