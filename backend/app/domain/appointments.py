@@ -35,7 +35,9 @@ ALLOWED_TRANSITIONS: dict[AppointmentStatus, set[AppointmentStatus]] = {
     # nie przez zmianę statusu odwołanej wizyty; historia zostaje)
     AppointmentStatus.COMPLETED: set(),
     AppointmentStatus.CANCELLED: set(),
-    AppointmentStatus.NO_SHOW: set(),
+    # wyjątek: pacjent spóźniony, ale jednak dotarł — wizytę
+    # można podjąć z NO_SHOW tego samego dnia (warunku dnia pilnuje endpoint)
+    AppointmentStatus.NO_SHOW: {AppointmentStatus.IN_PROGRESS},
     AppointmentStatus.INTERRUPTED: set(),
 }
 

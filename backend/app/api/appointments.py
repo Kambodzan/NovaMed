@@ -746,6 +746,14 @@ def change_status(
     if user.role.role_name == "lekarz" and a.doctor_id != user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest wizyta tego lekarza.")
     assert_transition(a.appointment_status, body.new_status)
+    # spóźniony pacjent (NO_SHOW → IN_PROGRESS) tylko w dniu wizyty —
+    # po północy nieodbyta wizyta zostaje nieodbyta
+    if (a.appointment_status == AppointmentStatus.NO_SHOW.value
+            and a.appointment_datetime.date() != datetime.now().date()):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Wizytę oznaczoną jako nieodbytą można podjąć tylko w dniu wizyty.",
+        )
     a.appointment_status = body.new_status.value
     db.commit()
     return appointment_out(db, a)

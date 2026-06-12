@@ -151,6 +151,12 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 </Button>
               </>
             )}
+            {visit.appointment_status === 'NO_SHOW'
+              && new Date(visit.appointment_datetime).toDateString() === new Date().toDateString() && (
+              <Button onClick={() => changeStatus.mutate('IN_PROGRESS')}>
+                <Play size={15} /> Jednak przyszedł — rozpocznij
+              </Button>
+            )}
             {!confirmed && !inProgress && <StatusBadge status={visit.appointment_status} />}
           </>}
         />

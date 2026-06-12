@@ -158,6 +158,9 @@ export function LekarzDzien() {
                     {v.notes && <p className="truncate text-xs font-medium text-gray-500">{v.notes}</p>}
                   </button>
                   {v.price != null && <Badge tone="neutral">{v.price} zł</Badge>}
+                  {isToday && past && v.appointment_status === 'CONFIRMED' && (
+                    <Badge tone="warn">spóźnienie {Math.max(1, Math.round((now.getTime() - new Date(v.appointment_datetime).getTime()) / 60000))} min</Badge>
+                  )}
                   {v.appointment_status === 'CONFIRMED' && v.confirmation_requested && (
                     v.patient_confirmed
                       ? <Badge tone="success">obecność potwierdzona</Badge>
@@ -174,6 +177,11 @@ export function LekarzDzien() {
                           Nie stawił się
                         </Button>
                       </>
+                    )}
+                    {v.appointment_status === 'NO_SHOW' && isToday && (
+                      <Button size="sm" variant="ghost" title="Pacjent dotarł spóźniony — podejmij wizytę" onClick={() => startVisit(v)}>
+                        Jednak przyszedł
+                      </Button>
                     )}
                     {live && (
                       <>
