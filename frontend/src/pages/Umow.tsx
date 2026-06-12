@@ -165,10 +165,6 @@ export function Umow() {
     () => [...new Set((allSlots ?? []).map(s => s.clinic_name))].sort(),
     [allSlots],
   )
-  const specNames = useMemo(
-    () => [...new Set((allSlots ?? []).map(s => s.specialization).filter(Boolean) as string[])].sort(),
-    [allSlots],
-  )
 
   // karty lekarzy z mini-kalendarzem: dni → godziny (jak na portalach rezerwacyjnych)
   const doctorCards = useMemo(() => {
@@ -195,23 +191,47 @@ export function Umow() {
       .sort((a, b) => a.days[0][1][0].appointment_datetime.localeCompare(b.days[0][1][0].appointment_datetime))
   }, [allSlots, q, spec, clinicFilter, doctorFilter])
 
-  // podpowiedzi wyszukiwarki: specjalizacje, lekarze i placówki w jednym miejscu
+  // Omnisearch jak na portalach rezerwacyjnych: na focus (bez pisania) od razu
+  // popularne specjalizacje i lekarze; pisanie filtruje wszystko z nagłówkami grup.
   const suggest = async (text: string): Promise<TypeaheadItem[]> => {
-    const fq = fold(text)
+    const fq = fold(text.trim())
     const out: TypeaheadItem[] = []
-    for (const s of specNames.filter(s => fold(s).includes(fq)))
-      out.push({ key: `spec:${s}`, label: `${s} — ${t('specjalizacja')}`, insert: s })
-    const seen = new Set<number>()
+
+    const specCounts = new Map<string, number>()
     for (const s of allSlots ?? []) {
-      if (seen.has(s.doctor_id)) continue
-      if (fold(s.doctor_name).includes(fq)) {
-        seen.add(s.doctor_id)
-        out.push({ key: `doc:${s.doctor_id}:${s.doctor_name}`, label: `${s.doctor_name} — ${s.specialization ?? ''}`, insert: s.doctor_name })
-      }
+      if (s.specialization) specCounts.set(s.specialization, (specCounts.get(s.specialization) ?? 0) + 1)
     }
-    for (const c of (clinicList ?? []).filter(c => fold(c.clinic_name + c.address).includes(fq)))
-      out.push({ key: `cli:${c.clinic_name}`, label: `${c.clinic_name}, ${c.address}`, insert: c.clinic_name })
-    return out.slice(0, 10)
+    const matchedSpecs = [...specCounts.entries()]
+      .filter(([name]) => !fq || fold(name).includes(fq))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, fq ? 6 : 8)
+    if (matchedSpecs.length) {
+      out.push({ key: 'h:spec', label: fq ? t('Specjalizacje') : t('Popularne specjalizacje'), insert: '', header: true })
+      for (const [name, count] of matchedSpecs)
+        out.push({ key: `spec:${name}`, label: `${name} (${count})`, insert: name })
+    }
+
+    const docs = new Map<number, { name: string; spec: string | null; earliest: string }>()
+    for (const s of allSlots ?? []) {
+      if (fq && !fold(s.doctor_name).includes(fq) && !fold(s.specialization ?? '').includes(fq)) continue
+      const cur = docs.get(s.doctor_id)
+      if (!cur || s.appointment_datetime < cur.earliest)
+        docs.set(s.doctor_id, { name: s.doctor_name, spec: s.specialization, earliest: s.appointment_datetime })
+    }
+    const matchedDocs = [...docs.entries()].sort((a, b) => a[1].earliest.localeCompare(b[1].earliest)).slice(0, fq ? 6 : 4)
+    if (matchedDocs.length) {
+      out.push({ key: 'h:doc', label: t('Lekarze'), insert: '', header: true })
+      for (const [id, d] of matchedDocs)
+        out.push({ key: `doc:${id}:${d.name}`, label: `${d.name} — ${d.spec ?? ''}`, insert: d.name })
+    }
+
+    const matchedClinics = (clinicList ?? []).filter(c => !fq || fold(c.clinic_name + c.address).includes(fq))
+    if (fq && matchedClinics.length) {
+      out.push({ key: 'h:cli', label: t('Placówki'), insert: '', header: true })
+      for (const c of matchedClinics.slice(0, 4))
+        out.push({ key: `cli:${c.clinic_name}`, label: `${c.clinic_name}, ${c.address}`, insert: c.clinic_name })
+    }
+    return out
   }
 
   const applySuggestion = (item: TypeaheadItem) => {
@@ -293,25 +313,16 @@ export function Umow() {
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
           <div className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <Typeahead
                 id="umow-search"
-                minLength={1}
+                minLength={0}
                 value={query}
                 onChange={setQuery}
                 onPick={applySuggestion}
                 search={suggest}
                 placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
               />
-              <select
-                aria-label={t('Specjalizacja')}
-                className={cx(inputCls, 'sm:w-44')}
-                value={spec ?? ''}
-                onChange={e => setSpec(e.target.value || null)}
-              >
-                <option value="">{t('Specjalizacja')}: {t('wszystkie')}</option>
-                {specNames.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
               {clinicNames.length > 1 && (
                 <select
                   aria-label={t('Placówka')}

@@ -8,6 +8,8 @@ export interface TypeaheadItem {
   key: string
   label: string
   insert: string
+  /** wiersz-nagłówek grupy (niewybieralny) */
+  header?: boolean
 }
 
 export function Typeahead({ id, value, onChange, onPick, search, placeholder, required, minLength = 2 }: {
@@ -43,11 +45,21 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
     setActiveIdx(-1)
   }
 
+  const step = (from: number, dir: 1 | -1): number => {
+    if (!items?.length) return -1
+    let i = from
+    for (let n = 0; n < items.length; n++) {
+      i = (i + dir + items.length) % items.length
+      if (!items[i].header) return i
+    }
+    return -1
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open || !items || items.length === 0) return
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => (i + 1) % items.length) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => (i <= 0 ? items.length - 1 : i - 1)) }
-    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); pick(items[activeIdx]) }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => step(i, 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => step(i < 0 ? 0 : i, -1)) }
+    else if (e.key === 'Enter' && activeIdx >= 0 && !items[activeIdx].header) { e.preventDefault(); pick(items[activeIdx]) }
     else if (e.key === 'Escape') { setOpen(false); setActiveIdx(-1) }
   }
 
@@ -70,6 +82,11 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
       {open && items && items.length > 0 && (
         <ul role="listbox" className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-2xl border border-gray-100 bg-white p-1 shadow-lg">
           {items.map((item, i) => (
+            item.header ? (
+              <li key={item.key} aria-hidden>
+                <p className="px-3 pt-2 pb-1 text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">{item.label}</p>
+              </li>
+            ) : (
             <li key={item.key} role="option" aria-selected={i === activeIdx}>
               <button
                 type="button"
@@ -79,6 +96,7 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
                 {item.label}
               </button>
             </li>
+            )
           ))}
         </ul>
       )}

@@ -198,6 +198,8 @@ const EN: Record<string, string> = {
   'Wszystkie placówki': 'All locations',
   'Szukaj lekarza, specjalizacji lub placówki…': 'Search for a doctor, specialty or location…',
   'Placówka': 'Location',
+  'Placówki': 'Locations',
+  'Popularne specjalizacje': 'Popular specialties',
   'wszystkie': 'all',
   'specjalizacja': 'specialty',
   'Wcześniejsze dni': 'Earlier days',
