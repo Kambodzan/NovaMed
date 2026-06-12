@@ -4,7 +4,7 @@
 # z repo lub pełne oficjalne CSV (RPL / NFZ).
 import uuid
 
-from sqlalchemy import Integer, String, Uuid
+from sqlalchemy import String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
