@@ -207,14 +207,15 @@ export function EmptyState({ icon, title, hint }: { icon: ReactNode; title: stri
   )
 }
 
-export function Modal({ title, overline, children, onClose, footer }: {
-  title: string; overline?: string; children: ReactNode; onClose: () => void; footer?: ReactNode
+export function Modal({ title, overline, children, onClose, footer, wide }: {
+  title: string; overline?: string; children: ReactNode; onClose: () => void; footer?: ReactNode; wide?: boolean
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4 backdrop-blur-[2px]" onClick={onClose}>
       <div
         role="dialog" aria-modal="true" aria-label={title}
-        className="w-full max-w-lg rounded-[24px] bg-surface shadow-[0_24px_64px_-16px_rgba(16,24,40,0.3)]"
+        className={cx('w-full rounded-[24px] bg-surface shadow-[0_24px_64px_-16px_rgba(16,24,40,0.3)]',
+          wide ? 'max-w-3xl' : 'max-w-lg')}
         onClick={e => e.stopPropagation()}
       >
         <div className="px-6 pt-5 pb-4">

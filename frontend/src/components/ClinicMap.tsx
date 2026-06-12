@@ -1,7 +1,7 @@
 // Mapa placówek (Leaflet + OpenStreetMap): pinezki klikalne = filtr lokalizacji.
 // Wybór miasta/placówki z wyszukiwarki dolatuje mapą do celu.
 import { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -22,6 +22,7 @@ export interface MapClinic {
   city: string | null
   lat: number | null
   lng: number | null
+  photo_url: string | null
 }
 
 // oba stany w primary teal — aktywny ciemniejszy i większy
@@ -46,18 +47,13 @@ function FitTo({ points }: { points: [number, number][] }) {
   return null
 }
 
-function ClickArea({ onPick }: { onPick: (lat: number, lng: number) => void }) {
-  useMapEvents({ click: e => onPick(e.latlng.lat, e.latlng.lng) })
-  return null
-}
 
-export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick, selectLabel }: {
+export function ClinicMap({ clinics, selected, onSelect, geo, selectLabel }: {
   clinics: MapClinic[]
   selected: string | null
   onSelect: (filter: string) => void
-  /** zaznaczony obszar (punkt + promień) — klik w mapę poza pinem */
+  /** zaznaczony obszar (punkt + promień) — ustawiany programowo (np. z wyszukiwarki) */
   geo?: GeoArea | null
-  onGeoPick?: (lat: number, lng: number) => void
   /** etykieta przycisku w dymku pinezki */
   selectLabel?: string
 }) {
@@ -86,8 +82,8 @@ export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick, selectL
       <MapContainer
         center={[pts[0].lat!, pts[0].lng!]}
         zoom={11}
-        scrollWheelZoom={false}
-        className="z-0 h-72 w-full"
+        scrollWheelZoom
+        className="z-0 h-[26rem] w-full"
       >
         {/* monochromatyczna baza CARTO Positron — spójna z resztą UI */}
         <TileLayer
@@ -95,7 +91,6 @@ export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick, selectL
           attribution='&copy; OpenStreetMap &copy; CARTO'
         />
         <FitTo points={(focus.length ? focus : pts).map(c => [c.lat!, c.lng!])} />
-        {onGeoPick && <ClickArea onPick={onGeoPick} />}
         {geo && (
           <Circle
             center={[geo.lat, geo.lng]}
@@ -118,7 +113,11 @@ export function ClinicMap({ clinics, selected, onSelect, geo, onGeoPick, selectL
           >
             {/* klik w pin pokazuje info — wybór dopiero przyciskiem w dymku */}
             <Popup>
-              <div style={{ minWidth: 170 }}>
+              <div style={{ minWidth: 200 }}>
+                {c.photo_url && (
+                  <img src={c.photo_url} alt={c.clinic_name}
+                    style={{ width: '100%', height: 96, objectFit: 'cover', borderRadius: 12, marginBottom: 6 }} />
+                )}
                 <span style={{ fontWeight: 700 }}>{c.clinic_name}</span><br />
                 {c.address}<br />
                 <button

@@ -159,7 +159,6 @@ export function Umow() {
   const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
   const [showAllDocs, setShowAllDocs] = useState(false)
-  const [radiusKm, setRadiusKm] = useState(10)
   const [locQuery, setLocQuery] = useState('')
   const [query, setQuery] = useState('')
   const [online, setOnline] = useState(false)
@@ -496,7 +495,7 @@ export function Umow() {
       {waitlistOpen && <WaitlistModal onClose={() => setWaitlistOpen(false)} />}
 
       {mapOpen && (
-        <Modal overline={t('Placówki')} title={t('Wybierz lokalizację')} onClose={() => setMapOpen(false)}>
+        <Modal wide overline={t('Placówki')} title={t('Wybierz lokalizację')} onClose={() => setMapOpen(false)}>
           {/* pt/px: obramówka i focus-ring inputa nie mogą być ścinane przez scroll modala */}
           <div className="space-y-3 px-0.5 pt-1.5 pb-4">
             <Typeahead
@@ -525,28 +524,8 @@ export function Umow() {
               selected={clinicFilter}
               onSelect={f => { setClinicFilter(cur => cur === f ? null : f); setMapOpen(false) }}
               geo={parseGeo(clinicFilter)}
-              onGeoPick={(lat, lng) => setClinicFilter(`geo:${lat.toFixed(4)},${lng.toFixed(4)},${radiusKm}`)}
               selectLabel={t('Wybierz placówkę')}
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-gray-400">{t('Kliknij mapę, by zaznaczyć obszar — promień:')}</span>
-              {[5, 10, 25].map(km => (
-                <button
-                  key={km}
-                  onClick={() => {
-                    setRadiusKm(km)
-                    const geo = parseGeo(clinicFilter)
-                    if (geo) setClinicFilter(`geo:${geo.lat},${geo.lng},${km}`)
-                  }}
-                  className={cx(
-                    'cursor-pointer rounded-full px-3 py-1 text-xs font-extrabold transition-colors',
-                    radiusKm === km ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
-                  )}
-                >
-                  {km} km
-                </button>
-              ))}
-            </div>
             <div className="flex justify-between">
               {clinicFilter ? (
                 <Button variant="ghost" size="sm" onClick={() => { setClinicFilter(null) }}>
