@@ -6,7 +6,10 @@ import { api, ApiError } from '../../lib/api'
 import { dayNo, formatTime, monthShort } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 
-interface Clinic { clinic_id: number; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number }
+interface Clinic {
+  clinic_id: number; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number
+  confirmation_required: boolean; confirmation_hours: number
+}
 interface DoctorRow { doctor_id: number; name: string; specialization: string | null }
 
 export function Terminy() {
@@ -82,18 +85,25 @@ export function Terminy() {
 
   const [noticeHours, setNoticeHours] = useState('')
   const [intervalMin, setIntervalMin] = useState('15')
+  const [confirmRequired, setConfirmRequired] = useState(false)
+  const [confirmHours, setConfirmHours] = useState('48')
   const [noticeSaved, setNoticeSaved] = useState(false)
   useEffect(() => {
     if (clinic) {
       setNoticeHours(String(clinic.earlier_notice_min_hours))
       setIntervalMin(String(clinic.slot_interval_min))
+      setConfirmRequired(clinic.confirmation_required)
+      setConfirmHours(String(clinic.confirmation_hours))
     }
   }, [clinic])
 
   const saveNotice = useMutation({
     mutationFn: () => api(`/clinics/${clinic!.clinic_id}/settings`, {
       method: 'PATCH',
-      body: { earlier_notice_min_hours: Number(noticeHours), slot_interval_min: Number(intervalMin) },
+      body: {
+        earlier_notice_min_hours: Number(noticeHours), slot_interval_min: Number(intervalMin),
+        confirmation_required: confirmRequired, confirmation_hours: Number(confirmHours),
+      },
     }),
     onSuccess: () => {
       setError(null)
@@ -216,6 +226,23 @@ export function Terminy() {
               value={noticeHours} onChange={e => setNoticeHours(e.target.value)}
             />
           </Field>
+          <Field label="Potwierdzanie obecności" hint="pacjent potwierdza, że przyjdzie">
+            <select
+              className={cx(inputCls, 'w-44')}
+              value={confirmRequired ? 'on' : 'off'}
+              onChange={e => setConfirmRequired(e.target.value === 'on')}
+            >
+              <option value="off">tylko przypomnienia</option>
+              <option value="on">wymagaj potwierdzenia</option>
+            </select>
+          </Field>
+          {confirmRequired && (
+            <Field label="Prośba o potwierdzenie" hint="ile godzin przed wizytą">
+              <select className={cx(inputCls, 'w-32')} value={confirmHours} onChange={e => setConfirmHours(e.target.value)}>
+                {[12, 24, 48, 72, 168].map(n => <option key={n} value={n}>{n} h</option>)}
+              </select>
+            </Field>
+          )}
           <Button size="sm" disabled={saveNotice.isPending || noticeHours === ''} onClick={() => saveNotice.mutate()}>
             {saveNotice.isPending ? 'Zapisywanie…' : 'Zapisz'}
           </Button>
@@ -224,6 +251,7 @@ export function Terminy() {
         <p className="mt-2 text-xs font-medium text-gray-400">
           Pacjenci, którzy przy rezerwacji zaznaczyli „powiadom, jeśli zwolni się wcześniejszy termin",
           dostaną powiadomienie, gdy u ich lekarza pojawi się wolny termin wcześniejszy niż ich wizyta.
+          {confirmRequired && ' Przy włączonym potwierdzaniu pacjent dostaje prośbę o potwierdzenie obecności, a brak potwierdzenia jest oznaczony w grafiku.'}
         </p>
       </Tile>
 

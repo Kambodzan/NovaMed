@@ -39,6 +39,10 @@ class Appointment(Base):
     referral_required: Mapped[bool] = mapped_column(Boolean, default=False)
     referral_document_id: Mapped[int | None] = mapped_column(ForeignKey("medical_document.document_id"))
     external_referral: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Potwierdzanie obecności (gdy placówka wymaga): czy wysłano prośbę
+    # i czy pacjent potwierdził, że będzie
+    confirmation_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    patient_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")

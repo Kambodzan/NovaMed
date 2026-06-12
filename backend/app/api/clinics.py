@@ -29,11 +29,15 @@ class ClinicOut(ClinicIn):
     clinic_id: int
     earlier_notice_min_hours: int = 24
     slot_interval_min: int = 15
+    confirmation_required: bool = False
+    confirmation_hours: int = 48
 
 
 class ClinicSettingsIn(BaseModel):
     earlier_notice_min_hours: int = Field(ge=0, le=720, description="Min. wyprzedzenie [h] powiadomień o wcześniejszym terminie")
     slot_interval_min: int = Field(default=15, ge=5, le=120, description="Siatka terminów [min] — np. 15 lub 20")
+    confirmation_required: bool = Field(default=False, description="Czy pacjent ma potwierdzać obecność przed wizytą")
+    confirmation_hours: int = Field(default=48, ge=2, le=336, description="Ile godzin przed wizytą wysłać prośbę o potwierdzenie")
 
 
 class StaffAssignIn(BaseModel):
@@ -76,22 +80,24 @@ def create_clinic(
     clinic = Clinic(**body.model_dump())
     db.add(clinic)
     db.commit()
-    return ClinicOut(clinic_id=clinic.clinic_id, earlier_notice_min_hours=clinic.earlier_notice_min_hours,
-                     slot_interval_min=clinic.slot_interval_min, **body.model_dump())
+    return clinic_out(clinic)
+
+
+def clinic_out(c: Clinic) -> ClinicOut:
+    return ClinicOut(
+        clinic_id=c.clinic_id, clinic_name=c.clinic_name, address=c.address,
+        phone=c.phone, clinic_email=c.clinic_email, city=c.city, lat=c.lat, lng=c.lng,
+        photo_url=c.photo_url,
+        earlier_notice_min_hours=c.earlier_notice_min_hours,
+        slot_interval_min=c.slot_interval_min,
+        confirmation_required=c.confirmation_required,
+        confirmation_hours=c.confirmation_hours,
+    )
 
 
 @router.get("", response_model=list[ClinicOut])
 def list_clinics(db: Session = Depends(get_db), _: AppUser = Depends(get_current_user)):
-    return [
-        ClinicOut(
-            clinic_id=c.clinic_id, clinic_name=c.clinic_name, address=c.address,
-            phone=c.phone, clinic_email=c.clinic_email, city=c.city, lat=c.lat, lng=c.lng,
-            photo_url=c.photo_url,
-            earlier_notice_min_hours=c.earlier_notice_min_hours,
-            slot_interval_min=c.slot_interval_min,
-        )
-        for c in db.scalars(select(Clinic).order_by(Clinic.clinic_name))
-    ]
+    return [clinic_out(c) for c in db.scalars(select(Clinic).order_by(Clinic.clinic_name))]
 
 
 @router.patch("/{clinic_id}/settings", response_model=ClinicOut)
@@ -101,17 +107,15 @@ def update_clinic_settings(
     _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
-    """Ustawienia placówki — limit wyprzedzenia powiadomień + siatka terminów."""
+    """Ustawienia placówki — wyprzedzenie powiadomień, siatka terminów,
+    potwierdzanie obecności przez pacjenta."""
     clinic = get_clinic_or_404(clinic_id, db)
     clinic.earlier_notice_min_hours = body.earlier_notice_min_hours
     clinic.slot_interval_min = body.slot_interval_min
+    clinic.confirmation_required = body.confirmation_required
+    clinic.confirmation_hours = body.confirmation_hours
     db.commit()
-    return ClinicOut(
-        clinic_id=clinic.clinic_id, clinic_name=clinic.clinic_name, address=clinic.address,
-        phone=clinic.phone, clinic_email=clinic.clinic_email,
-        earlier_notice_min_hours=clinic.earlier_notice_min_hours,
-        slot_interval_min=clinic.slot_interval_min,
-    )
+    return clinic_out(clinic)
 
 
 @router.post("/{clinic_id}/staff", status_code=status.HTTP_201_CREATED)

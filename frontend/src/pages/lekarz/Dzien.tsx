@@ -94,6 +94,11 @@ export function LekarzDzien() {
                     {v.notes && <p className="truncate text-xs font-medium text-gray-500">{v.notes}</p>}
                   </button>
                   {v.price != null && <Badge tone="neutral">{v.price} zł</Badge>}
+                  {v.appointment_status === 'CONFIRMED' && v.confirmation_requested && (
+                    v.patient_confirmed
+                      ? <Badge tone="success">obecność potwierdzona</Badge>
+                      : <Badge tone="warn">bez potwierdzenia</Badge>
+                  )}
                   <StatusBadge status={v.appointment_status} />
                   <div className="flex gap-2">
                     {v.appointment_status === 'CONFIRMED' && (

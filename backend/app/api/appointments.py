@@ -101,6 +101,9 @@ class AppointmentOut(BaseModel):
     notify_earlier: bool = False
     service_name: str | None = None     # badanie diagnostyczne (NULL = wizyta lekarska)
     referral_required: bool = False
+    # potwierdzanie obecności (gdy placówka wymaga)
+    confirmation_requested: bool = False
+    patient_confirmed: bool = False
 
 
 class PaymentInfoOut(BaseModel):
@@ -159,6 +162,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         notify_earlier=a.notify_earlier,
         service_name=a.service_name,
         referral_required=a.referral_required,
+        confirmation_requested=a.confirmation_requested,
+        patient_confirmed=a.patient_confirmed,
     )
 
 
@@ -454,6 +459,24 @@ def pay_appointment(
             amount=float(payment.amount), payment_status=payment.payment_status,
         ),
     )
+
+
+@router.post("/appointments/{appointment_id}/confirm-attendance", response_model=AppointmentOut)
+def confirm_attendance(
+    appointment_id: int,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Potwierdzenie obecności przez pacjenta (lub opiekuna) — gdy placówka
+    wymaga potwierdzania wizyt. Personel też może odhaczyć (np. po telefonie)."""
+    a = get_appointment_or_404(appointment_id, db)
+    if user.role.role_name == "pacjent" and a.patient_id not in allowed_patient_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
+    if a.appointment_status != AppointmentStatus.CONFIRMED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tę wizytę można potwierdzić tylko, gdy jest zarezerwowana.")
+    a.patient_confirmed = True
+    db.commit()
+    return appointment_out(db, a)
 
 
 @router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentOut)

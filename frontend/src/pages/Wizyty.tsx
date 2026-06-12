@@ -52,6 +52,12 @@ export function Wizyty() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się anulować wizyty.'),
   })
 
+  const confirmAttendance = useMutation({
+    mutationFn: (id: number) => api(`/appointments/${id}/confirm-attendance`, { method: 'POST' }),
+    onSuccess: () => { invalidate(); setError(null) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się potwierdzić obecności.'),
+  })
+
   const upcoming = (visits ?? [])
     .filter(v => ['CONFIRMED', 'TEMP_LOCK', 'IN_PROGRESS'].includes(v.appointment_status)
       && (isFuture(v.appointment_datetime) || v.appointment_status === 'IN_PROGRESS'))
@@ -71,11 +77,23 @@ export function Wizyty() {
             {v.appointment_type === 'ONLINE' ? t('teleporada') : v.clinic_name}
           </p>
         </div>
+        {v.patient_confirmed && ['CONFIRMED', 'IN_PROGRESS'].includes(v.appointment_status) && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+            <Check size={12} /> {t('Obecność potwierdzona')}
+          </span>
+        )}
         <StatusBadge status={v.appointment_status} />
         {actions && v.appointment_status === 'CONFIRMED' && (
           <div className="flex gap-2">
+            {v.confirmation_requested && !v.patient_confirmed && (
+              <Button size="sm" disabled={confirmAttendance.isPending}
+                onClick={() => confirmAttendance.mutate(v.appointment_id)}>
+                <Check size={14} /> {t('Potwierdzam, że będę')}
+              </Button>
+            )}
             {v.appointment_type === 'ONLINE' && (
-              <Button size="sm" onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
+              <Button size="sm" variant={v.confirmation_requested && !v.patient_confirmed ? 'secondary' : 'primary'}
+                onClick={() => navigate(`/telewizyta/${v.appointment_id}`)}>
                 <Video size={14} /> {t('Rozpocznij')}
               </Button>
             )}
@@ -115,6 +133,10 @@ export function Wizyty() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Moje wizyty')}</h1>
+
+      {error && !cancelFor && !payFor && !rescheduleFor && !reviewFor && (
+        <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>
+      )}
 
       <section className="space-y-3">
         <Overline>{t('Nadchodzące · bezpłatne odwołanie do 24 h przed terminem')}</Overline>

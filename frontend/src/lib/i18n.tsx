@@ -157,6 +157,8 @@ const EN: Record<string, string> = {
   'Zamknij': 'Close',
   'Podsumowanie': 'Summary',
   'Podsumowanie wizyty': 'Visit summary',
+  'Potwierdzam, że będę': "I'll be there",
+  'Obecność potwierdzona': 'Attendance confirmed',
   'Zgłoszony powód wizyty': 'Reported reason for the visit',
   'Notatki i zalecenia lekarza': "Doctor's notes and recommendations",
   'Lekarz nie zostawił notatki z tej wizyty.': 'The doctor left no notes for this visit.',

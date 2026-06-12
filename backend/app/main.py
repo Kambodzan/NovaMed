@@ -25,7 +25,7 @@ from app.api.telemed import router as telemed_router
 from app.api.waitlist import router as waitlist_router
 from app.core.config import settings
 from app.core.db import SessionLocal, get_db
-from app.domain.reminders import release_expired_temp_locks, send_due_reminders
+from app.domain.reminders import release_expired_temp_locks, send_confirmation_requests, send_due_reminders
 
 logger = logging.getLogger("novamed")
 
@@ -43,6 +43,9 @@ async def reminders_loop() -> None:
                 released = release_expired_temp_locks(db)
                 if released:
                     logger.info("Zwolniono %s terminów z porzuconą płatnością", released)
+                asked = send_confirmation_requests(db)
+                if asked:
+                    logger.info("Wysłano %s próśb o potwierdzenie obecności", asked)
             finally:
                 db.close()
         except Exception:  # pętla nie może umrzeć od pojedynczego błędu
