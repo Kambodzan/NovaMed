@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
+import { PowrotDoWizyty } from './components/PowrotDoWizyty'
 import { Login } from './pages/Login'
 import { Rejestracja } from './pages/Rejestracja'
 import { PortalLayout } from './pages/PortalLayout'
@@ -48,6 +49,7 @@ function LekarzLayout() {
         { to: '/kod', label: 'Kod od pacjenta', icon: FileSignature },
       ]}
     >
+      <PowrotDoWizyty />
       <Outlet />
     </ProShell>
   )
