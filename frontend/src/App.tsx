@@ -11,6 +11,7 @@ import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
 import { Rodzina } from './pages/Rodzina'
 import { RezerwacjaPubliczna } from './pages/RezerwacjaPubliczna'
+import { ResetHasla } from './pages/ResetHasla'
 import { FamilyProvider } from './lib/family'
 import { I18nProvider } from './lib/i18n'
 import { Telewizyta } from './pages/Telewizyta'
@@ -109,6 +110,7 @@ export default function App() {
       <Route path="/rejestracja" element={<Rejestracja />} />
       {/* publiczna strona rezerwacji (M8.6) — bez logowania */}
       <Route path="/rezerwacja" element={<RezerwacjaPubliczna />} />
+      <Route path="/reset-hasla" element={<ResetHasla />} />
 
       {!token && <Route path="*" element={<Navigate to="/login" replace />} />}
       {token && profileMissing && <Route path="*" element={<Navigate to="/rejestracja" replace />} />}

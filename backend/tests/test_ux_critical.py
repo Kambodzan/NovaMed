@@ -230,6 +230,43 @@ def test_usuwanie_wolnego_slotu(client, setup):
                       headers=auth_header(setup["doctor_token"])).status_code == 404
 
 
+def test_preferencje_sms_wylaczaja_kanal(client, setup, integration_fakes):
+    me = client.get("/auth/me", headers=auth_header(setup["patient_token"])).json()
+    assert me["notify_sms"] is True
+    r = client.patch("/auth/me/preferences", json={"notify_sms": False},
+                     headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 200 and r.json()["notify_sms"] is False
+
+    # rezerwacja: powiadomienie in-app TAK, SMS NIE
+    before = len(integration_fakes.sms.sent)
+    dt = (datetime.now() + timedelta(days=6)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot = make_slots(client, setup, [dt.isoformat()])[0]
+    client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+    assert len(integration_fakes.sms.sent) == before
+    notes = client.get("/notifications/my", headers=auth_header(setup["patient_token"])).json()
+    assert any("potwierdzona" in n["notification_title"] for n in notes)
+
+
+def test_rejestracja_edytuje_kontakt_i_wpisuje_wynik(client, setup):
+    pid = setup["patient"].user_id
+    r = client.patch(f"/patients/{pid}/contact", json={"phone_number": "700800900"},
+                     headers=auth_header(setup["reg_token"]))
+    assert r.status_code == 200 and r.json()["phone_number"] == "700800900"
+    # pacjent nie może edytować cudzych danych tym endpointem
+    assert client.patch(f"/patients/{pid}/contact", json={"phone_number": "1"},
+                        headers=auth_header(setup["patient_token"])).status_code == 403
+
+    # wynik „z papieru": rejestracja podpina do wizyty lekarskiej pacjenta
+    dt = (datetime.now() + timedelta(days=6)).replace(hour=10, minute=0, second=0, microsecond=0)
+    slot = make_slots(client, setup, [dt.isoformat()])[0]
+    client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+    lab = client.post(f"/patients/{pid}/lab-results", headers=auth_header(setup["reg_token"]),
+                      json={"appointment_id": slot["appointment_id"],
+                            "test_type": "Morfologia (papier)", "test_description": "W normie."})
+    assert lab.status_code == 201
+    assert lab.json()["document_status"] == "READY"
+
+
 def test_karta_pacjenta_pokazuje_opiekuna(client, setup):
     dep = client.post("/family", json={
         "first_name": "Hania", "last_name": "Testowa",

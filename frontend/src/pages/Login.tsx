@@ -51,7 +51,10 @@ export function Login() {
             <LogIn size={17} /> {busy ? 'Logowanie…' : 'Zaloguj się'}
           </Button>
         </form>
-        <p className="mt-4 text-center text-sm font-medium text-gray-500">
+        <p className="mt-3 text-center text-sm font-medium text-gray-500">
+          <Link to="/reset-hasla" className="font-extrabold text-primary hover:underline">Nie pamiętasz hasła?</Link>
+        </p>
+        <p className="mt-2 text-center text-sm font-medium text-gray-500">
           Nie masz konta?{' '}
           <Link to="/rejestracja" className="font-extrabold text-primary hover:underline">Zarejestruj się</Link>
           {' '}albo{' '}

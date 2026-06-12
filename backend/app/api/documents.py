@@ -303,12 +303,23 @@ def issue_sick_leave(
 def add_lab_result(
     patient_id: int,
     body: LabResultIn,
-    user: AppUser = Depends(require_roles("lekarz")),
+    user: AppUser = Depends(require_roles("lekarz", "rejestracja", "kierownik")),
     db: Session = Depends(get_db),
 ):
-    """UC-L1: wynik badania wykonanego na miejscu (np. USG w trakcie konsultacji)."""
-    validate_visit(db, user, patient_id, body.appointment_id)
-    doc = new_document(user.user_id, patient_id, body.appointment_id,
+    """UC-L1: wynik badania wykonanego na miejscu (lekarz, w kontekście swojej wizyty)
+    + UC-PP3: rejestracja wpisuje wynik „z papieru" do dowolnej wizyty pacjenta."""
+    if user.role.role_name == "lekarz":
+        validate_visit(db, user, patient_id, body.appointment_id)
+        author_id = user.user_id
+    else:
+        a = db.get(Appointment, body.appointment_id)
+        if a is None or a.patient_id != patient_id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wizyta nie dotyczy tego pacjenta.")
+        if a.doctor_id is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Wynik z papieru podpinaj do wizyty lekarskiej pacjenta.")
+        author_id = a.doctor_id  # dokument podpisany lekarzem wizyty
+    doc = new_document(author_id, patient_id, body.appointment_id,
                        DocumentType.LAB_RESULT, DocumentStatus.READY)
     db.add(doc)
     db.flush()
@@ -426,6 +437,35 @@ def patient_info(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    return patient_info_out(db, p)
+
+
+class PatientContactIn(BaseModel):
+    phone_number: str | None = Field(default=None, max_length=20)
+    first_name: str | None = Field(default=None, min_length=1, max_length=50)
+    last_name: str | None = Field(default=None, min_length=1, max_length=50)
+
+
+@router.patch("/patients/{patient_id}/contact", response_model=PatientInfoOut)
+def update_patient_contact(
+    patient_id: int,
+    body: PatientContactIn,
+    _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    db: Session = Depends(get_db),
+):
+    """UC-PP3: edycja danych kontaktowych pacjenta przez rejestrację."""
+    p = db.get(Patient, patient_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    user = db.get(AppUser, patient_id)
+    if body.phone_number is not None:
+        user.phone_number = body.phone_number.strip() or None
+    if body.first_name:
+        p.first_name = body.first_name
+    if body.last_name:
+        p.last_name = body.last_name
+    user.username = f"{p.first_name} {p.last_name}"
+    db.commit()
     return patient_info_out(db, p)
 
 

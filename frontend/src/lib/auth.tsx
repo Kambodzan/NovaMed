@@ -12,7 +12,8 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 export const DEV_MODE = !SUPABASE_URL
 
-const supabase: SupabaseClient | null =
+// eksport: reset hasła (ResetHasla.tsx) korzysta z klienta bezpośrednio
+export const supabase: SupabaseClient | null =
   SUPABASE_URL && SUPABASE_ANON ? createClient(SUPABASE_URL, SUPABASE_ANON) : null
 
 const DEV_TOKEN_KEY = 'novamed_dev_token'

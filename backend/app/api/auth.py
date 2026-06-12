@@ -41,6 +41,11 @@ class MeOut(BaseModel):
     active_account: bool
     first_name: str | None = None
     last_name: str | None = None
+    notify_sms: bool = True
+
+
+class PreferencesIn(BaseModel):
+    notify_sms: bool
 
 
 class DevTokenIn(BaseModel):
@@ -148,4 +153,17 @@ def me(user: AppUser = Depends(get_current_user), db: Session = Depends(get_db))
         active_account=user.active_account,
         first_name=patient.first_name if patient else None,
         last_name=patient.last_name if patient else None,
+        notify_sms=user.notify_sms,
     )
+
+
+@router.patch("/me/preferences", response_model=MeOut)
+def update_preferences(
+    body: PreferencesIn,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Preferencje powiadomień: kanał SMS włącz/wyłącz (in-app zawsze aktywne)."""
+    user.notify_sms = body.notify_sms
+    db.commit()
+    return me(user, db)

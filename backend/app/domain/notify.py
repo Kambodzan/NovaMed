@@ -22,5 +22,5 @@ def notify(db: Session, user_id: int, title: str, content: str) -> None:
         is_read=False,
     ))
     user = db.get(AppUser, user_id)
-    if user is not None and user.phone_number:
+    if user is not None and user.phone_number and user.notify_sms:
         get_sms_client().send(to=user.phone_number, message=f"NovaMed: {title}. {content}")

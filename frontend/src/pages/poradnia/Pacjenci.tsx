@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, ShieldCheck, Users } from 'lucide-react'
-import { Badge, Button, EmptyState, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { Pencil, Search, ShieldCheck, Users } from 'lucide-react'
+import { Badge, Button, EmptyState, Field, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 
 interface Clinic { clinic_id: number; clinic_name: string }
@@ -30,6 +30,17 @@ export function PacjenciPlacowki() {
     mutationFn: (patientId: number) => api(`/patients/${patientId}/verify-insurance`, { method: 'POST' }),
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Weryfikacja eWUŚ nie powiodła się.'),
+  })
+
+  // UC-PP3: edycja danych kontaktowych pacjenta
+  const [editFor, setEditFor] = useState<PatientRow | null>(null)
+  const [editPhone, setEditPhone] = useState('')
+  const saveContact = useMutation({
+    mutationFn: () => api(`/patients/${editFor!.patient_id}/contact`, {
+      method: 'PATCH', body: { phone_number: editPhone },
+    }),
+    onSuccess: () => { setError(null); setEditFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać danych.'),
   })
 
   const filtered = (patients ?? []).filter(p =>
@@ -79,10 +90,15 @@ export function PacjenciPlacowki() {
                       : <Badge tone="warn">brak potwierdzenia</Badge>}
                   </td>
                   <td className="border-t border-gray-100 px-4 py-3.5 text-right">
-                    <Button size="sm" variant="secondary" disabled={verify.isPending}
-                      onClick={() => verify.mutate(p.patient_id)}>
-                      <ShieldCheck size={14} /> Weryfikuj eWUŚ
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => { setEditFor(p); setEditPhone('') }}>
+                        <Pencil size={13} /> Kontakt
+                      </Button>
+                      <Button size="sm" variant="secondary" disabled={verify.isPending}
+                        onClick={() => verify.mutate(p.patient_id)}>
+                        <ShieldCheck size={14} /> Weryfikuj eWUŚ
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -90,6 +106,28 @@ export function PacjenciPlacowki() {
           </table>
         )}
       </Tile>
+
+      {editFor && (
+        <Modal
+          overline={`${editFor.first_name} ${editFor.last_name} · PESEL ${editFor.pesel}`}
+          title="Dane kontaktowe"
+          onClose={() => setEditFor(null)}
+          footer={<>
+            <Button variant="secondary" onClick={() => setEditFor(null)}>Anuluj</Button>
+            <Button disabled={saveContact.isPending || editPhone.trim().length < 7}
+              onClick={() => saveContact.mutate()}>
+              {saveContact.isPending ? 'Zapisywanie…' : 'Zapisz'}
+            </Button>
+          </>}
+        >
+          <div className="pb-2">
+            <Field label="Telefon" hint="na ten numer pójdą SMS-y z przypomnieniami">
+              <input className={inputCls} value={editPhone} placeholder="601 234 567"
+                onChange={e => setEditPhone(e.target.value)} />
+            </Field>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -8,6 +8,7 @@ export interface Me {
   active_account: boolean
   first_name: string | null
   last_name: string | null
+  notify_sms: boolean
 }
 
 export interface AppointmentOut {

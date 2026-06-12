@@ -16,6 +16,9 @@ const EN: Record<string, string> = {
   'Udostępnij': 'Share',
   'Rodzina': 'Family',
   'Wyloguj': 'Log out',
+  'Powiadomienia SMS': 'SMS notifications',
+  'wł.': 'on',
+  'wył.': 'off',
   'Nawigacja': 'Navigation',
   'Aktywny profil': 'Active profile',
   'Działasz w imieniu: {name}. Wizyty, dokumenty i rezerwacje dotyczą tego profilu.':

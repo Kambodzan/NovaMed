@@ -1,5 +1,6 @@
-// UC-P6: udostępnianie dokumentacji jednorazowym kodem.
-import { useState } from 'react'
+// UC-P6: udostępnianie dokumentacji jednorazowym kodem (+ QR do zeskanowania).
+import { useEffect, useState } from 'react'
+import QRCode from 'qrcode'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Share2, Trash2 } from 'lucide-react'
 import { Button, EmptyState, Field, Overline, Tile, TileHeader, inputCls } from '../ui'
@@ -46,6 +47,14 @@ export function Udostepnij() {
     },
   })
 
+  // QR z kodem — personel może zeskanować zamiast przepisywać
+  const [qr, setQr] = useState<string | null>(null)
+  useEffect(() => {
+    if (!lastCode) { setQr(null); return }
+    QRCode.toDataURL(lastCode.access_code, { width: 180, margin: 1, color: { dark: '#0f766e' } })
+      .then(setQr, () => setQr(null))
+  }, [lastCode])
+
   const copy = async (code: string) => {
     await navigator.clipboard.writeText(code)
     setCopied(true)
@@ -88,6 +97,7 @@ export function Udostepnij() {
             <div className="rounded-2xl bg-primary-soft p-6 text-center">
               <Overline className="!text-primary/60">{t('Przekaż ten kod lekarzowi lub pielęgniarce')}</Overline>
               <p className="my-3 text-4xl font-extrabold tracking-[0.25em] text-primary">{lastCode.access_code}</p>
+              {qr && <img src={qr} alt="Kod QR" className="mx-auto mb-2 rounded-xl bg-white p-1" />}
               <p className="text-xs font-semibold text-gray-400">
                 {scopeLabel(lastCode)} · {t('ważny do:')} {formatDatePL(lastCode.expires_at)}, {formatTime(lastCode.expires_at)}
               </p>
