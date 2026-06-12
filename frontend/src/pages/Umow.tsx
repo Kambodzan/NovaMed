@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -126,6 +127,7 @@ export function Umow() {
   const [step, setStep] = useState(1)
   const [spec, setSpec] = useState<string | null>(null)
   const [clinicFilter, setClinicFilter] = useState<string | null>(null)
+  const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
   const [query, setQuery] = useState('')
   const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
@@ -142,7 +144,7 @@ export function Umow() {
   // żeby nie zarezerwować po cichu dla niewłaściwej osoby (płatność w toku zostaje)
   useEffect(() => {
     setStep(s => (s > 1 && payPhase === 'idle' ? 1 : s))
-    if (payPhase === 'idle') { setSlot(null); setBooked(null); setSpec(null); setClinicFilter(null) }
+    if (payPhase === 'idle') { setSlot(null); setBooked(null); setSpec(null); setClinicFilter(null); setDoctorFilter(null) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
@@ -174,6 +176,7 @@ export function Umow() {
     for (const s of allSlots ?? []) {
       if (spec && s.specialization !== spec) continue
       if (clinicFilter && s.clinic_name !== clinicFilter) continue
+      if (doctorFilter && s.doctor_id !== doctorFilter.id) continue
       const cur = map.get(s.doctor_id)
         ?? { id: s.doctor_id, name: s.doctor_name, spec: s.specialization, clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>() }
       cur.clinics.add(s.clinic_name)
@@ -190,7 +193,34 @@ export function Umow() {
           .map(([day, list]) => [day, list.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
       }))
       .sort((a, b) => a.days[0][1][0].appointment_datetime.localeCompare(b.days[0][1][0].appointment_datetime))
-  }, [allSlots, q, spec, clinicFilter])
+  }, [allSlots, q, spec, clinicFilter, doctorFilter])
+
+  // podpowiedzi wyszukiwarki: specjalizacje, lekarze i placówki w jednym miejscu
+  const suggest = async (text: string): Promise<TypeaheadItem[]> => {
+    const fq = fold(text)
+    const out: TypeaheadItem[] = []
+    for (const s of specNames.filter(s => fold(s).includes(fq)))
+      out.push({ key: `spec:${s}`, label: `${s} — ${t('specjalizacja')}`, insert: s })
+    const seen = new Set<number>()
+    for (const s of allSlots ?? []) {
+      if (seen.has(s.doctor_id)) continue
+      if (fold(s.doctor_name).includes(fq)) {
+        seen.add(s.doctor_id)
+        out.push({ key: `doc:${s.doctor_id}:${s.doctor_name}`, label: `${s.doctor_name} — ${s.specialization ?? ''}`, insert: s.doctor_name })
+      }
+    }
+    for (const c of (clinicList ?? []).filter(c => fold(c.clinic_name + c.address).includes(fq)))
+      out.push({ key: `cli:${c.clinic_name}`, label: `${c.clinic_name}, ${c.address}`, insert: c.clinic_name })
+    return out.slice(0, 10)
+  }
+
+  const applySuggestion = (item: TypeaheadItem) => {
+    const [kind, ...rest] = item.key.split(':')
+    if (kind === 'spec') setSpec(rest.join(':'))
+    else if (kind === 'doc') setDoctorFilter({ id: Number(rest[0]), name: rest.slice(1).join(':') })
+    else if (kind === 'cli') setClinicFilter(rest.join(':'))
+    setQuery('')
+  }
 
   const pickSlot = (s: AppointmentOut) => {
     setSlot(s)
@@ -263,49 +293,62 @@ export function Umow() {
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
           <div className="space-y-4">
-            <input
-              className={inputCls}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder={t('Szukaj lekarza lub specjalizacji…')}
-              autoComplete="off"
-            />
-
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <Typeahead
+                id="umow-search"
+                minLength={1}
+                value={query}
+                onChange={setQuery}
+                onPick={applySuggestion}
+                search={suggest}
+                placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
+              />
+              <select
+                aria-label={t('Specjalizacja')}
+                className={cx(inputCls, 'sm:w-44')}
+                value={spec ?? ''}
+                onChange={e => setSpec(e.target.value || null)}
+              >
+                <option value="">{t('Specjalizacja')}: {t('wszystkie')}</option>
+                {specNames.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
               {clinicNames.length > 1 && (
-                <>
-                  {[null, ...clinicNames].map(c => (
-                    <button
-                      key={c ?? 'all'}
-                      onClick={() => setClinicFilter(c)}
-                      title={c ? addressOf(c) : undefined}
-                      className={cx(
-                        'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
-                        clinicFilter === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
-                      )}
-                    >
-                      {c ?? t('Wszystkie placówki')}
-                    </button>
-                  ))}
-                  <span className="mx-1 hidden w-px bg-gray-200 sm:block" />
-                </>
-              )}
-              {specNames.map(s => (
-                <button
-                  key={s}
-                  onClick={() => setSpec(cur => cur === s ? null : s)}
-                  className={cx(
-                    'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
-                    spec === s ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
-                  )}
+                <select
+                  aria-label={t('Placówka')}
+                  className={cx(inputCls, 'sm:w-52')}
+                  value={clinicFilter ?? ''}
+                  onChange={e => setClinicFilter(e.target.value || null)}
                 >
-                  {s}
-                </button>
-              ))}
+                  <option value="">{t('Placówka')}: {t('wszystkie')}</option>
+                  {clinicNames.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
             </div>
 
-            {clinicFilter && addressOf(clinicFilter) && (
-              <p className="-mt-2 text-xs font-semibold text-gray-400">{clinicFilter} · {addressOf(clinicFilter)}</p>
+            {(spec || clinicFilter || doctorFilter) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {doctorFilter && (
+                  <button onClick={() => setDoctorFilter(null)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
+                    {doctorFilter.name} <X size={12} />
+                  </button>
+                )}
+                {spec && (
+                  <button onClick={() => setSpec(null)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
+                    {spec} <X size={12} />
+                  </button>
+                )}
+                {clinicFilter && (
+                  <button onClick={() => setClinicFilter(null)} title={addressOf(clinicFilter)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
+                    {clinicFilter} <X size={12} />
+                  </button>
+                )}
+                {clinicFilter && addressOf(clinicFilter) && (
+                  <span className="text-xs font-semibold text-gray-400">{addressOf(clinicFilter)}</span>
+                )}
+              </div>
             )}
 
             {doctorCards.length === 0 ? (
