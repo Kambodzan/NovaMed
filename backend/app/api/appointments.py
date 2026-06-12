@@ -239,7 +239,8 @@ def create_slots(
             appointment_type=body.appointment_type.value,
             price=body.price,
             service_name=body.service_name,
-            referral_required=body.referral_required if body.service_name else False,
+            # NFZ-owe badanie (bez ceny) ZAWSZE wymaga skierowania; prywatne (z ceną) — nie
+            referral_required=(body.price is None) if body.service_name else False,
         )
         db.add(a)
         created.append(a)

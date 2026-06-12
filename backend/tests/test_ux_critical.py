@@ -195,6 +195,23 @@ def test_badania_diagnostyczne_ze_skierowaniem(client, setup, factory):
                       headers=auth_header(other_token))
     assert bad.status_code == 409
 
+    # badanie PRYWATNE (z ceną) nie wymaga skierowania — NFZ-owe wymaga zawsze
+    priv = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"service_name": "USG jamy brzusznej", "datetimes": [(dt + timedelta(days=2)).isoformat()],
+              "price": 180},
+        headers=auth_header(setup["reg_token"]),
+    ).json()[0]
+    assert priv["referral_required"] is False
+    ok3 = client.post(f"/appointments/{priv['appointment_id']}/book", headers=auth_header(other_token))
+    assert ok3.status_code == 200 and ok3.json()["payment"]["payment_status"] == "PENDING"
+    nfz = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"service_name": "USG jamy brzusznej", "datetimes": [(dt + timedelta(days=3)).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    ).json()[0]
+    assert nfz["referral_required"] is True  # NFZ = skierowanie obowiązkowe
+
 
 def test_usuwanie_wolnego_slotu(client, setup):
     dt = (datetime.now() + timedelta(days=3)).replace(hour=14, minute=0, second=0, microsecond=0)

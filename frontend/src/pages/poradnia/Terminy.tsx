@@ -63,7 +63,6 @@ export function Terminy() {
         body: {
           doctor_id: form.kind === 'visit' ? Number(doctorId) : null,
           service_name: form.kind === 'exam' ? form.service.trim() : null,
-          referral_required: form.kind === 'exam' && form.referral,
           datetimes,
           appointment_type: form.type,
           price: form.price ? Number(form.price) : null,
@@ -164,13 +163,9 @@ export function Terminy() {
               </select>
             </Field>
           ) : (
-            <Field label="Badanie">
+            <Field label="Badanie" hint="bez ceny = NFZ (wymagane skierowanie); z ceną = prywatne, bez skierowania">
               <input className={inputCls} required minLength={2} value={form.service} placeholder="np. RTG klatki piersiowej"
                 onChange={e => setForm(f => ({ ...f, service: e.target.value }))} />
-              <label className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-500">
-                <input type="checkbox" checked={form.referral}
-                  onChange={e => setForm(f => ({ ...f, referral: e.target.checked }))} /> wymaga skierowania
-              </label>
             </Field>
           )}
           <Field label="Data">

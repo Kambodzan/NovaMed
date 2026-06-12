@@ -290,6 +290,7 @@ export function Umow() {
           referralRequired: s.referral_required,
           clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>(),
         }
+      cur.referralRequired = cur.referralRequired || s.referral_required
       cur.clinics.add(s.clinic_name)
       const day = s.appointment_datetime.slice(0, 10)
       cur.byDay.set(day, [...(cur.byDay.get(day) ?? []), s])
