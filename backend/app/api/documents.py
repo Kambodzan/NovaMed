@@ -78,14 +78,23 @@ class DocumentOut(BaseModel):
     code: str | None = None
     details: str | None = None
     error_message: str | None = None
+    referral_type: str | None = None  # NURSING/LAB/SPECIALIST (tylko skierowania)
 
 
 # ---------- pomocnicze ----------
+
+REFERRAL_TYPE_LABEL = {
+    "NURSING": "zabieg pielęgniarski",
+    "LAB": "badanie laboratoryjne",
+    "SPECIALIST": "konsultacja specjalistyczna",
+}
+
 
 def document_out(db: Session, doc: MedicalDocument, error_message: str | None = None) -> DocumentOut:
     doctor_user = db.get(AppUser, doc.doctor_id)
     patient = db.get(Patient, doc.patient_id)
     code = None
+    referral_type = None
     details = doc.document_content
     if doc.document_type == DocumentType.PRESCRIPTION.value:
         child = db.scalar(select(Prescription).where(Prescription.document_id == doc.document_id))
@@ -94,7 +103,9 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
     elif doc.document_type == DocumentType.REFERRAL.value:
         child = db.scalar(select(Referral).where(Referral.document_id == doc.document_id))
         if child:
-            code, details = child.referral_code, f"{child.referral_type}: {child.notes or ''}".strip(": ")
+            referral_type = child.referral_type
+            label = REFERRAL_TYPE_LABEL.get(child.referral_type, child.referral_type)
+            code, details = child.referral_code, f"{label}: {child.notes or ''}".strip(": ")
     elif doc.document_type == DocumentType.SICK_LEAVE.value:
         child = db.scalar(select(SickLeave).where(SickLeave.document_id == doc.document_id))
         if child:
@@ -114,6 +125,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         doctor_name=doctor_user.username,
         code=code,
         details=details,
+        referral_type=referral_type,
         error_message=error_message,
     )
 

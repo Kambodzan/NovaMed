@@ -383,10 +383,13 @@ export function Umow() {
   })
 
   // skierowania pacjenta z apki — do podpięcia przy badaniu ze skierowaniem
+  // (bez NURSING: zabiegi pielęgniarskie nie są skierowaniem na badanie)
   const { data: myReferrals } = useQuery({
     queryKey: ['my-referrals', activeId],
     queryFn: async () => (await api<DocumentOut[]>(asPatient('/documents/my')))
-      .filter(d => d.document_type === 'REFERRAL' && ['ACTIVE', 'CONFIRMED'].includes(d.document_status)),
+      .filter(d => d.document_type === 'REFERRAL'
+        && ['ACTIVE', 'CONFIRMED'].includes(d.document_status)
+        && d.referral_type !== 'NURSING'),
     enabled: !!slot?.referral_required,
   })
 
@@ -739,6 +742,9 @@ export function Umow() {
                           onChange={() => { setRefDocId(r.document_id); setExternalRef(false) }} />
                         <span className="text-sm font-semibold text-gray-700">
                           {t('Skierowanie z NovaMed')}: {r.details ?? r.code ?? `#${r.document_id}`}
+                          <span className="block text-xs font-medium text-gray-400">
+                            {formatDatePL(r.issued_at)}{r.code ? ` · ${r.code}` : ''}
+                          </span>
                         </span>
                       </label>
                     ))}

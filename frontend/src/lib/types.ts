@@ -114,6 +114,7 @@ export interface DocumentOut {
   code: string | null
   details: string | null
   error_message: string | null
+  referral_type: 'NURSING' | 'LAB' | 'SPECIALIST' | null
 }
 
 export interface ProcedureOut {
