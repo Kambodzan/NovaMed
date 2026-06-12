@@ -13,15 +13,15 @@ export function PacjentRecord() {
   const { id } = useParams()
 
   const { data: patient } = useQuery({
-    queryKey: ['patient', Number(id)],
+    queryKey: ['patient', id],
     queryFn: () => api<PatientInfo>(`/patients/${id}`),
   })
   const { data: documents } = useQuery({
-    queryKey: ['patient-documents', Number(id)],
+    queryKey: ['patient-documents', id],
     queryFn: () => api<DocumentOut[]>(`/patients/${id}/documents`),
   })
   const { data: visits } = useQuery({
-    queryKey: ['patient-appointments', Number(id)],
+    queryKey: ['patient-appointments', id],
     queryFn: () => api<AppointmentOut[]>(`/patients/${id}/appointments`),
   })
 
