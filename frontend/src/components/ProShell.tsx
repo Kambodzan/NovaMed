@@ -15,7 +15,10 @@ export function ProShell({ brand, nav, children }: {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-gray-100 bg-surface">
+      {/* sidebar przyklejony na wysokość okna — scrolluje się tylko treść;
+          przy bardzo niskim oknie nawigacja dostaje własny scroll, stopka z
+          wylogowaniem zawsze widoczna */}
+      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-gray-100 bg-surface">
         <div className="flex items-center gap-2.5 px-5 pt-6 pb-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white">
             <HeartPulse size={18} />
@@ -25,7 +28,7 @@ export function ProShell({ brand, nav, children }: {
             <p className="truncate text-[11px] font-bold text-gray-400">{brand}</p>
           </div>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-2" aria-label="Nawigacja główna">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2" aria-label="Nawigacja główna">
           {nav.map(item => (
             <NavLink
               key={item.to}
