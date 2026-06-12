@@ -8,19 +8,25 @@ import { Badge, Button, Field, Modal, PageHeader, StatusBadge, Tile, TileHeader,
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut, DocumentOut, PatientInfo } from '../../lib/types'
-import { KIND_LABEL, WystawDokument } from '../../components/WystawDokument'
+import { KIND_LABEL, WystawDokument, searchIcd10 } from '../../components/WystawDokument'
 import { DokumentyLista } from '../../components/DokumentyLista'
+import { Typeahead } from '../../components/Typeahead'
 
-// notatka strukturalna — sekcje sklejane do jednego dokumentu NOTE
-const EMPTY_NOTE = { wywiad: '', badanie: '', rozpoznanie: '', zalecenia: '' }
+// notatka strukturalna — sekcje sklejane do jednego dokumentu NOTE;
+// Rozpoznanie jest osobnym, JEDNYM polem (ICD-10) — wchodzi do notatki
+// i automatycznie do wystawianych recept/skierowań
+const EMPTY_NOTE = { wywiad: '', badanie: '', zalecenia: '' }
 const NOTE_SECTIONS: Array<{ key: keyof typeof EMPTY_NOTE; label: string; placeholder: string; tall?: boolean }> = [
   { key: 'wywiad', label: 'Wywiad', placeholder: 'co zgłasza pacjent, od kiedy, okoliczności…', tall: true },
   { key: 'badanie', label: 'Badanie przedmiotowe', placeholder: 'wynik badania w gabinecie…' },
-  { key: 'rozpoznanie', label: 'Rozpoznanie', placeholder: 'np. B02 — Półpasiec' },
   { key: 'zalecenia', label: 'Zalecenia', placeholder: 'leczenie, kontrola, na co uważać…', tall: true },
 ]
-const composeNote = (n: typeof EMPTY_NOTE) =>
-  NOTE_SECTIONS.map(s => n[s.key].trim() ? `${s.label}: ${n[s.key].trim()}` : null).filter(Boolean).join('\n\n')
+const composeNote = (n: typeof EMPTY_NOTE, rozpoznanie: string) => [
+  n.wywiad.trim() && `Wywiad: ${n.wywiad.trim()}`,
+  n.badanie.trim() && `Badanie przedmiotowe: ${n.badanie.trim()}`,
+  rozpoznanie.trim() && `Rozpoznanie: ${rozpoznanie.trim()}`,
+  n.zalecenia.trim() && `Zalecenia: ${n.zalecenia.trim()}`,
+].filter(Boolean).join('\n\n')
 
 type DocKind = DocumentOut['document_type']
 const HIST_KINDS: DocKind[] = ['PRESCRIPTION', 'REFERRAL', 'LAB_RESULT', 'SICK_LEAVE', 'NOTE']
@@ -30,6 +36,7 @@ export function Gabinet() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [note, setNote] = useState(EMPTY_NOTE)
+  const [rozpoznanie, setRozpoznanie] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // potwierdzenia akcji bez powrotu: NO_SHOW i zakończenie z niezapisaną notatką
@@ -38,7 +45,9 @@ export function Gabinet() {
   const [histOpen, setHistOpen] = useState(false)
   const [histFilter, setHistFilter] = useState<'ALL' | DocKind>('ALL')
   const [histLimit, setHistLimit] = useState(8)
-  const noteText = composeNote(note)
+  const noteText = composeNote(note, rozpoznanie)
+  // samo rozpoznanie nie liczy się jako „niezapisana notatka" — żyje też w dokumentach
+  const unsavedNote = Object.values(note).some(v => v.trim())
 
   const { data: visit } = useQuery({
     queryKey: ['appointment', id],
@@ -70,7 +79,7 @@ export function Gabinet() {
 
   const saveNote = useMutation({
     mutationFn: () => api(`/patients/${patientId}/notes`, {
-      method: 'POST', body: { appointment_id: Number(id), content: composeNote(note) },
+      method: 'POST', body: { appointment_id: Number(id), content: composeNote(note, rozpoznanie) },
     }),
     onSuccess: () => {
       setNote(EMPTY_NOTE)
@@ -146,7 +155,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                     <Video size={15} /> Rozmowa wideo
                   </Button>
                 )}
-                <Button onClick={() => noteText ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
+                <Button onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
                   <Square size={14} /> Zakończ wizytę
                 </Button>
               </>
@@ -210,7 +219,26 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
               <Tile className="p-5" delay={100}>
                 <TileHeader title={<span className="inline-flex items-center gap-1.5"><ClipboardPen size={13} /> Notatka z wizyty</span>} />
                 <div className="space-y-3">
-                  {NOTE_SECTIONS.map(s => (
+                  {NOTE_SECTIONS.slice(0, 2).map(s => (
+                    <Field key={s.key} label={s.label}>
+                      <textarea
+                        className={cx(inputCls, s.tall ? 'h-20' : 'h-12', 'py-2')}
+                        value={note[s.key]}
+                        onChange={e => setNote(n => ({ ...n, [s.key]: e.target.value }))}
+                        placeholder={s.placeholder}
+                      />
+                    </Field>
+                  ))}
+                  <Field label="Rozpoznanie (ICD-10)" hint="trafia do notatki i automatycznie do recept/skierowań">
+                    <Typeahead
+                      id="icd10-gabinet" minLength={1}
+                      value={rozpoznanie}
+                      onChange={setRozpoznanie}
+                      search={searchIcd10}
+                      placeholder="np. B02 albo półpasiec"
+                    />
+                  </Field>
+                  {NOTE_SECTIONS.slice(2).map(s => (
                     <Field key={s.key} label={s.label}>
                       <textarea
                         className={cx(inputCls, s.tall ? 'h-20' : 'h-12', 'py-2')}
@@ -231,7 +259,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
 
               <Tile className="p-5" delay={140}>
                 <TileHeader title="Wystaw dokument" />
-                {patientId && <WystawDokument patientId={patientId} appointmentId={Number(id)} hideKinds={['NOTE']} />}
+                {patientId && <WystawDokument patientId={patientId} appointmentId={Number(id)} hideKinds={['NOTE']} icd10={rozpoznanie} />}
               </Tile>
             </>
           ) : confirmed ? (

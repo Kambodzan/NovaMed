@@ -13,7 +13,7 @@ interface MedicationRow { med_id: number; name: string; form: string | null; str
 
 // po wybraniu w polu zostaje „B02 — Półpasiec", nie sam kod;
 // czysty kod wycinamy dopiero przy wysyłce (icdCode)
-const searchIcd10 = (q: string) =>
+export const searchIcd10 = (q: string) =>
   api<Icd10Row[]>(`/dictionaries/icd10?q=${encodeURIComponent(q)}`).then(rows =>
     rows.map(r => ({ key: r.code, label: `${r.code} — ${r.name}`, insert: `${r.code} — ${r.name}` })))
 
@@ -37,10 +37,13 @@ export const KIND_LABEL: Record<DocKind, string> = {
   NOTE: 'Notatka z wizyty',
 }
 
-export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
+export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10 }: {
   patientId: number
   appointmentId: number
   hideKinds?: DocKind[]
+  // rozpoznanie podane z zewnątrz (gabinet: jedno pole w notatce) —
+  // formularz nie pokazuje wtedy własnego pola ICD-10
+  icd10?: string
 }) {
   const queryClient = useQueryClient()
   const kinds = (Object.keys(KIND_LABEL) as DocKind[]).filter(k => !hideKinds.includes(k))
@@ -63,6 +66,10 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [key]: e.target.value }))
 
+  const externalIcd = icd10 !== undefined
+  const icd10Value = externalIcd ? icd10 : form.icd10
+  const needsIcd = kind === 'PRESCRIPTION' || kind === 'REFERRAL'
+
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['patient-documents', patientId] })
 
   const issue = useMutation({
@@ -71,11 +78,11 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
       switch (kind) {
         case 'PRESCRIPTION':
           return api<DocumentOut>(`/patients/${patientId}/prescriptions`, {
-            method: 'POST', body: { ...base, icd10: icdCode(form.icd10), drugs: form.drugs },
+            method: 'POST', body: { ...base, icd10: icdCode(icd10Value), drugs: form.drugs },
           })
         case 'REFERRAL':
           return api<DocumentOut>(`/patients/${patientId}/referrals`, {
-            method: 'POST', body: { ...base, icd10: icdCode(form.icd10), referral_type: form.referral_type, notes: form.notes || null },
+            method: 'POST', body: { ...base, icd10: icdCode(icd10Value), referral_type: form.referral_type, notes: form.notes || null },
           })
         case 'SICK_LEAVE':
           return api<DocumentOut>(`/patients/${patientId}/sick-leaves`, {
@@ -166,7 +173,7 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
         ))}
       </div>
 
-      {(kind === 'PRESCRIPTION' || kind === 'REFERRAL') && (
+      {needsIcd && !externalIcd && (
         <Field label="Rozpoznanie (ICD-10)" hint="zacznij pisać kod lub nazwę rozpoznania">
           <Typeahead
             id="icd10" minLength={1} required
@@ -176,6 +183,14 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
             placeholder="np. I10 albo nadciśnienie"
           />
         </Field>
+      )}
+      {needsIcd && externalIcd && (
+        <div className="rounded-xl bg-gray-50 px-3.5 py-2.5">
+          <p className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Rozpoznanie (ICD-10)</p>
+          {icd10Value.trim()
+            ? <p className="text-sm font-bold text-gray-900">{icd10Value}</p>
+            : <p className="text-sm font-medium text-amber-700">Uzupełnij „Rozpoznanie" w notatce obok — trafi tu automatycznie.</p>}
+        </div>
       )}
 
       {kind === 'PRESCRIPTION' && (
@@ -241,7 +256,7 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
       )}
 
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-      <Button disabled={issue.isPending} type="submit">
+      <Button disabled={issue.isPending || (needsIcd && externalIcd && !icd10Value.trim())} type="submit">
         <Send size={14} /> {issue.isPending ? 'Wystawianie…' : 'Wystaw'}
       </Button>
     </form>
