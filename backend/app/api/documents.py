@@ -536,6 +536,21 @@ def my_documents(
     return [document_out(db, d) for d in rows]
 
 
+@router.get("/documents/issued", response_model=list[DocumentOut])
+def issued_documents(
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Dokumenty wystawione przez zalogowanego lekarza (rejestr własnej pracy)."""
+    rows = db.scalars(
+        select(MedicalDocument)
+        .where(MedicalDocument.doctor_id == user.user_id)
+        .order_by(MedicalDocument.issued_at.desc())
+        .limit(500)
+    )
+    return [document_out(db, d) for d in rows]
+
+
 @router.get("/documents/{document_id}/pdf")
 def document_pdf(
     document_id: int,

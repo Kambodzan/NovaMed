@@ -120,6 +120,21 @@ export interface DocumentOut {
   appointment_id: number | null
 }
 
+export interface ReviewOut {
+  review_id: number
+  rating: number
+  comment: string | null
+  created_at: string
+  target: 'doctor' | 'clinic'
+}
+
+export interface DoctorReviewsOut {
+  doctor_id: number
+  average: number | null
+  count: number
+  items: ReviewOut[]
+}
+
 export interface ProcedureOut {
   procedure_id: number
   procedure_datetime: string

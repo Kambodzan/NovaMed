@@ -13,9 +13,10 @@ const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
   SICK_LEAVE: FileText, NOTE: FileText,
 }
 
-export function DokumentyLista({ documents, emptyHint }: {
+export function DokumentyLista({ documents, emptyHint, byline = 'doctor' }: {
   documents: DocumentOut[]
   emptyHint?: string
+  byline?: 'doctor' | 'patient' // czyje nazwisko w wierszu (rejestr lekarza → pacjent)
 }) {
   const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   if (documents.length === 0) {
@@ -45,7 +46,7 @@ export function DokumentyLista({ documents, emptyHint }: {
               </p>
               <p className="mt-0.5 text-sm font-bold break-words text-gray-900">{d.details ?? '—'}</p>
               <p className="mt-0.5 text-xs font-semibold text-gray-400">
-                {d.doctor_name}{d.code ? <> · kod: <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-extrabold tracking-[0.15em] text-gray-900">{d.code}</span></> : null}
+                {byline === 'patient' ? d.patient_name : d.doctor_name}{d.code ? <> · kod: <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-extrabold tracking-[0.15em] text-gray-900">{d.code}</span></> : null}
               </p>
             </div>
             <StatusBadge status={d.document_status} />

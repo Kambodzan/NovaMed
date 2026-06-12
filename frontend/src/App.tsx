@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, KeyRound as KeyIcon, Plug, Users } from 'lucide-react'
+import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { Login } from './pages/Login'
@@ -20,6 +20,9 @@ import { Telewizyta } from './pages/Telewizyta'
 import { Udostepnij } from './pages/Udostepnij'
 import { KodOdPacjenta } from './pages/KodOdPacjenta'
 import { LekarzDzien } from './pages/lekarz/Dzien'
+import { LekarzKalendarz } from './pages/lekarz/Kalendarz'
+import { LekarzDokumenty } from './pages/lekarz/Dokumenty'
+import { LekarzOpinie } from './pages/lekarz/Opinie'
 import { Gabinet } from './pages/lekarz/Gabinet'
 import { StaffPacjenci } from './pages/staff/Pacjenci'
 import { PacjentRecord } from './pages/staff/PacjentRecord'
@@ -38,7 +41,10 @@ function LekarzLayout() {
       brand="Portal Lekarza"
       nav={[
         { to: '/', label: 'Mój dzień', icon: CalendarDays, end: true },
+        { to: '/kalendarz', label: 'Kalendarz', icon: CalendarRange },
         { to: '/pacjenci', label: 'Pacjenci', icon: Users },
+        { to: '/dokumenty', label: 'Dokumenty', icon: FileText },
+        { to: '/opinie', label: 'Opinie', icon: Star },
         { to: '/kod', label: 'Kod od pacjenta', icon: FileSignature },
       ]}
     >
@@ -135,6 +141,9 @@ export default function App() {
       {token && me && role === 'lekarz' && (
         <Route path="/" element={<LekarzLayout />}>
           <Route index element={<LekarzDzien />} />
+          <Route path="kalendarz" element={<LekarzKalendarz />} />
+          <Route path="dokumenty" element={<LekarzDokumenty />} />
+          <Route path="opinie" element={<LekarzOpinie />} />
           <Route path="wizyta/:id" element={<Gabinet />} />
           <Route path="pacjenci" element={<StaffPacjenci />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
