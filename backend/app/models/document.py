@@ -1,8 +1,10 @@
 # Dokumentacja medyczna: dokument bazowy + specjalizacje 1:1
 # (prescription / referral / lab_result / sick_leave) — zgodnie ze schematem danych.
+import uuid
+
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -11,10 +13,10 @@ from app.core.db import Base
 class MedicalDocument(Base):
     __tablename__ = "medical_document"
 
-    document_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    appointment_id: Mapped[int] = mapped_column(ForeignKey("appointment.appointment_id"))
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patient.patient_id"))
-    doctor_id: Mapped[int] = mapped_column(ForeignKey("doctor.doctor_id"))
+    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.appointment_id"))
+    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patient.patient_id"))
+    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctor.doctor_id"))
     issued_at: Mapped[datetime] = mapped_column(DateTime)
     document_type: Mapped[str] = mapped_column(String(50))  # PRESCRIPTION/REFERRAL/LAB_RESULT/SICK_LEAVE/NOTE
     document_content: Mapped[str | None] = mapped_column(Text)
@@ -32,8 +34,8 @@ class Prescription(Base):
 
     __tablename__ = "prescription"
 
-    prescription_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("medical_document.document_id"))
+    prescription_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     prescription_code: Mapped[str] = mapped_column(String(50))  # kod z (mock) P1
     prescribed_drugs: Mapped[str] = mapped_column(Text)
 
@@ -43,8 +45,8 @@ class Prescription(Base):
 class Referral(Base):
     __tablename__ = "referral"
 
-    referral_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("medical_document.document_id"))
+    referral_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     referral_code: Mapped[str] = mapped_column(String(50))
     referral_type: Mapped[str] = mapped_column(String(100))  # m.in. zabieg pielęgniarski, badanie lab
     notes: Mapped[str | None] = mapped_column(Text)
@@ -57,8 +59,8 @@ class LabResult(Base):
 
     __tablename__ = "lab_result"
 
-    lab_result_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("medical_document.document_id"))
+    lab_result_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     test_type: Mapped[str] = mapped_column(String(100))
     test_description: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(String(255))
@@ -69,8 +71,8 @@ class LabResult(Base):
 class SickLeave(Base):
     __tablename__ = "sick_leave"
 
-    sick_leave_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("medical_document.document_id"))
+    sick_leave_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     sick_leave_code: Mapped[str] = mapped_column(String(50))
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)

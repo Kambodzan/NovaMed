@@ -1,6 +1,7 @@
 # Udostępnianie dokumentacji jednorazowym kodem (UC-P6).
 # Pacjent generuje kod (zakres + ważność) i przekazuje go personelowi;
 # lekarz/pielęgniarka otwierają kodem podgląd dokumentacji w zakresie.
+from uuid import UUID
 import secrets
 from datetime import datetime, timedelta
 
@@ -41,7 +42,7 @@ class ShareIn(BaseModel):
 
 
 class ShareOut(BaseModel):
-    share_id: int
+    share_id: UUID
     access_code: str
     scope: str
     scope_label: str
@@ -54,7 +55,7 @@ class AccessIn(BaseModel):
 
 
 class SharedDocsOut(BaseModel):
-    patient_id: int
+    patient_id: UUID
     patient_name: str
     pesel: str
     scope_label: str
@@ -107,7 +108,7 @@ def my_shares(
 
 @router.delete("/{share_id}", status_code=status.HTTP_204_NO_CONTENT)
 def revoke_share(
-    share_id: int,
+    share_id: UUID,
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):

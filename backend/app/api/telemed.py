@@ -4,6 +4,7 @@
 # (offer/answer/ICE) i przekazuje czat przez WebSocket pokoju wizyty.
 # Czat jest efemeryczny (na czas rozmowy) — trwałe są dokumenty wystawiane
 # w trakcie wizyty i załączniki.
+from uuid import UUID
 import re
 import uuid
 from pathlib import Path
@@ -36,7 +37,7 @@ def is_participant(db: Session, a: Appointment, user: AppUser) -> bool:
     return user.user_id == a.doctor_id or a.patient_id in allowed_patient_ids(db, user)
 
 
-def assert_participant(db: Session, appointment_id: int, user: AppUser) -> Appointment:
+def assert_participant(db: Session, appointment_id: UUID, user: AppUser) -> Appointment:
     a = db.get(Appointment, appointment_id)
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
@@ -53,17 +54,17 @@ class RoomManager:
     def __init__(self):
         self.rooms: dict[int, dict[int, WebSocket]] = {}
 
-    async def join(self, appointment_id: int, user_id: int, ws: WebSocket) -> None:
+    async def join(self, appointment_id: UUID, user_id: UUID, ws: WebSocket) -> None:
         room = self.rooms.setdefault(appointment_id, {})
         room[user_id] = ws
 
-    def leave(self, appointment_id: int, user_id: int) -> None:
+    def leave(self, appointment_id: UUID, user_id: UUID) -> None:
         room = self.rooms.get(appointment_id, {})
         room.pop(user_id, None)
         if not room:
             self.rooms.pop(appointment_id, None)
 
-    async def relay(self, appointment_id: int, sender_id: int, message: dict) -> None:
+    async def relay(self, appointment_id: UUID, sender_id: UUID, message: dict) -> None:
         for uid, ws in list(self.rooms.get(appointment_id, {}).items()):
             if uid != sender_id:
                 await ws.send_json(message)
@@ -75,7 +76,7 @@ manager = RoomManager()
 @router.websocket("/ws/telemed/{appointment_id}")
 async def telemed_ws(
     ws: WebSocket,
-    appointment_id: int,
+    appointment_id: UUID,
     token: str = "",
     db: Session = Depends(get_db),
 ):
@@ -127,7 +128,7 @@ class AttachmentOut(BaseModel):
 
 @router.post("/telemed/{appointment_id}/attachments", status_code=status.HTTP_201_CREATED, response_model=AttachmentOut)
 async def upload_attachment(
-    appointment_id: int,
+    appointment_id: UUID,
     file: UploadFile,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -153,7 +154,7 @@ async def upload_attachment(
 
 @router.get("/telemed/{appointment_id}/attachments/{filename}")
 def download_attachment(
-    appointment_id: int,
+    appointment_id: UUID,
     filename: str,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),

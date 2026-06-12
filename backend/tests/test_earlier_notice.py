@@ -25,7 +25,7 @@ def make_slot(client, s, days_ahead=3, hour=10):
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     return client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(s["reg_token"]),
     ).json()[0]
 
@@ -117,5 +117,5 @@ def test_ustawienia_placowki_rbac_i_walidacja(client, setup):
     # wartość widoczna na liście placówek
     client.patch(url, json={"earlier_notice_min_hours": 48}, headers=auth_header(setup["reg_token"]))
     clinics = client.get("/clinics", headers=auth_header(setup["patient_token"])).json()
-    me = next(c for c in clinics if c["clinic_id"] == setup["clinic"].clinic_id)
+    me = next(c for c in clinics if c["clinic_id"] == str(setup["clinic"].clinic_id))
     assert me["earlier_notice_min_hours"] == 48

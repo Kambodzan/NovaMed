@@ -1,5 +1,6 @@
 # Słowniki ICD-10 i leków — podpowiedzi (typeahead) przy wystawianiu dokumentów.
 # Dane ładowane importerem scripts/import-dictionaries.py.
+from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import or_, select
@@ -20,7 +21,7 @@ class Icd10Out(BaseModel):
 
 
 class MedicationOut(BaseModel):
-    med_id: int
+    med_id: UUID
     name: str
     form: str | None
     strength: str | None

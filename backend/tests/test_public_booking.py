@@ -25,7 +25,7 @@ def make_slot(client, s, days_ahead=3, hour=10, **extra):
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     body = {"datetimes": [dt.isoformat()], **extra}
     if "service_name" not in extra:
-        body["doctor_id"] = s["doctor"].user_id
+        body["doctor_id"] = str(s["doctor"].user_id)
     return client.post(f"/clinics/{s['clinic'].clinic_id}/slots", json=body,
                        headers=auth_header(s["reg_token"])).json()[0]
 

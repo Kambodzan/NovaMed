@@ -36,7 +36,7 @@ def enable_confirmation(client, s, hours=48):
 def book_at(client, s, dt) -> int:
     slot = client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(s["reg_token"]),
     ).json()[0]
     resp = client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(s["patient_token"]))
@@ -94,7 +94,7 @@ def test_wolnego_slotu_nie_da_sie_potwierdzic(client, setup):
     dt = (datetime.now() + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(s["reg_token"]),
     ).json()[0]
     resp = client.post(f"/appointments/{slot['appointment_id']}/confirm-attendance", headers=auth_header(s["patient_token"]))

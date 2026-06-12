@@ -1,3 +1,4 @@
+from uuid import UUID
 import csv
 import io
 from datetime import datetime
@@ -19,7 +20,7 @@ REPORT_ROLES = ("rejestracja", "kierownik", "administrator")
 
 
 class DoctorLoadOut(BaseModel):
-    doctor_id: int
+    doctor_id: UUID
     doctor_name: str
     booked: int
     completed: int
@@ -44,7 +45,7 @@ def month_range(month: str) -> tuple[datetime, datetime]:
     return start, end
 
 
-def build_report(db: Session, clinic_id: int, month: str) -> ReportOut:
+def build_report(db: Session, clinic_id: UUID, month: str) -> ReportOut:
     """UC-PP4: statystyki miesiąca. „Wizyta" = termin z przypisanym pacjentem
     (wolne sloty nie wchodzą do statystyk)."""
     if db.get(Clinic, clinic_id) is None:
@@ -86,7 +87,7 @@ def build_report(db: Session, clinic_id: int, month: str) -> ReportOut:
 
 @router.get("/clinics/{clinic_id}/reports", response_model=ReportOut)
 def clinic_report(
-    clinic_id: int,
+    clinic_id: UUID,
     month: str = Query(description="Miesiąc w formacie YYYY-MM"),
     _: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
@@ -96,7 +97,7 @@ def clinic_report(
 
 @router.get("/clinics/{clinic_id}/reports/csv", response_class=PlainTextResponse)
 def clinic_report_csv(
-    clinic_id: int,
+    clinic_id: UUID,
     month: str = Query(description="Miesiąc w formacie YYYY-MM"),
     _: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),

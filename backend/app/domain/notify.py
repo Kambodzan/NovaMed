@@ -1,12 +1,13 @@
 # Powiadomienia domenowe (UC-P7): zapis do tabeli notification przy zdarzeniach
 # + kanał SMS (best-effort, na numer z konta; mock bramki w mocks/sms).
+from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.integrations.sms import get_sms_client
 from app.models import AppUser, Notification, Patient
 
 
-def notify(db: Session, user_id: int, title: str, content: str) -> None:
+def notify(db: Session, user_id: UUID, title: str, content: str) -> None:
     """Dopisuje powiadomienie w ramach bieżącej transakcji wywołującego.
     SMS wysyłany od razu (poza transakcją DB) — jego awaria niczego nie psuje.
     Powiadomienia podopiecznego (konta rodzinne) trafiają do opiekuna —

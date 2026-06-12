@@ -2,6 +2,7 @@
 # profile podopiecznych i działa w ich imieniu (parametr ?as_patient=).
 # Podopieczny nie loguje się sam: app_user.active_account = False, brak konta
 # w Supabase (syntetyczny supabase_uid), a powiadomienia trafiają do opiekuna.
+from uuid import UUID
 import uuid
 from datetime import date
 
@@ -42,14 +43,14 @@ class DependentIn(BaseModel):
 
 
 class DependentOut(BaseModel):
-    patient_id: int
+    patient_id: UUID
     first_name: str
     last_name: str
     pesel: str
     birth_date: date
 
 
-def resolve_patient_id(db: Session, user: AppUser, as_patient: int | None) -> int:
+def resolve_patient_id(db: Session, user: AppUser, as_patient: UUID | None) -> int:
     """Pacjent działa za siebie albo za podopiecznego (patient.guardian_id)."""
     if as_patient is None or as_patient == user.user_id:
         return user.user_id
@@ -59,7 +60,7 @@ def resolve_patient_id(db: Session, user: AppUser, as_patient: int | None) -> in
     return as_patient
 
 
-def allowed_patient_ids(db: Session, user: AppUser) -> set[int]:
+def allowed_patient_ids(db: Session, user: AppUser) -> set[UUID]:
     """Pacjenci, w których imieniu może działać użytkownik (on sam + podopieczni)."""
     ids = {user.user_id}
     ids.update(db.scalars(select(Patient.patient_id).where(Patient.guardian_id == user.user_id)))
@@ -98,7 +99,7 @@ def add_dependent(
 
 @router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
 def unlink_dependent(
-    patient_id: int,
+    patient_id: UUID,
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):

@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 class NotificationOut(BaseModel):
-    notification_id: int
+    notification_id: UUID
     sent_at: datetime
     notification_title: str
     notification_content: str
@@ -56,7 +57,7 @@ def unread_count(user: AppUser = Depends(get_current_user), db: Session = Depend
 
 @router.post("/{notification_id}/read", response_model=NotificationOut)
 def mark_read(
-    notification_id: int,
+    notification_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

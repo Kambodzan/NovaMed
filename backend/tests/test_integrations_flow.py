@@ -20,7 +20,7 @@ def setup(client, factory):
 
 def make_slot(client, s, price=None, days_ahead=3, hour=10):
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
-    body = {"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]}
+    body = {"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]}
     if price is not None:
         body["price"] = price
     resp = client.post(f"/clinics/{s['clinic'].clinic_id}/slots", json=body, headers=auth_header(s["reg_token"]))

@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 class ReviewIn(BaseModel):
     """UC-P8: ocena lekarza i/lub kliniki po odbytej wizycie — minimum jedna z dwóch."""
 
-    appointment_id: int
+    appointment_id: UUID
     doctor_rating: int | None = Field(default=None, ge=1, le=5)
     doctor_comment: str | None = None
     clinic_rating: int | None = Field(default=None, ge=1, le=5)
@@ -30,7 +31,7 @@ class ReviewIn(BaseModel):
 
 
 class ReviewOut(BaseModel):
-    review_id: int
+    review_id: UUID
     rating: int
     comment: str | None
     created_at: datetime
@@ -38,7 +39,7 @@ class ReviewOut(BaseModel):
 
 
 class DoctorReviewsOut(BaseModel):
-    doctor_id: int
+    doctor_id: UUID
     average: float | None
     count: int
     items: list[ReviewOut]
@@ -100,7 +101,7 @@ def create_review(
 
 @router.get("/doctor/{doctor_id}", response_model=DoctorReviewsOut)
 def doctor_reviews(
-    doctor_id: int,
+    doctor_id: UUID,
     _: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

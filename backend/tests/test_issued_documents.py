@@ -24,7 +24,7 @@ def test_rejestr_wystawionych_dokumentow(client, setup, factory):
     dt = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(s["reg_token"]),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(s["patient_token"]))

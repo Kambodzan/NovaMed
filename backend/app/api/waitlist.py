@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,7 +18,7 @@ class WaitlistIn(BaseModel):
 
 
 class WaitlistOut(BaseModel):
-    entry_id: int
+    entry_id: UUID
     specialization: str
     created_at: datetime
 
@@ -52,7 +53,7 @@ def my_waitlist(
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def leave_waitlist(
-    entry_id: int,
+    entry_id: UUID,
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):

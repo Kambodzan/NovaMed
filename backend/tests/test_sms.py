@@ -13,7 +13,7 @@ def test_sms_przy_potwierdzeniu_wizyty(client, factory, integration_fakes):
     dt = (datetime.now() + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{clinic.clinic_id}/slots",
-        json={"doctor_id": doctor_user.user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(reg_token),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(patient_token))
@@ -37,7 +37,7 @@ def test_sms_brak_numeru_nie_wysyla(client, factory, integration_fakes, db_sessi
     dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{clinic.clinic_id}/slots",
-        json={"doctor_id": doctor_user.user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(reg_token),
     ).json()[0]
     resp = client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(patient_token))

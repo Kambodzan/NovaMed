@@ -12,7 +12,7 @@ from app.core.db import Base
 class Role(Base):
     __tablename__ = "role"
 
-    role_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     role_name: Mapped[str] = mapped_column(String(50))
     role_description: Mapped[str | None] = mapped_column(String(255))
 
@@ -22,8 +22,8 @@ class Role(Base):
 class AppUser(Base):
     __tablename__ = "app_user"
 
-    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    role_id: Mapped[int] = mapped_column(ForeignKey("role.role_id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("role.role_id"))
     # Tożsamość w Supabase Auth (claim `sub` tokenu JWT)
     supabase_uid: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True)
     username: Mapped[str] = mapped_column(String(50))
@@ -43,7 +43,7 @@ class AppUser(Base):
 class Administrator(Base):
     __tablename__ = "administrator"
 
-    administrator_id: Mapped[int] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
+    administrator_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     is_system_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_clinic_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -53,7 +53,7 @@ class Administrator(Base):
 class Doctor(Base):
     __tablename__ = "doctor"
 
-    doctor_id: Mapped[int] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
+    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     license_number: Mapped[str] = mapped_column(String(50))
     specialization: Mapped[str | None] = mapped_column(String(100))
     academic_title: Mapped[str | None] = mapped_column(String(100))
@@ -64,7 +64,7 @@ class Doctor(Base):
 class Nurse(Base):
     __tablename__ = "nurse"
 
-    nurse_id: Mapped[int] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
+    nurse_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     license_number: Mapped[str] = mapped_column(String(50))
     specialization: Mapped[str | None] = mapped_column(String(100))
 
@@ -74,7 +74,7 @@ class Nurse(Base):
 class Patient(Base):
     __tablename__ = "patient"
 
-    patient_id: Mapped[int] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
+    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     first_name: Mapped[str] = mapped_column(String(50))
     last_name: Mapped[str] = mapped_column(String(50))
     pesel: Mapped[str] = mapped_column(String(11))
@@ -82,7 +82,7 @@ class Patient(Base):
     insurance_status: Mapped[bool] = mapped_column(Boolean, default=False)  # aktualizowane z eWUŚ
     # Konta rodzinne (rozszerzenie ERD): opiekun zarządza
     # wizytami i dokumentacją podopiecznego; podopieczny nie loguje się sam.
-    guardian_id: Mapped[int | None] = mapped_column(ForeignKey("app_user.user_id"))
+    guardian_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.user_id"))
 
     user: Mapped["AppUser"] = relationship(foreign_keys=[patient_id])
     guardian: Mapped["AppUser | None"] = relationship(foreign_keys=[guardian_id])

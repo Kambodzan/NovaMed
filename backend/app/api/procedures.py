@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,7 +22,7 @@ ST_CANCELLED = "CANCELLED"
 
 
 class PlanProcedureIn(BaseModel):
-    referral_document_id: int
+    referral_document_id: UUID
     procedure_datetime: datetime
 
 
@@ -30,12 +31,12 @@ class CompleteProcedureIn(BaseModel):
 
 
 class ProcedureOut(BaseModel):
-    procedure_id: int
+    procedure_id: UUID
     procedure_datetime: datetime
     procedure_type: str
     procedure_status: str
     notes: str | None
-    patient_id: int
+    patient_id: UUID
     patient_name: str
     referral_code: str
     ordered_by: str
@@ -120,7 +121,7 @@ def procedures_day(
     return [procedure_out(db, p) for p in rows]
 
 
-def get_own_procedure(procedure_id: int, user: AppUser, db: Session) -> NursingProcedure:
+def get_own_procedure(procedure_id: UUID, user: AppUser, db: Session) -> NursingProcedure:
     p = db.get(NursingProcedure, procedure_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zabieg nie istnieje.")
@@ -131,7 +132,7 @@ def get_own_procedure(procedure_id: int, user: AppUser, db: Session) -> NursingP
 
 @router.post("/{procedure_id}/complete", response_model=ProcedureOut)
 def complete_procedure(
-    procedure_id: int,
+    procedure_id: UUID,
     body: CompleteProcedureIn,
     user: AppUser = Depends(require_roles("pielegniarka")),
     db: Session = Depends(get_db),
@@ -151,7 +152,7 @@ def complete_procedure(
 
 @router.post("/{procedure_id}/cancel", response_model=ProcedureOut)
 def cancel_procedure(
-    procedure_id: int,
+    procedure_id: UUID,
     user: AppUser = Depends(require_roles("pielegniarka")),
     db: Session = Depends(get_db),
 ):

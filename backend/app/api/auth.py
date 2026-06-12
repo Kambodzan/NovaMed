@@ -1,3 +1,4 @@
+from uuid import UUID
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -34,7 +35,7 @@ class RegisterProfileIn(BaseModel):
 
 
 class MeOut(BaseModel):
-    user_id: int
+    user_id: UUID
     email: str
     username: str
     role: str

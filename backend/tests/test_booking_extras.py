@@ -22,7 +22,7 @@ def make_slot(client, s, days_ahead=3, hour=10):
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     return client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(s["reg_token"]),
     ).json()[0]
 
@@ -101,7 +101,7 @@ def test_seria_cykliczna_tworzy_wszystkie_sloty(client, setup):
     dts = [(base + timedelta(weeks=i)).isoformat() for i in range(4)]
     resp = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": dts},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": dts},
         headers=auth_header(setup["reg_token"]),
     )
     assert resp.status_code == 201
@@ -112,7 +112,7 @@ def test_seria_z_konfliktem_jest_atomowa(client, setup):
     base = (datetime.now() + timedelta(days=8)).replace(hour=8, minute=30, second=0, microsecond=0)
     first = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [(base + timedelta(weeks=1)).isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [(base + timedelta(weeks=1)).isoformat()]},
         headers=auth_header(setup["reg_token"]),
     )
     assert first.status_code == 201
@@ -121,7 +121,7 @@ def test_seria_z_konfliktem_jest_atomowa(client, setup):
     dts = [(base + timedelta(weeks=i)).isoformat() for i in range(3)]
     resp = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": dts},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": dts},
         headers=auth_header(setup["reg_token"]),
     )
     assert resp.status_code == 409

@@ -1,3 +1,4 @@
+from uuid import UUID
 import json
 import secrets
 from datetime import date, datetime
@@ -31,20 +32,20 @@ STAFF_ROLES = ("lekarz", "pielegniarka", "rejestracja", "kierownik", "administra
 # ---------- schematy ----------
 
 class PrescriptionIn(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     icd10: str = Field(min_length=3, max_length=10)
     drugs: str = Field(min_length=3)
 
 
 class ReferralIn(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     referral_type: ReferralType
     icd10: str = Field(min_length=3, max_length=10)
     notes: str | None = None
 
 
 class SickLeaveIn(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     date_from: date
     date_to: date
     indication: str = Field(default="chory powinien leżeć", max_length=255)
@@ -57,29 +58,29 @@ class SickLeaveIn(BaseModel):
 
 
 class LabResultIn(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     test_type: str = Field(min_length=2, max_length=100)
     test_description: str = Field(min_length=2)
 
 
 class NoteIn(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     content: str = Field(min_length=2)
 
 
 class DocumentOut(BaseModel):
-    document_id: int
+    document_id: UUID
     document_type: str
     document_status: str
     issued_at: datetime
-    patient_id: int
+    patient_id: UUID
     patient_name: str
     doctor_name: str
     code: str | None = None
     details: str | None = None
     error_message: str | None = None
     referral_type: str | None = None  # NURSING/LAB/SPECIALIST (tylko skierowania)
-    appointment_id: int | None = None  # wizyta, w której wystawiono dokument
+    appointment_id: UUID | None = None  # wizyta, w której wystawiono dokument
 
 
 # ---------- pomocnicze ----------
@@ -132,7 +133,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
     )
 
 
-def validate_visit(db: Session, doctor: AppUser, patient_id: int, appointment_id: int) -> Appointment:
+def validate_visit(db: Session, doctor: AppUser, patient_id: UUID, appointment_id: UUID) -> Appointment:
     """Dokument zawsze powstaje w kontekście wizyty lekarza z TYM pacjentem."""
     if db.get(Patient, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
@@ -146,7 +147,7 @@ def validate_visit(db: Session, doctor: AppUser, patient_id: int, appointment_id
     return a
 
 
-def new_document(doctor_id: int, patient_id: int, appointment_id: int, doc_type: DocumentType,
+def new_document(doctor_id: UUID, patient_id: UUID, appointment_id: UUID, doc_type: DocumentType,
                  doc_status: DocumentStatus, content: str | None = None) -> MedicalDocument:
     return MedicalDocument(
         appointment_id=appointment_id,
@@ -159,7 +160,7 @@ def new_document(doctor_id: int, patient_id: int, appointment_id: int, doc_type:
     )
 
 
-def doctor_pwz(db: Session, doctor_id: int) -> str:
+def doctor_pwz(db: Session, doctor_id: UUID) -> str:
     return db.get(Doctor, doctor_id).license_number
 
 
@@ -184,7 +185,7 @@ def notify_new_document(db: Session, doc: MedicalDocument, code: str | None = No
 
 @router.post("/patients/{patient_id}/prescriptions", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
 def issue_prescription(
-    patient_id: int,
+    patient_id: UUID,
     body: PrescriptionIn,
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
@@ -217,7 +218,7 @@ def issue_prescription(
 
 @router.post("/patients/{patient_id}/referrals", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
 def issue_referral(
-    patient_id: int,
+    patient_id: UUID,
     body: ReferralIn,
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
@@ -280,7 +281,7 @@ def issue_referral(
 
 @router.post("/patients/{patient_id}/sick-leaves", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
 def issue_sick_leave(
-    patient_id: int,
+    patient_id: UUID,
     body: SickLeaveIn,
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
@@ -315,7 +316,7 @@ def issue_sick_leave(
 
 @router.post("/patients/{patient_id}/lab-results", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
 def add_lab_result(
-    patient_id: int,
+    patient_id: UUID,
     body: LabResultIn,
     user: AppUser = Depends(require_roles("lekarz", "rejestracja", "kierownik")),
     db: Session = Depends(get_db),
@@ -346,7 +347,7 @@ def add_lab_result(
 
 @router.post("/patients/{patient_id}/notes", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
 def add_note(
-    patient_id: int,
+    patient_id: UUID,
     body: NoteIn,
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
@@ -362,7 +363,7 @@ def add_note(
 
 @router.post("/documents/{document_id}/resend", response_model=DocumentOut)
 def resend_document(
-    document_id: int,
+    document_id: UUID,
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
     p1: P1Client = Depends(get_p1_client),
@@ -417,7 +418,7 @@ def resend_document(
 # ---------- wgląd ----------
 
 class PatientInfoOut(BaseModel):
-    patient_id: int
+    patient_id: UUID
     first_name: str
     last_name: str
     pesel: str
@@ -443,7 +444,7 @@ def patient_info_out(db: Session, p: Patient) -> PatientInfoOut:
 
 @router.get("/patients/{patient_id}", response_model=PatientInfoOut)
 def patient_info(
-    patient_id: int,
+    patient_id: UUID,
     _: AppUser = Depends(require_roles(*STAFF_ROLES)),
     db: Session = Depends(get_db),
 ):
@@ -462,7 +463,7 @@ class PatientContactIn(BaseModel):
 
 @router.patch("/patients/{patient_id}/contact", response_model=PatientInfoOut)
 def update_patient_contact(
-    patient_id: int,
+    patient_id: UUID,
     body: PatientContactIn,
     _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
@@ -485,7 +486,7 @@ def update_patient_contact(
 
 @router.post("/patients/{patient_id}/verify-insurance", response_model=PatientInfoOut)
 def verify_insurance(
-    patient_id: int,
+    patient_id: UUID,
     user: AppUser = Depends(require_roles(*STAFF_ROLES)),
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
@@ -504,7 +505,7 @@ def verify_insurance(
 
 @router.get("/patients/{patient_id}/documents", response_model=list[DocumentOut])
 def patient_documents(
-    patient_id: int,
+    patient_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -523,7 +524,7 @@ def patient_documents(
 
 @router.get("/documents/my", response_model=list[DocumentOut])
 def my_documents(
-    as_patient: int | None = Query(default=None),
+    as_patient: UUID | None = Query(default=None),
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
@@ -553,7 +554,7 @@ def issued_documents(
 
 @router.get("/documents/{document_id}/pdf")
 def document_pdf(
-    document_id: int,
+    document_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

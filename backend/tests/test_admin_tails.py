@@ -24,7 +24,7 @@ def completed_visit(client, s) -> int:
     dt = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(s["reg_token"]),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(s["patient_token"]))
@@ -64,7 +64,7 @@ def test_opinia_nieodbytej_wizyty_409(client, setup):
     dt = (datetime.now() + timedelta(days=2)).replace(hour=11, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(setup["reg_token"]),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
@@ -79,7 +79,7 @@ def test_powiadomienia_rezerwacja_i_odczyt(client, setup):
     dt = (datetime.now() + timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(setup["reg_token"]),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
@@ -122,7 +122,7 @@ def test_lista_oczekujacych_i_powiadomienie_o_slotach(client, setup):
     dt = (datetime.now() + timedelta(days=3)).replace(hour=9, minute=0, second=0, microsecond=0)
     client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(setup["reg_token"]),
     )
     assert client.get("/waiting-list/my", headers=auth_header(setup["patient_token"])).json() == []

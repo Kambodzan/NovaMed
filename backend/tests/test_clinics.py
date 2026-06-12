@@ -10,7 +10,7 @@ def test_tworzenie_kliniki_tylko_admin(client, factory):
 
     resp = client.post("/clinics", json=body, headers=auth_header(admin_token))
     assert resp.status_code == 201
-    assert resp.json()["clinic_id"] > 0
+    assert resp.json()["clinic_id"]
 
     resp = client.get("/clinics", headers=auth_header(patient_token))
     assert resp.status_code == 200
@@ -24,14 +24,14 @@ def test_personel_i_lekarze_placowki(client, factory):
 
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/staff",
-        json={"user_id": doctor_user.user_id},
+        json={"user_id": str(doctor_user.user_id)},
         headers=auth_header(reg_token),
     )
     assert resp.status_code == 201
     # podwójne przypisanie
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/staff",
-        json={"user_id": doctor_user.user_id},
+        json={"user_id": str(doctor_user.user_id)},
         headers=auth_header(reg_token),
     )
     assert resp.status_code == 409
@@ -50,7 +50,7 @@ def test_pacjenci_placowki_rbac(client, factory):
 
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/patients",
-        json={"patient_id": patient_user.user_id},
+        json={"patient_id": str(patient_user.user_id)},
         headers=auth_header(reg_token),
     )
     assert resp.status_code == 201

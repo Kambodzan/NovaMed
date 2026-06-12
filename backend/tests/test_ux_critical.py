@@ -25,7 +25,7 @@ def setup(client, factory):
 def make_slots(client, s, dts, price=None):
     return client.post(
         f"/clinics/{s['clinic'].clinic_id}/slots",
-        json={"doctor_id": s["doctor"].user_id, "datetimes": dts, "price": price},
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": dts, "price": price},
         headers=auth_header(s["reg_token"]),
     ).json()
 
@@ -61,8 +61,10 @@ def test_porzucony_temp_lock_wraca_do_puli(client, setup, db_session):
     assert release_expired_temp_locks(db_session) == 0
 
     # postarz płatność o 30 min → sprzątanie zwalnia slot
+    from uuid import UUID
+
     from sqlalchemy import select
-    payment = db_session.scalar(select(Payment).where(Payment.appointment_id == slot["appointment_id"]))
+    payment = db_session.scalar(select(Payment).where(Payment.appointment_id == UUID(slot["appointment_id"])))
     assert payment is not None
     payment.created_at = datetime.now() - timedelta(minutes=30)
     db_session.commit()
@@ -85,7 +87,7 @@ def test_opiekun_ma_dostep_do_zalacznikow_telewizyty_podopiecznego(client, setup
     dt = (datetime.now() + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt.isoformat()], "appointment_type": "ONLINE"},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()], "appointment_type": "ONLINE"},
         headers=auth_header(setup["reg_token"]),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book?as_patient={dep['patient_id']}",
@@ -111,14 +113,14 @@ def test_slot_poza_siatka_odrzucony(client, setup):
     base = (datetime.now() + timedelta(days=9)).replace(hour=10, minute=7, second=0, microsecond=0)
     bad = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [base.isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [base.isoformat()]},
         headers=auth_header(setup["reg_token"]),
     )
     assert bad.status_code == 422
     assert "siatce" in bad.json()["detail"]
     ok = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [base.replace(minute=15).isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [base.replace(minute=15).isoformat()]},
         headers=auth_header(setup["reg_token"]),
     )
     assert ok.status_code == 201
@@ -130,12 +132,12 @@ def test_slot_poza_siatka_odrzucony(client, setup):
     day2 = base + timedelta(days=1)
     assert client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [day2.replace(minute=15).isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [day2.replace(minute=15).isoformat()]},
         headers=auth_header(setup["reg_token"]),
     ).status_code == 422
     assert client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [day2.replace(minute=20).isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [day2.replace(minute=20).isoformat()]},
         headers=auth_header(setup["reg_token"]),
     ).status_code == 201
 
@@ -168,7 +170,7 @@ def test_badania_diagnostyczne_ze_skierowaniem(client, setup, factory):
     # skierowanie z apki: lekarz wystawia, pacjent podpina przy rezerwacji
     visit = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [(dt + timedelta(hours=2)).isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [(dt + timedelta(hours=2)).isoformat()]},
         headers=auth_header(setup["reg_token"]),
     ).json()[0]
     client.post(f"/appointments/{visit['appointment_id']}/book", headers=auth_header(setup["patient_token"]))

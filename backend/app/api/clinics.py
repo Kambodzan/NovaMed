@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,7 +27,7 @@ class ClinicIn(BaseModel):
 
 
 class ClinicOut(ClinicIn):
-    clinic_id: int
+    clinic_id: UUID
     earlier_notice_min_hours: int = 24
     slot_interval_min: int = 15
     confirmation_required: bool = False
@@ -41,30 +42,30 @@ class ClinicSettingsIn(BaseModel):
 
 
 class StaffAssignIn(BaseModel):
-    user_id: int
+    user_id: UUID
     start_date: date | None = None
 
 
 class DoctorOut(BaseModel):
-    doctor_id: int
+    doctor_id: UUID
     name: str
     specialization: str | None
     academic_title: str | None
 
 
 class PatientAssignIn(BaseModel):
-    patient_id: int
+    patient_id: UUID
 
 
 class PatientOut(BaseModel):
-    patient_id: int
+    patient_id: UUID
     first_name: str
     last_name: str
     pesel: str
     insurance_status: bool
 
 
-def get_clinic_or_404(clinic_id: int, db: Session) -> Clinic:
+def get_clinic_or_404(clinic_id: UUID, db: Session) -> Clinic:
     clinic = db.get(Clinic, clinic_id)
     if clinic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placówka nie istnieje.")
@@ -102,7 +103,7 @@ def list_clinics(db: Session = Depends(get_db), _: AppUser = Depends(get_current
 
 @router.patch("/{clinic_id}/settings", response_model=ClinicOut)
 def update_clinic_settings(
-    clinic_id: int,
+    clinic_id: UUID,
     body: ClinicSettingsIn,
     _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
@@ -120,7 +121,7 @@ def update_clinic_settings(
 
 @router.post("/{clinic_id}/staff", status_code=status.HTTP_201_CREATED)
 def assign_staff(
-    clinic_id: int,
+    clinic_id: UUID,
     body: StaffAssignIn,
     _: AppUser = Depends(require_roles(*STAFF_MANAGERS)),
     db: Session = Depends(get_db),
@@ -143,7 +144,7 @@ def assign_staff(
 
 @router.get("/{clinic_id}/doctors", response_model=list[DoctorOut])
 def list_clinic_doctors(
-    clinic_id: int,
+    clinic_id: UUID,
     db: Session = Depends(get_db),
     _: AppUser = Depends(get_current_user),
 ):
@@ -165,7 +166,7 @@ def list_clinic_doctors(
 
 @router.post("/{clinic_id}/patients", status_code=status.HTTP_201_CREATED)
 def assign_patient(
-    clinic_id: int,
+    clinic_id: UUID,
     body: PatientAssignIn,
     _: AppUser = Depends(require_roles(*STAFF_MANAGERS)),
     db: Session = Depends(get_db),
@@ -186,7 +187,7 @@ def assign_patient(
 
 @router.get("/{clinic_id}/patients", response_model=list[PatientOut])
 def list_clinic_patients(
-    clinic_id: int,
+    clinic_id: UUID,
     _: AppUser = Depends(require_roles(*STAFF_MANAGERS, "lekarz", "pielegniarka")),
     db: Session = Depends(get_db),
 ):

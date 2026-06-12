@@ -25,7 +25,7 @@ def make_slot(client, setup, days_ahead=3, hour=10) -> int:
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     resp = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(setup["reg_token"]),
     )
     assert resp.status_code == 201, resp.text
@@ -36,7 +36,7 @@ def test_pacjent_nie_tworzy_slotow(client, setup):
     dt = (datetime.now() + timedelta(days=1)).isoformat()
     resp = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt]},
         headers=auth_header(setup["patient_token"]),
     )
     assert resp.status_code == 403
@@ -47,7 +47,7 @@ def test_konflikt_terminow_409(client, setup):
     dt = (datetime.now() + timedelta(days=3)).replace(hour=10, minute=0, second=0, microsecond=0)
     resp = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
-        json={"doctor_id": setup["doctor"].user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(setup["reg_token"]),
     )
     assert resp.status_code == 409

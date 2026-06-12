@@ -1,6 +1,8 @@
+import uuid
+
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -9,7 +11,7 @@ from app.core.db import Base
 class Clinic(Base):
     __tablename__ = "clinic"
 
-    clinic_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    clinic_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     clinic_name: Mapped[str] = mapped_column(String(100))
     address: Mapped[str] = mapped_column(String(255))
     # miasto jako oś filtrowania (sieciówka: 3 placówki w Warszawie, 2 w Krakowie…)
@@ -38,9 +40,9 @@ class PatientClinic(Base):
 
     __tablename__ = "patient_clinic"
 
-    patient_clinic_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinic.clinic_id"))
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patient.patient_id"))
+    patient_clinic_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinic.clinic_id"))
+    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patient.patient_id"))
     assigned_date: Mapped[date] = mapped_column(Date)
 
     clinic: Mapped["Clinic"] = relationship()
@@ -52,9 +54,9 @@ class StaffClinic(Base):
 
     __tablename__ = "staff_clinic"
 
-    staff_clinic_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinic.clinic_id"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("app_user.user_id"))
+    staff_clinic_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinic.clinic_id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"))
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
 

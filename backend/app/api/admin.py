@@ -1,3 +1,4 @@
+from uuid import UUID
 import time
 from datetime import datetime
 
@@ -20,7 +21,7 @@ ADMIN = ("administrator",)
 # ---------- użytkownicy (UC-A1) ----------
 
 class AdminUserOut(BaseModel):
-    user_id: int
+    user_id: UUID
     username: str
     email: str
     role: str
@@ -53,7 +54,7 @@ def list_users(
 
 @router.post("/users/{user_id}/toggle-active", response_model=AdminUserOut)
 def toggle_active(
-    user_id: int,
+    user_id: UUID,
     admin: AppUser = Depends(require_roles(*ADMIN)),
     db: Session = Depends(get_db),
 ):

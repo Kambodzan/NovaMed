@@ -57,7 +57,7 @@ def visit(client, factory):
     dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/slots",
-        json={"doctor_id": doctor_user.user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(reg_token),
     )
     slot_id = resp.json()[0]["appointment_id"]

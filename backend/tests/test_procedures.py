@@ -22,7 +22,7 @@ def nursing_setup(client, factory):
     dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{clinic.clinic_id}/slots",
-        json={"doctor_id": doctor_user.user_id, "datetimes": [dt.isoformat()]},
+        json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()]},
         headers=auth_header(reg_token),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(patient_token))

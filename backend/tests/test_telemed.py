@@ -19,7 +19,7 @@ def online_visit(client, factory):
     dt = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{clinic.clinic_id}/slots",
-        json={"doctor_id": doctor_user.user_id, "datetimes": [dt.isoformat()], "appointment_type": "ONLINE"},
+        json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()], "appointment_type": "ONLINE"},
         headers=auth_header(reg_token),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(patient_token))
@@ -84,7 +84,7 @@ def test_ws_wizyta_stacjonarna_odrzucona(client, factory):
     dt = (datetime.now() + timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
     slot = client.post(
         f"/clinics/{clinic.clinic_id}/slots",
-        json={"doctor_id": doctor_user.user_id, "datetimes": [dt.isoformat()], "appointment_type": "STATIONARY"},
+        json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()], "appointment_type": "STATIONARY"},
         headers=auth_header(reg_token),
     ).json()[0]
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(patient_token))

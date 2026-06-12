@@ -1,6 +1,8 @@
+import uuid
+
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -15,12 +17,12 @@ class Appointment(Base):
 
     __tablename__ = "appointment"
 
-    appointment_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patient.patient_id"))
+    appointment_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("patient.patient_id"))
     # NULL dla terminów BADAŃ — badanie wykonuje pracownia placówki, nie lekarz
-    doctor_id: Mapped[int | None] = mapped_column(ForeignKey("doctor.doctor_id"))
-    nurse_id: Mapped[int | None] = mapped_column(ForeignKey("nurse.nurse_id"))
-    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinic.clinic_id"))
+    doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"))
+    nurse_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("nurse.nurse_id"))
+    clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinic.clinic_id"))
     appointment_datetime: Mapped[datetime] = mapped_column(DateTime)
     appointment_status: Mapped[str] = mapped_column(String(50))
     appointment_type: Mapped[str] = mapped_column(String(50))  # ONLINE / STATIONARY
@@ -37,7 +39,7 @@ class Appointment(Base):
     # podpięte skierowanie z apki LUB oświadczenie o zewnętrznym
     service_name: Mapped[str | None] = mapped_column(String(100))
     referral_required: Mapped[bool] = mapped_column(Boolean, default=False)
-    referral_document_id: Mapped[int | None] = mapped_column(ForeignKey("medical_document.document_id"))
+    referral_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("medical_document.document_id"))
     external_referral: Mapped[bool] = mapped_column(Boolean, default=False)
     # Potwierdzanie obecności (gdy placówka wymaga): czy wysłano prośbę
     # i czy pacjent potwierdził, że będzie

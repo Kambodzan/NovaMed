@@ -3,6 +3,7 @@
 # (jak podopieczny), wizyta CONFIRMED, potwierdzenie SMS-em. Po późniejszej
 # rejestracji w Supabase tym samym e-mailem konto jest PRZEJMOWANE
 # (auth.register_profile) razem z historią wizyt.
+from uuid import UUID
 import uuid
 from datetime import date, datetime
 
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/public", tags=["public"])
 
 
 class PublicClinicOut(BaseModel):
-    clinic_id: int
+    clinic_id: UUID
     clinic_name: str
     address: str
     city: str | None
@@ -32,7 +33,7 @@ class PublicClinicOut(BaseModel):
 
 
 class GuestBookIn(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     first_name: str = Field(min_length=1, max_length=50)
     last_name: str = Field(min_length=1, max_length=50)
     pesel: str = Field(min_length=11, max_length=11, pattern=r"^\d{11}$")

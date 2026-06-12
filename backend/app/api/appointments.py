@@ -1,3 +1,4 @@
+from uuid import UUID
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -32,7 +33,7 @@ def visit_label(db: Session, a: Appointment) -> str:
     return f"{doctor_user.username}, {when}"
 
 
-def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot_dts: list[datetime]) -> None:
+def notify_earlier_watchers(db: Session, *, doctor_id: UUID, clinic_id: UUID, slot_dts: list[datetime]) -> None:
     """Sloty stały się wolne → powiadom pacjentów z PÓŹNIEJSZĄ wizytą u tego lekarza,
     którzy zaznaczyli notify_earlier. Limit placówki (earlier_notice_min_hours)
     chroni przed powiadomieniami o terminach „za 2 godziny". Cała paczka slotów
@@ -51,7 +52,7 @@ def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot
         Appointment.patient_id.is_not(None),
         Appointment.appointment_datetime > eligible[0],
     )).all()
-    seen: set[int] = set()
+    seen: set[UUID] = set()
     for w in watchers:
         if w.patient_id in seen:
             continue
@@ -75,7 +76,7 @@ SLOT_MANAGERS = ("lekarz", "rejestracja", "kierownik", "administrator")
 
 class SlotsCreateIn(BaseModel):
     # wizyta lekarska: doctor_id; badanie (pracownia placówki): service_name [+ referral_required]
-    doctor_id: int | None = None
+    doctor_id: UUID | None = None
     service_name: str | None = Field(default=None, max_length=100)
     referral_required: bool = False
     datetimes: list[datetime]
@@ -84,16 +85,16 @@ class SlotsCreateIn(BaseModel):
 
 
 class AppointmentOut(BaseModel):
-    appointment_id: int
+    appointment_id: UUID
     appointment_datetime: datetime
     appointment_status: str
     appointment_type: str
-    doctor_id: int | None
+    doctor_id: UUID | None
     doctor_name: str
     specialization: str | None
-    clinic_id: int
+    clinic_id: UUID
     clinic_name: str
-    patient_id: int | None = None
+    patient_id: UUID | None = None
     patient_name: str | None = None
     price: float | None = None
     reviewed: bool | None = None  # tylko w /appointments/my (UC-P8)
@@ -107,7 +108,7 @@ class AppointmentOut(BaseModel):
 
 
 class PaymentInfoOut(BaseModel):
-    payment_id: int
+    payment_id: UUID
     provider_ref: str
     amount: float
     payment_status: str
@@ -128,12 +129,12 @@ class BookIn(BaseModel):
     # teleporada to WYBÓR PACJENTA przy rezerwacji, nie cecha slotu
     online: bool = Field(default=False, description="Pacjent woli teleporadę (wizyta online)")
     # badania ze skierowaniem: nasze skierowanie z apki LUB oświadczenie o zewnętrznym
-    referral_document_id: int | None = None
+    referral_document_id: UUID | None = None
     external_referral: bool = False
 
 
 class RescheduleIn(BaseModel):
-    new_appointment_id: int
+    new_appointment_id: UUID
 
 
 class StatusChangeIn(BaseModel):
@@ -167,7 +168,7 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
     )
 
 
-def get_appointment_or_404(appointment_id: int, db: Session) -> Appointment:
+def get_appointment_or_404(appointment_id: UUID, db: Session) -> Appointment:
     a = db.get(Appointment, appointment_id)
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
@@ -176,7 +177,7 @@ def get_appointment_or_404(appointment_id: int, db: Session) -> Appointment:
 
 @router.post("/clinics/{clinic_id}/slots", status_code=status.HTTP_201_CREATED, response_model=list[AppointmentOut])
 def create_slots(
-    clinic_id: int,
+    clinic_id: UUID,
     body: SlotsCreateIn,
     user: AppUser = Depends(require_roles(*SLOT_MANAGERS)),
     db: Session = Depends(get_db),
@@ -276,7 +277,7 @@ def create_slots(
 
 @router.delete("/slots/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_free_slot(
-    appointment_id: int,
+    appointment_id: UUID,
     _: AppUser = Depends(require_roles(*SLOT_MANAGERS)),
     db: Session = Depends(get_db),
 ):
@@ -295,8 +296,8 @@ def search_slots(
     db: Session = Depends(get_db),
     _: AppUser = Depends(get_current_user),
     specialization: str | None = None,
-    doctor_id: int | None = Query(default=None),
-    clinic_id: int | None = Query(default=None),
+    doctor_id: UUID | None = Query(default=None),
+    clinic_id: UUID | None = Query(default=None),
 ):
     """UC-P3: wyszukiwanie wolnych terminów (kalendarz pacjenta)."""
     q = (
@@ -317,9 +318,9 @@ def search_slots(
 
 @router.post("/appointments/{appointment_id}/book", response_model=BookOut)
 def book_appointment(
-    appointment_id: int,
+    appointment_id: UUID,
     body: BookIn | None = None,
-    as_patient: int | None = Query(default=None, description="Konta rodzinne: rezerwacja w imieniu podopiecznego"),
+    as_patient: UUID | None = Query(default=None, description="Konta rodzinne: rezerwacja w imieniu podopiecznego"),
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
@@ -409,7 +410,7 @@ def book_appointment(
 
 @router.post("/appointments/{appointment_id}/pay", response_model=BookOut)
 def pay_appointment(
-    appointment_id: int,
+    appointment_id: UUID,
     body: PayIn,
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
@@ -463,7 +464,7 @@ def pay_appointment(
 
 @router.post("/appointments/{appointment_id}/confirm-attendance", response_model=AppointmentOut)
 def confirm_attendance(
-    appointment_id: int,
+    appointment_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -481,7 +482,7 @@ def confirm_attendance(
 
 @router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentOut)
 def cancel_appointment(
-    appointment_id: int,
+    appointment_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -539,7 +540,7 @@ def cancel_appointment(
 
 @router.post("/appointments/{appointment_id}/reschedule", response_model=AppointmentOut)
 def reschedule_appointment(
-    appointment_id: int,
+    appointment_id: UUID,
     body: RescheduleIn,
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
@@ -586,7 +587,7 @@ def reschedule_appointment(
 
 @router.get("/appointments/my", response_model=list[AppointmentOut])
 def my_appointments(
-    as_patient: int | None = Query(default=None),
+    as_patient: UUID | None = Query(default=None),
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
@@ -635,7 +636,7 @@ def doctor_day(
 
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
 def patient_appointments(
-    patient_id: int,
+    patient_id: UUID,
     _: AppUser = Depends(require_roles("lekarz", "pielegniarka", "rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
@@ -652,7 +653,7 @@ def patient_appointments(
 
 @router.get("/appointments/{appointment_id}/ics")
 def appointment_ics(
-    appointment_id: int,
+    appointment_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -720,7 +721,7 @@ def appointment_ics(
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
 def appointment_detail(
-    appointment_id: int,
+    appointment_id: UUID,
     user: AppUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -735,7 +736,7 @@ def appointment_detail(
 
 @router.post("/appointments/{appointment_id}/status", response_model=AppointmentOut)
 def change_status(
-    appointment_id: int,
+    appointment_id: UUID,
     body: StatusChangeIn,
     user: AppUser = Depends(require_roles("lekarz", "rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
