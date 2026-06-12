@@ -41,11 +41,12 @@ export function PodgladDokumentu({ doc, onClose }: {
       overline={t('Podgląd dokumentu')}
       title={t(KIND[doc.document_type] ?? 'Dokument')}
       onClose={onClose}
-      footer={
-        <Button size="sm" variant="secondary" onClick={() => void downloadPdf()}>
+      footer={<>
+        <Button size="sm" variant="ghost" onClick={() => void downloadPdf()}>
           <Download size={14} /> {t('Pobierz PDF')}
         </Button>
-      }
+        <Button size="sm" onClick={onClose}>{t('Zamknij')}</Button>
+      </>}
     >
       <div className="space-y-4 pb-2">
         {doc.code && (

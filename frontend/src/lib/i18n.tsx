@@ -154,6 +154,7 @@ const EN: Record<string, string> = {
   'Data wystawienia': 'Issue date',
   'Status': 'Status',
   'Treść': 'Content',
+  'Zamknij': 'Close',
 
   // Udostępnij
   'Udostępnij dokumentację': 'Share your records',
