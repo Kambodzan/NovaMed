@@ -140,6 +140,62 @@ def test_slot_poza_siatka_odrzucony(client, setup):
     ).status_code == 201
 
 
+def test_badania_diagnostyczne_ze_skierowaniem(client, setup, factory):
+    dt = (datetime.now() + timedelta(days=4)).replace(hour=8, minute=0, second=0, microsecond=0)
+    # slot badania: pracownia placówki (bez lekarza), RTG wymaga skierowania
+    r = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"service_name": "RTG klatki piersiowej", "referral_required": True,
+              "datetimes": [dt.isoformat(), (dt + timedelta(minutes=30)).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    )
+    assert r.status_code == 201
+    rtg1, rtg2 = r.json()
+    assert rtg1["doctor_id"] is None and rtg1["service_name"] == "RTG klatki piersiowej"
+    assert rtg1["referral_required"] is True
+
+    # bez skierowania = 409
+    deny = client.post(f"/appointments/{rtg1['appointment_id']}/book",
+                       headers=auth_header(setup["patient_token"]))
+    assert deny.status_code == 409 and "skierowania" in deny.json()["detail"]
+
+    # oświadczenie o zewnętrznym skierowaniu = OK
+    ok = client.post(f"/appointments/{rtg1['appointment_id']}/book",
+                     json={"external_referral": True}, headers=auth_header(setup["patient_token"]))
+    assert ok.status_code == 200
+    assert ok.json()["appointment"]["appointment_status"] == "CONFIRMED"
+
+    # skierowanie z apki: lekarz wystawia, pacjent podpina przy rezerwacji
+    visit = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"doctor_id": setup["doctor"].user_id, "datetimes": [(dt + timedelta(hours=2)).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    ).json()[0]
+    client.post(f"/appointments/{visit['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+    ref = client.post(
+        f"/patients/{setup['patient'].user_id}/referrals", headers=auth_header(setup["doctor_token"]),
+        json={"appointment_id": visit["appointment_id"], "icd10": "I10",
+              "referral_type": "NURSING", "notes": "RTG kontrolne"},
+    ).json()
+    ok2 = client.post(f"/appointments/{rtg2['appointment_id']}/book",
+                      json={"referral_document_id": ref["document_id"]},
+                      headers=auth_header(setup["patient_token"]))
+    assert ok2.status_code == 200
+
+    # cudze/nieistniejące skierowanie odrzucone przy kolejnym slocie badania
+    r3 = client.post(
+        f"/clinics/{setup['clinic'].clinic_id}/slots",
+        json={"service_name": "TK głowy", "referral_required": True,
+              "datetimes": [(dt + timedelta(days=1)).isoformat()]},
+        headers=auth_header(setup["reg_token"]),
+    ).json()[0]
+    _, other_token = factory.patient()
+    bad = client.post(f"/appointments/{r3['appointment_id']}/book",
+                      json={"referral_document_id": ref["document_id"]},
+                      headers=auth_header(other_token))
+    assert bad.status_code == 409
+
+
 def test_usuwanie_wolnego_slotu(client, setup):
     dt = (datetime.now() + timedelta(days=3)).replace(hour=14, minute=0, second=0, microsecond=0)
     free = make_slots(client, setup, [dt.isoformat()])[0]

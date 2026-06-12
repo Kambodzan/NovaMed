@@ -37,7 +37,7 @@ import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
-import type { AppointmentOut, BookOut, WaitlistEntry } from '../lib/types'
+import type { AppointmentOut, BookOut, DocumentOut, WaitlistEntry } from '../lib/types'
 
 type PayPhase = 'idle' | 'awaiting' | 'success' | 'declined'
 
@@ -81,6 +81,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
   const { data: rating } = useQuery({
     queryKey: ['doctor-rating', d.id],
     queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${d.id}`),
+    enabled: d.id > 0,  // badania (pracownia) nie mają ocen lekarza
     staleTime: 300_000,
   })
   const dayLabel = (day: string) =>
@@ -182,6 +183,12 @@ export function Umow() {
   const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
   const [showAllDocs, setShowAllDocs] = useState(false)
+  // wizyta lekarska czy badanie diagnostyczne (spirometria, RTG, TK…)
+  const [bookKind, setBookKind] = useState<'visit' | 'exam'>(
+    () => new URLSearchParams(window.location.search).get('mode') === 'exam' ? 'exam' : 'visit')
+  const [refDocId, setRefDocId] = useState<number | null>(
+    () => Number(new URLSearchParams(window.location.search).get('refDoc')) || null)
+  const [externalRef, setExternalRef] = useState(false)
   const [locQuery, setLocQuery] = useState('')
   const [locError, setLocError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
@@ -250,8 +257,10 @@ export function Umow() {
 
   // karty lekarzy z mini-kalendarzem: dni → godziny (jak na portalach rezerwacyjnych)
   const doctorCards = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; spec: string | null; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
+    const map = new Map<number | string, { id: number; name: string; spec: string | null; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
+      // tryb: wizyty lekarskie vs badania (pracownia)
+      if (bookKind === 'visit' ? s.service_name != null : s.service_name == null) continue
       if (spec && s.specialization !== spec) continue
       if (clinicFilter?.startsWith('city:') && cityOf(s.clinic_name) !== clinicFilter.slice(5)) continue
       if (clinicFilter?.startsWith('cli:') && s.clinic_name !== clinicFilter.slice(4)) continue
@@ -261,12 +270,19 @@ export function Umow() {
         if (!c || c.lat == null || c.lng == null || distanceKm(geo.lat, geo.lng, c.lat, c.lng) > geo.km) continue
       }
       if (doctorFilter && s.doctor_id !== doctorFilter.id) continue
-      const cur = map.get(s.doctor_id)
-        ?? { id: s.doctor_id, name: s.doctor_name, spec: s.specialization, clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>() }
+      // wizyty grupowane po lekarzu; badania po nazwie badania
+      const key = bookKind === 'visit' ? s.doctor_id! : s.service_name!
+      const cur = map.get(key)
+        ?? {
+          id: typeof key === 'number' ? key : 0,
+          name: bookKind === 'visit' ? s.doctor_name : s.service_name!,
+          spec: bookKind === 'visit' ? s.specialization : (s.referral_required ? 'wymaga skierowania' : null),
+          clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>(),
+        }
       cur.clinics.add(s.clinic_name)
       const day = s.appointment_datetime.slice(0, 10)
       cur.byDay.set(day, [...(cur.byDay.get(day) ?? []), s])
-      map.set(s.doctor_id, cur)
+      map.set(key, cur)
     }
     return [...map.values()]
       .filter(d => !q || fold(d.name).includes(q) || fold(d.spec ?? '').includes(q))
@@ -278,7 +294,7 @@ export function Umow() {
       }))
       .sort((a, b) => a.days[0][1][0].appointment_datetime.localeCompare(b.days[0][1][0].appointment_datetime))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSlots, q, spec, clinicFilter, doctorFilter, clinicList])
+  }, [allSlots, q, spec, clinicFilter, doctorFilter, clinicList, bookKind])
 
   // Omnisearch jak na portalach rezerwacyjnych: na focus (bez pisania) od razu
   // popularne specjalizacje i lekarze; pisanie filtruje wszystko z nagłówkami grup.
@@ -302,6 +318,7 @@ export function Umow() {
 
     const docs = new Map<number, { name: string; spec: string | null; earliest: string }>()
     for (const s of allSlots ?? []) {
+      if (s.doctor_id == null) continue  // sloty badań nie są lekarzami
       if (fq && !fold(s.doctor_name).includes(fq) && !fold(s.specialization ?? '').includes(fq)) continue
       const cur = docs.get(s.doctor_id)
       if (!cur || s.appointment_datetime < cur.earliest)
@@ -349,8 +366,16 @@ export function Umow() {
   const { data: slotRating } = useQuery({
     queryKey: ['doctor-rating', slot?.doctor_id],
     queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${slot!.doctor_id}`),
-    enabled: !!slot,
+    enabled: !!slot?.doctor_id,
     staleTime: 300_000,
+  })
+
+  // skierowania pacjenta z apki — do podpięcia przy badaniu ze skierowaniem
+  const { data: myReferrals } = useQuery({
+    queryKey: ['my-referrals', activeId],
+    queryFn: async () => (await api<DocumentOut[]>(asPatient('/documents/my')))
+      .filter(d => d.document_type === 'REFERRAL' && ['ACTIVE', 'CONFIRMED'].includes(d.document_status)),
+    enabled: !!slot?.referral_required,
   })
 
   const pickSlot = (s: AppointmentOut) => {
@@ -370,7 +395,11 @@ export function Umow() {
   const book = useMutation({
     mutationFn: (id: number) => api<BookOut>(asPatient(`/appointments/${id}/book`), {
       method: 'POST',
-      body: { reason: reason.trim() || null, notify_earlier: notifyEarlier, online },
+      body: {
+        reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
+        referral_document_id: slot?.referral_required && !externalRef ? refDocId : null,
+        external_referral: !!slot?.referral_required && externalRef,
+      },
     }),
     onSuccess: (data) => {
       setBooked(data)
@@ -424,7 +453,26 @@ export function Umow() {
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
           <div className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            {/* wizyta u lekarza czy badanie diagnostyczne (do placówki) */}
+            <div className="grid grid-cols-2 gap-2">
+              {([['visit', 'Wizyta lekarska', 'konsultacja u specjalisty'],
+                 ['exam', 'Badanie diagnostyczne', 'RTG, USG, spirometria… — do placówki']] as const).map(([k, label, sub]) => (
+                <button
+                  key={k}
+                  onClick={() => { setBookKind(k); setSpec(null); setDoctorFilter(null); setShowAllDocs(false); setQuery('') }}
+                  className={cx(
+                    'cursor-pointer rounded-2xl px-4 py-3 text-left transition-colors',
+                    bookKind === k ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50 hover:bg-primary-soft/50',
+                  )}
+                >
+                  <span className={cx('block font-extrabold', bookKind === k ? 'text-primary' : 'text-gray-900')}>{t(label)}</span>
+                  <span className="block text-xs font-semibold text-gray-500">{t(sub)}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className={cx('grid gap-2', bookKind === 'visit' ? 'sm:grid-cols-[1fr_auto]' : 'sm:grid-cols-[auto]')}>
+              {bookKind === 'visit' && (
               <Typeahead
                 id="umow-search"
                 minLength={0}
@@ -434,6 +482,7 @@ export function Umow() {
                 search={suggest}
                 placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
               />
+              )}
               {clinicNames.length > 1 && (
                 <button
                   onClick={() => setMapOpen(true)}
@@ -451,6 +500,7 @@ export function Umow() {
             </div>
 
             {/* popularne specjalizacje — gotowe wejścia bez pisania */}
+            {bookKind === 'visit' && (
             <div>
               <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Popularne specjalizacje')}</p>
               <div className="flex flex-wrap gap-2">
@@ -468,8 +518,9 @@ export function Umow() {
                 ))}
               </div>
             </div>
+            )}
 
-            {!showResults && (
+            {bookKind === 'visit' && !showResults && (
               <div className="text-center">
                 <Button variant="ghost" size="sm" onClick={() => setShowAllDocs(true)}>
                   {t('Przeglądaj wszystkich lekarzy')} <ChevronRight size={14} />
@@ -477,7 +528,7 @@ export function Umow() {
               </div>
             )}
 
-            {showResults && (
+            {(showResults || bookKind === 'exam') && (
               <div className="flex flex-wrap items-center gap-2">
                 {showAllDocs && !spec && !doctorFilter && !clinicFilter && !q && (
                   <button onClick={() => setShowAllDocs(false)}
@@ -512,7 +563,7 @@ export function Umow() {
               </div>
             )}
 
-            {showResults && (doctorCards.length === 0 ? (
+            {(showResults || bookKind === 'exam') && (doctorCards.length === 0 ? (
               <div className="space-y-3 text-center">
                 <EmptyState
                   icon={<CalendarDays size={28} strokeWidth={1.5} />}
@@ -640,7 +691,30 @@ export function Umow() {
                     placeholder={t('np. od tygodnia duszności przy wysiłku…')}
                   />
                 </Field>
-                {slot.appointment_type !== 'ONLINE' && (
+                {slot.referral_required && (
+                  <div className="space-y-2 rounded-2xl bg-amber-50 px-4 py-3">
+                    <p className="text-sm font-extrabold text-amber-800">{t('To badanie wymaga skierowania')}</p>
+                    {(myReferrals ?? []).map(r => (
+                      <label key={r.document_id} className="flex cursor-pointer items-start gap-2.5">
+                        <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                          checked={!externalRef && refDocId === r.document_id}
+                          onChange={() => { setRefDocId(r.document_id); setExternalRef(false) }} />
+                        <span className="text-sm font-semibold text-gray-700">
+                          {t('Skierowanie z NovaMed')}: {r.details ?? r.code ?? `#${r.document_id}`}
+                        </span>
+                      </label>
+                    ))}
+                    <label className="flex cursor-pointer items-start gap-2.5">
+                      <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                        checked={externalRef}
+                        onChange={() => { setExternalRef(true); setRefDocId(null) }} />
+                      <span className="text-sm font-semibold text-gray-700">
+                        {t('Oświadczam, że mam skierowanie zewnętrzne (okażę przed badaniem)')}
+                      </span>
+                    </label>
+                  </div>
+                )}
+                {slot.appointment_type !== 'ONLINE' && !slot.service_name && (
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
                     <input
                       type="checkbox"
@@ -669,7 +743,9 @@ export function Umow() {
                     ? t('Po rezerwacji termin blokujemy na czas płatności. Wizyta zostanie potwierdzona po jej zaksięgowaniu.')
                     : t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}
                 </p>
-                <Button size="lg" disabled={book.isPending} onClick={() => book.mutate(slot.appointment_id)}>
+                <Button size="lg"
+                  disabled={book.isPending || (slot.referral_required && !externalRef && !refDocId)}
+                  onClick={() => book.mutate(slot.appointment_id)}>
                   {book.isPending ? t('Rezerwowanie…') : slot.price ? t('Rezerwuję i przechodzę do płatności') : t('Rezerwuję termin')}
                 </Button>
               </>

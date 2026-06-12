@@ -17,7 +17,8 @@ class Appointment(Base):
 
     appointment_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     patient_id: Mapped[int | None] = mapped_column(ForeignKey("patient.patient_id"))
-    doctor_id: Mapped[int] = mapped_column(ForeignKey("doctor.doctor_id"))
+    # NULL dla terminów BADAŃ — badanie wykonuje pracownia placówki, nie lekarz
+    doctor_id: Mapped[int | None] = mapped_column(ForeignKey("doctor.doctor_id"))
     nurse_id: Mapped[int | None] = mapped_column(ForeignKey("nurse.nurse_id"))
     clinic_id: Mapped[int] = mapped_column(ForeignKey("clinic.clinic_id"))
     appointment_datetime: Mapped[datetime] = mapped_column(DateTime)
@@ -31,6 +32,13 @@ class Appointment(Base):
     # Pacjent chce powiadomienie, gdy u tego lekarza zwolni się WCZEŚNIEJSZY termin
     # (rozszerzenie ERD)
     notify_earlier: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Badania diagnostyczne (rozszerzenie ERD):
+    # nazwa badania (NULL = wizyta lekarska), wymóg skierowania,
+    # podpięte skierowanie z apki LUB oświadczenie o zewnętrznym
+    service_name: Mapped[str | None] = mapped_column(String(100))
+    referral_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    referral_document_id: Mapped[int | None] = mapped_column(ForeignKey("medical_document.document_id"))
+    external_referral: Mapped[bool] = mapped_column(Boolean, default=False)
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")

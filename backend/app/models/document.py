@@ -20,7 +20,9 @@ class MedicalDocument(Base):
     document_content: Mapped[str | None] = mapped_column(Text)
     document_status: Mapped[str] = mapped_column(String(50))
 
-    appointment = relationship("Appointment")
+    # foreign_keys jawnie: appointment.referral_document_id tworzy DRUGĄ ścieżkę FK
+    # między tabelami (badanie → podpięte skierowanie), więc relacja byłaby niejednoznaczna
+    appointment = relationship("Appointment", foreign_keys=[appointment_id])
     patient = relationship("Patient")
     doctor = relationship("Doctor")
 

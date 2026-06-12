@@ -57,6 +57,9 @@ def create_review(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
     if a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
+    if a.doctor_id is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Opinie wystawia się po wizytach lekarskich, nie po badaniach.")
     if a.appointment_status != AppointmentStatus.COMPLETED.value:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -24,8 +24,12 @@ from app.models import (
 
 
 def visit_label(db: Session, a: Appointment) -> str:
+    when = a.appointment_datetime.strftime('%d.%m.%Y %H:%M')
+    if a.doctor_id is None:  # badanie — pracownia placówki
+        clinic = db.get(Clinic, a.clinic_id)
+        return f"{a.service_name}, {clinic.clinic_name}, {when}"
     doctor_user = db.get(AppUser, a.doctor_id)
-    return f"{doctor_user.username}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}"
+    return f"{doctor_user.username}, {when}"
 
 
 def notify_earlier_watchers(db: Session, *, doctor_id: int, clinic_id: int, slot_dts: list[datetime]) -> None:
@@ -70,7 +74,10 @@ SLOT_MANAGERS = ("lekarz", "rejestracja", "kierownik", "administrator")
 
 
 class SlotsCreateIn(BaseModel):
-    doctor_id: int
+    # wizyta lekarska: doctor_id; badanie (pracownia placówki): service_name [+ referral_required]
+    doctor_id: int | None = None
+    service_name: str | None = Field(default=None, max_length=100)
+    referral_required: bool = False
     datetimes: list[datetime]
     appointment_type: AppointmentType = AppointmentType.STATIONARY
     price: float | None = Field(default=None, ge=0, description="Cena wizyty prywatnej; brak = NFZ/bezpłatna")
@@ -81,7 +88,7 @@ class AppointmentOut(BaseModel):
     appointment_datetime: datetime
     appointment_status: str
     appointment_type: str
-    doctor_id: int
+    doctor_id: int | None
     doctor_name: str
     specialization: str | None
     clinic_id: int
@@ -92,6 +99,8 @@ class AppointmentOut(BaseModel):
     reviewed: bool | None = None  # tylko w /appointments/my (UC-P8)
     notes: str | None = None      # powód wizyty („co Ci dolega") podany przy rezerwacji
     notify_earlier: bool = False
+    service_name: str | None = None     # badanie diagnostyczne (NULL = wizyta lekarska)
+    referral_required: bool = False
 
 
 class PaymentInfoOut(BaseModel):
@@ -115,6 +124,9 @@ class BookIn(BaseModel):
     notify_earlier: bool = Field(default=False, description="Powiadom, gdy zwolni się wcześniejszy termin")
     # teleporada to WYBÓR PACJENTA przy rezerwacji, nie cecha slotu
     online: bool = Field(default=False, description="Pacjent woli teleporadę (wizyta online)")
+    # badania ze skierowaniem: nasze skierowanie z apki LUB oświadczenie o zewnętrznym
+    referral_document_id: int | None = None
+    external_referral: bool = False
 
 
 class RescheduleIn(BaseModel):
@@ -126,8 +138,8 @@ class StatusChangeIn(BaseModel):
 
 
 def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
-    doctor_user = db.get(AppUser, a.doctor_id)
-    doctor = db.get(Doctor, a.doctor_id)
+    doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
+    doctor = db.get(Doctor, a.doctor_id) if a.doctor_id else None
     clinic = db.get(Clinic, a.clinic_id)
     patient = db.get(Patient, a.patient_id) if a.patient_id else None
     return AppointmentOut(
@@ -136,8 +148,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         appointment_status=a.appointment_status,
         appointment_type=a.appointment_type,
         doctor_id=a.doctor_id,
-        doctor_name=doctor_user.username,
-        specialization=doctor.specialization,
+        doctor_name=doctor_user.username if doctor_user else (a.service_name or "Pracownia diagnostyczna"),
+        specialization=doctor.specialization if doctor else None,
         clinic_id=a.clinic_id,
         clinic_name=clinic.clinic_name,
         patient_id=a.patient_id,
@@ -145,6 +157,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         price=float(a.price) if a.price is not None else None,
         notes=a.appointment_notes,
         notify_earlier=a.notify_earlier,
+        service_name=a.service_name,
+        referral_required=a.referral_required,
     )
 
 
@@ -174,32 +188,47 @@ def create_slots(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Godzina {dt.strftime('%H:%M')} nie leży na siatce terminów placówki (co {interval} min).",
             )
-    if db.get(Doctor, body.doctor_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lekarz nie istnieje.")
-    # lekarz może dodawać terminy tylko sobie
-    if user.role.role_name == "lekarz" and user.user_id != body.doctor_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lekarz może dodawać terminy tylko w swoim kalendarzu.")
-    works_here = db.scalar(select(StaffClinic).where(
-        StaffClinic.clinic_id == clinic_id,
-        StaffClinic.user_id == body.doctor_id,
-        StaffClinic.end_date.is_(None),
-    ))
-    if not works_here:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
+    # wizyta lekarska XOR badanie diagnostyczne
+    if (body.doctor_id is None) == (body.service_name is None):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Podaj doctor_id (wizyta) ALBO service_name (badanie).")
+    if body.doctor_id is not None:
+        if db.get(Doctor, body.doctor_id) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lekarz nie istnieje.")
+        # lekarz może dodawać terminy tylko sobie
+        if user.role.role_name == "lekarz" and user.user_id != body.doctor_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lekarz może dodawać terminy tylko w swoim kalendarzu.")
+        works_here = db.scalar(select(StaffClinic).where(
+            StaffClinic.clinic_id == clinic_id,
+            StaffClinic.user_id == body.doctor_id,
+            StaffClinic.end_date.is_(None),
+        ))
+        if not works_here:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
 
     created: list[Appointment] = []
     for dt in body.datetimes:
-        conflict = db.scalar(select(Appointment).where(
-            Appointment.doctor_id == body.doctor_id,
-            Appointment.appointment_datetime == dt,
-            Appointment.appointment_status.notin_([
-                AppointmentStatus.CANCELLED.value, AppointmentStatus.INTERRUPTED.value,
-            ]),
-        ))
+        if body.doctor_id is not None:
+            conflict = db.scalar(select(Appointment).where(
+                Appointment.doctor_id == body.doctor_id,
+                Appointment.appointment_datetime == dt,
+                Appointment.appointment_status.notin_([
+                    AppointmentStatus.CANCELLED.value, AppointmentStatus.INTERRUPTED.value,
+                ]),
+            ))
+        else:  # badanie: konflikt per placówka + rodzaj badania + termin
+            conflict = db.scalar(select(Appointment).where(
+                Appointment.clinic_id == clinic_id,
+                Appointment.service_name == body.service_name,
+                Appointment.appointment_datetime == dt,
+                Appointment.appointment_status.notin_([
+                    AppointmentStatus.CANCELLED.value, AppointmentStatus.INTERRUPTED.value,
+                ]),
+            ))
         if conflict:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Lekarz ma już termin {dt.isoformat(sep=' ', timespec='minutes')}.",
+                detail=f"Termin {dt.isoformat(sep=' ', timespec='minutes')} jest już zajęty.",
             )
         a = Appointment(
             patient_id=None,
@@ -209,18 +238,21 @@ def create_slots(
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=body.appointment_type.value,
             price=body.price,
+            service_name=body.service_name,
+            referral_required=body.referral_required if body.service_name else False,
         )
         db.add(a)
         created.append(a)
 
     # „powiadom o wcześniejszym terminie": nowe sloty też się liczą (jedno
     # powiadomienie dla całej serii — bez spamu przy slotach cyklicznych)
-    notify_earlier_watchers(db, doctor_id=body.doctor_id, clinic_id=clinic_id,
-                            slot_dts=[a.appointment_datetime for a in created])
+    if body.doctor_id is not None:
+        notify_earlier_watchers(db, doctor_id=body.doctor_id, clinic_id=clinic_id,
+                                slot_dts=[a.appointment_datetime for a in created])
 
     # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
-    doctor = db.get(Doctor, body.doctor_id)
-    if doctor.specialization:
+    doctor = db.get(Doctor, body.doctor_id) if body.doctor_id else None
+    if doctor and doctor.specialization:
         entries = db.scalars(select(WaitingListEntry).where(
             WaitingListEntry.specialization == doctor.specialization,
         )).all()
@@ -295,12 +327,31 @@ def book_appointment(
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
 
+    # badanie ze skierowaniem: wymagane nasze skierowanie ALBO oświadczenie o zewnętrznym
+    if a.referral_required:
+        ref_id = body.referral_document_id if body else None
+        external = bool(body and body.external_referral)
+        if not ref_id and not external:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Badanie „{a.service_name}” wymaga skierowania — wybierz skierowanie z NovaMed albo oświadcz, że masz zewnętrzne.",
+            )
+        if ref_id:
+            from app.models import MedicalDocument  # import lokalny — unika cyklu
+            ref = db.get(MedicalDocument, ref_id)
+            if ref is None or ref.patient_id != patient_id or ref.document_type != "REFERRAL":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Wskazane skierowanie nie istnieje lub nie należy do pacjenta.")
+            a.referral_document_id = ref_id
+        else:
+            a.external_referral = True
+
     # powód wizyty i opcje rezerwacji (opcjonalne body)
     if body:
         if body.reason:
             a.appointment_notes = body.reason.strip()[:500]
         a.notify_earlier = body.notify_earlier
-        if body.online:
+        if body.online and a.service_name is None:  # badania zawsze stacjonarnie
             a.appointment_type = AppointmentType.ONLINE.value
 
     # eWUŚ — automatyczna weryfikacja przy rejestracji wizyty; awaria nie blokuje rezerwacji
@@ -587,14 +638,15 @@ def appointment_ics(
     if user.user_id != a.doctor_id and a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do tej wizyty.")
 
-    doctor_user = db.get(AppUser, a.doctor_id)
-    doctor = db.get(Doctor, a.doctor_id)
+    doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
+    doctor = db.get(Doctor, a.doctor_id) if a.doctor_id else None
     clinic = db.get(Clinic, a.clinic_id)
     start = a.appointment_datetime
     end = start + timedelta(minutes=30)
     fmt = "%Y%m%dT%H%M%S"
     location = "Teleporada online (NovaMed)" if a.appointment_type == "ONLINE" else f"{clinic.clinic_name}, {clinic.address}"
-    summary = f"Wizyta: {doctor_user.username}" + (f" ({doctor.specialization})" if doctor.specialization else "")
+    summary = (f"Badanie: {a.service_name}" if a.doctor_id is None
+               else f"Wizyta: {doctor_user.username}" + (f" ({doctor.specialization})" if doctor.specialization else ""))
 
     # TZID + VTIMEZONE: bez strefy import w innej strefie przesuwałby godzinę.
     # Alarm -PT24H spójny z przypomnieniem SMS (24 h przed wizytą).

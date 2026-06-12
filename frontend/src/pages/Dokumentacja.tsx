@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Download, FileSignature, FileText, FlaskConical, FolderOpen, Pill } from 'lucide-react'
+import { CalendarPlus, Download, FileSignature, FileText, FlaskConical, FolderOpen, Pill } from 'lucide-react'
 import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
 import { API_URL, api, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -30,6 +31,7 @@ const docMeta: Record<DocumentOut['document_type'], { icon: typeof FileText; lab
 }
 
 export function Dokumentacja() {
+  const navigate = useNavigate()
   const [filter, setFilter] = useState<string>('ALL')
   const [error, setError] = useState<string | null>(null)
   const { activeId, asPatient } = useFamily()
@@ -91,6 +93,12 @@ export function Dokumentacja() {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={doc.document_status} />
+                      {/* ze skierowania prosto w umawianie — z podpiętym skierowaniem */}
+                      {doc.document_type === 'REFERRAL' && ['ACTIVE', 'CONFIRMED'].includes(doc.document_status) && (
+                        <Button size="sm" onClick={() => navigate(`/umow?mode=exam&refDoc=${doc.document_id}`)}>
+                          <CalendarPlus size={14} /> {t('Umów na podstawie skierowania')}
+                        </Button>
+                      )}
                       <Button size="sm" variant="secondary"
                         onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
                         <Download size={14} /> {t('Pobierz PDF')}

@@ -35,6 +35,9 @@ export function Terminy() {
   })
 
   const [form, setForm] = useState({
+    kind: 'visit',      // visit = wizyta lekarska, exam = badanie (pracownia)
+    service: '',
+    referral: false,
     doctor_id: '',
     date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
     time: '09:00',
@@ -58,7 +61,9 @@ export function Terminy() {
       return api(`/clinics/${clinic!.clinic_id}/slots`, {
         method: 'POST',
         body: {
-          doctor_id: Number(doctorId),
+          doctor_id: form.kind === 'visit' ? Number(doctorId) : null,
+          service_name: form.kind === 'exam' ? form.service.trim() : null,
+          referral_required: form.kind === 'exam' && form.referral,
           datetimes,
           appointment_type: form.type,
           price: form.price ? Number(form.price) : null,
@@ -144,13 +149,30 @@ export function Terminy() {
           className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto]"
           onSubmit={e => { e.preventDefault(); addSlot.mutate() }}
         >
-          <Field label="Lekarz">
-            <select className={inputCls} value={doctorId} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))}>
-              {(doctors ?? []).map(d => (
-                <option key={d.doctor_id} value={d.doctor_id}>{d.name} — {d.specialization}</option>
-              ))}
+          <Field label="Rodzaj">
+            <select className={inputCls} value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
+              <option value="visit">wizyta lekarska</option>
+              <option value="exam">badanie (pracownia)</option>
             </select>
           </Field>
+          {form.kind === 'visit' ? (
+            <Field label="Lekarz">
+              <select className={inputCls} value={doctorId} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))}>
+                {(doctors ?? []).map(d => (
+                  <option key={d.doctor_id} value={d.doctor_id}>{d.name} — {d.specialization}</option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <Field label="Badanie">
+              <input className={inputCls} required minLength={2} value={form.service} placeholder="np. RTG klatki piersiowej"
+                onChange={e => setForm(f => ({ ...f, service: e.target.value }))} />
+              <label className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-gray-500">
+                <input type="checkbox" checked={form.referral}
+                  onChange={e => setForm(f => ({ ...f, referral: e.target.checked }))} /> wymaga skierowania
+              </label>
+            </Field>
+          )}
           <Field label="Data">
             <input type="date" className={inputCls} required value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </Field>

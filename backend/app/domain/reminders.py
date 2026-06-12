@@ -22,11 +22,12 @@ def send_due_reminders(db: Session) -> int:
         Appointment.appointment_datetime <= now + timedelta(hours=24),
     )).all()
     for a in rows:
-        doctor_user = db.get(AppUser, a.doctor_id)
+        doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
+        who = doctor_user.username if doctor_user else f"badanie {a.service_name}"
         notify(
             db, a.patient_id,
             "Przypomnienie o wizycie",
-            f"Jutro masz wizytę: {doctor_user.username}, "
+            f"Jutro masz wizytę: {who}, "
             f"{a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}"
             f"{' (teleporada — połączysz się z portalu)' if a.appointment_type == 'ONLINE' else ''}.",
         )

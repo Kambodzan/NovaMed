@@ -15,8 +15,10 @@ export interface AppointmentOut {
   appointment_datetime: string
   appointment_status: string
   appointment_type: 'ONLINE' | 'STATIONARY'
-  doctor_id: number
+  doctor_id: number | null  // NULL = badanie diagnostyczne (pracownia placówki)
   doctor_name: string
+  service_name: string | null
+  referral_required: boolean
   specialization: string | null
   clinic_id: number
   clinic_name: string
