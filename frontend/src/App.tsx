@@ -9,6 +9,8 @@ import { Start } from './pages/Start'
 import { Umow } from './pages/Umow'
 import { Wizyty } from './pages/Wizyty'
 import { Dokumentacja } from './pages/Dokumentacja'
+import { Recepty } from './pages/Recepty'
+import { SkierowaniaPacjenta } from './pages/SkierowaniaPacjenta'
 import { Rodzina } from './pages/Rodzina'
 import { RezerwacjaPubliczna } from './pages/RezerwacjaPubliczna'
 import { ResetHasla } from './pages/ResetHasla'
@@ -120,6 +122,8 @@ export default function App() {
           <Route index element={<Start />} />
           <Route path="umow" element={<Umow />} />
           <Route path="wizyty" element={<Wizyty />} />
+          <Route path="recepty" element={<Recepty />} />
+          <Route path="skierowania" element={<SkierowaniaPacjenta />} />
           <Route path="dokumentacja" element={<Dokumentacja />} />
           <Route path="udostepnij" element={<Udostepnij />} />
           <Route path="rodzina" element={<Rodzina />} />

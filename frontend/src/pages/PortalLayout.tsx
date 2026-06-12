@@ -12,6 +12,8 @@ const navItems = [
   { to: '/', label: 'Start' },
   { to: '/umow', label: 'Umów wizytę' },
   { to: '/wizyty', label: 'Moje wizyty' },
+  { to: '/recepty', label: 'Recepty' },
+  { to: '/skierowania', label: 'Skierowania' },
   { to: '/dokumentacja', label: 'Dokumentacja' },
   { to: '/udostepnij', label: 'Udostępnij' },
   { to: '/rodzina', label: 'Rodzina' },

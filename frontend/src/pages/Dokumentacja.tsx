@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarPlus, Download, FileSignature, FileText, FlaskConical, FolderOpen, Pill } from 'lucide-react'
+import { Download, FileText, FlaskConical, FolderOpen } from 'lucide-react'
 import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
 import { API_URL, api, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -22,16 +21,14 @@ async function downloadPdf(documentId: number) {
   URL.revokeObjectURL(a.href)
 }
 
-const docMeta: Record<DocumentOut['document_type'], { icon: typeof FileText; label: string }> = {
-  PRESCRIPTION: { icon: Pill, label: 'E-recepta' },
-  REFERRAL: { icon: FileSignature, label: 'E-skierowanie' },
+// recepty i skierowania mają własne strony — tu zostaje reszta dokumentacji
+const docMeta: Record<string, { icon: typeof FileText; label: string }> = {
   LAB_RESULT: { icon: FlaskConical, label: 'Wynik badania' },
   SICK_LEAVE: { icon: FileText, label: 'E-ZLA' },
   NOTE: { icon: FileText, label: 'Notatka z wizyty' },
 }
 
 export function Dokumentacja() {
-  const navigate = useNavigate()
   const [filter, setFilter] = useState<string>('ALL')
   const [error, setError] = useState<string | null>(null)
   const { activeId, asPatient } = useFamily()
@@ -41,7 +38,9 @@ export function Dokumentacja() {
     queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
   })
 
-  const filtered = (docs ?? []).filter(d => filter === 'ALL' || d.document_type === filter)
+  const filtered = (docs ?? [])
+    .filter(d => d.document_type in docMeta)
+    .filter(d => filter === 'ALL' || d.document_type === filter)
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -59,7 +58,7 @@ export function Dokumentacja() {
               filter === kind ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-500 hover:text-gray-900',
             )}
           >
-            {kind === 'ALL' ? t('Wszystkie') : t(docMeta[kind as DocumentOut['document_type']].label)}
+            {kind === 'ALL' ? t('Wszystkie') : t(docMeta[kind].label)}
           </button>
         ))}
       </div>
@@ -93,12 +92,6 @@ export function Dokumentacja() {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={doc.document_status} />
-                      {/* ze skierowania prosto w umawianie — z podpiętym skierowaniem */}
-                      {doc.document_type === 'REFERRAL' && ['ACTIVE', 'CONFIRMED'].includes(doc.document_status) && (
-                        <Button size="sm" onClick={() => navigate(`/umow?mode=exam&refDoc=${doc.document_id}`)}>
-                          <CalendarPlus size={14} /> {t('Umów na podstawie skierowania')}
-                        </Button>
-                      )}
                       <Button size="sm" variant="secondary"
                         onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
                         <Download size={14} /> {t('Pobierz PDF')}

@@ -15,6 +15,18 @@ const EN: Record<string, string> = {
   'Dokumentacja': 'Records',
   'Udostępnij': 'Share',
   'Rodzina': 'Family',
+  'Recepty': 'Prescriptions',
+  'Skierowania': 'Referrals',
+  'Brak recept': 'No prescriptions',
+  'E-recepty wystawione przez lekarza pojawią się tutaj z kodem do realizacji w aptece.':
+    'E-prescriptions from your doctor will appear here with the pharmacy code.',
+  'kod recepty': 'prescription code',
+  'W aptece podaj kod i PESEL.': 'At the pharmacy, give the code and your PESEL.',
+  'Brak skierowań': 'No referrals',
+  'Skierowania od lekarza pojawią się tutaj — z każdego aktywnego umówisz termin jednym kliknięciem.':
+    'Referrals from your doctor will appear here — book from any active one in a single click.',
+  'Zabieg zaplanuje pielęgniarka — skierowanie czeka w jej kolejce.':
+    'A nurse will schedule the procedure — the referral is waiting in her queue.',
   'Wyloguj': 'Log out',
   'Powiadomienia SMS': 'SMS notifications',
   'wł.': 'on',
