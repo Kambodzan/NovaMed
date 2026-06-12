@@ -8,10 +8,10 @@ import type { AppointmentOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
 
 interface Clinic {
-  clinic_id: number; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number
+  clinic_id: string; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number
   confirmation_required: boolean; confirmation_hours: number
 }
-interface DoctorRow { doctor_id: number; name: string; specialization: string | null }
+interface DoctorRow { doctor_id: string; name: string; specialization: string | null }
 
 export function Terminy() {
   const queryClient = useQueryClient()
@@ -23,7 +23,7 @@ export function Terminy() {
     queryFn: () => api<Clinic[]>('/clinics'),
   })
   // przychodnia = wiele placówek; rejestracja wybiera, którą obsługuje
-  const [clinicId, setClinicId] = useState<number | null>(null)
+  const [clinicId, setClinicId] = useState<string | null>(null)
   const clinic = (clinics ?? []).find(c => c.clinic_id === clinicId) ?? clinics?.[0]
 
   const { data: doctors } = useQuery({
@@ -65,7 +65,7 @@ export function Terminy() {
       return api(`/clinics/${clinic!.clinic_id}/slots`, {
         method: 'POST',
         body: {
-          doctor_id: form.kind === 'visit' ? Number(doctorId) : null,
+          doctor_id: form.kind === 'visit' ? doctorId : null,
           service_name: form.kind === 'exam' ? form.service.trim() : null,
           datetimes,
           appointment_type: form.type,
@@ -118,7 +118,7 @@ export function Terminy() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   const removeSlot = useMutation({
-    mutationFn: (id: number) => api(`/slots/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/slots/${id}`, { method: 'DELETE' }),
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] }) },
     onError: (e) => { setOk(null); setError(e instanceof ApiError ? e.message : 'Nie udało się usunąć terminu.') },
   })
@@ -145,7 +145,7 @@ export function Terminy() {
               aria-label="Placówka"
               className={cx(inputCls, 'w-56')}
               value={clinic?.clinic_id ?? ''}
-              onChange={e => setClinicId(Number(e.target.value))}
+              onChange={e => setClinicId(e.target.value)}
             >
               {(clinics ?? []).map(c => <option key={c.clinic_id} value={c.clinic_id}>{c.clinic_name}</option>)}
             </select>

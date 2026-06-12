@@ -53,7 +53,7 @@ const doctorInitials = (name: string) => {
 const shortLoc = (clinicName: string) => clinicName.split('—').pop()!.trim()
 
 interface DoctorCardData {
-  id: number
+  id: string  // doctor_id (UUID) albo '' dla badań (pracownia)
   name: string
   spec: string | null
   referralRequired?: boolean
@@ -82,7 +82,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
   const { data: rating } = useQuery({
     queryKey: ['doctor-rating', d.id],
     queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${d.id}`),
-    enabled: d.id > 0,  // badania (pracownia) nie mają ocen lekarza
+    enabled: d.id !== '',  // badania (pracownia) nie mają ocen lekarza
     staleTime: 300_000,
   })
   const dayLabel = (day: string) =>
@@ -190,14 +190,14 @@ export function Umow() {
   const [step, setStep] = useState(1)
   const [spec, setSpec] = useState<string | null>(null)
   const [clinicFilter, setClinicFilter] = useState<string | null>(null)
-  const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
+  const [doctorFilter, setDoctorFilter] = useState<{ id: string; name: string } | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
   const [showAllDocs, setShowAllDocs] = useState(false)
   // wizyta lekarska czy badanie diagnostyczne (spirometria, RTG, TK…)
   const [bookKind, setBookKind] = useState<'visit' | 'exam'>(
     () => new URLSearchParams(window.location.search).get('mode') === 'exam' ? 'exam' : 'visit')
-  const [refDocId, setRefDocId] = useState<number | null>(
-    () => Number(new URLSearchParams(window.location.search).get('refDoc')) || null)
+  const [refDocId, setRefDocId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('refDoc'))
   const [externalRef, setExternalRef] = useState(false)
   const [locQuery, setLocQuery] = useState('')
   const [locError, setLocError] = useState<string | null>(null)
@@ -267,7 +267,7 @@ export function Umow() {
 
   // karty lekarzy z mini-kalendarzem: dni → godziny (jak na portalach rezerwacyjnych)
   const doctorCards = useMemo(() => {
-    const map = new Map<number | string, { id: number; name: string; spec: string | null; referralRequired: boolean; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
+    const map = new Map<string, { id: string; name: string; spec: string | null; referralRequired: boolean; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
       // tryb: wizyty lekarskie vs badania (pracownia)
       if (bookKind === 'visit' ? s.service_name != null : s.service_name == null) continue
@@ -284,7 +284,7 @@ export function Umow() {
       const key = bookKind === 'visit' ? s.doctor_id! : s.service_name!
       const cur = map.get(key)
         ?? {
-          id: typeof key === 'number' ? key : 0,
+          id: bookKind === 'visit' ? (s.doctor_id ?? '') : '',
           name: bookKind === 'visit' ? s.doctor_name : s.service_name!,
           spec: bookKind === 'visit' ? s.specialization : null,
           referralRequired: s.referral_required,
@@ -328,7 +328,7 @@ export function Umow() {
         out.push({ key: `spec:${name}`, label: `${name} (${count})`, insert: name })
     }
 
-    const docs = new Map<number, { name: string; spec: string | null; earliest: string }>()
+    const docs = new Map<string, { name: string; spec: string | null; earliest: string }>()
     for (const s of allSlots ?? []) {
       if (s.doctor_id == null) continue  // sloty badań nie są lekarzami
       if (fq && !fold(s.doctor_name).includes(fq) && !fold(s.specialization ?? '').includes(fq)) continue
@@ -358,7 +358,7 @@ export function Umow() {
   const applySuggestion = (item: TypeaheadItem) => {
     const [kind, ...rest] = item.key.split(':')
     if (kind === 'spec') setSpec(rest.join(':'))
-    else if (kind === 'doc') setDoctorFilter({ id: Number(rest[0]), name: rest.slice(1).join(':') })
+    else if (kind === 'doc') setDoctorFilter({ id: rest[0], name: rest.slice(1).join(':') })
     else if (kind === 'cli' || kind === 'city') setClinicFilter(item.key)
     setQuery('')
   }
@@ -408,7 +408,7 @@ export function Umow() {
   }
 
   const book = useMutation({
-    mutationFn: (id: number) => api<BookOut>(asPatient(`/appointments/${id}/book`), {
+    mutationFn: (id: string) => api<BookOut>(asPatient(`/appointments/${id}/book`), {
       method: 'POST',
       body: {
         reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
@@ -426,7 +426,7 @@ export function Umow() {
   })
 
   const pay = useMutation({
-    mutationFn: ({ id, outcome }: { id: number; outcome: 'success' | 'failure' }) =>
+    mutationFn: ({ id, outcome }: { id: string; outcome: 'success' | 'failure' }) =>
       api<BookOut>(`/appointments/${id}/pay`, { method: 'POST', body: { outcome } }),
     onSuccess: (data) => {
       setPayPhase(data.payment?.payment_status === 'PAID' ? 'success' : 'declined')
@@ -865,7 +865,7 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
   })
 
   const leave = useMutation({
-    mutationFn: (id: number) => api(`/waiting-list/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/waiting-list/${id}`, { method: 'DELETE' }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['waitlist'] }),
   })
 

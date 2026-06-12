@@ -16,7 +16,7 @@ export function AdminUzytkownicy() {
   })
 
   const toggle = useMutation({
-    mutationFn: (id: number) => api(`/admin/users/${id}/toggle-active`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/admin/users/${id}/toggle-active`, { method: 'POST' }),
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['admin-users'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Operacja nie powiodła się.'),
   })

@@ -9,7 +9,7 @@ import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
 
-async function downloadIcs(appointmentId: number) {
+async function downloadIcs(appointmentId: string) {
   const resp = await fetch(`${API_URL}/appointments/${appointmentId}/ics`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   })
@@ -47,13 +47,13 @@ export function Wizyty() {
   }
 
   const cancel = useMutation({
-    mutationFn: (id: number) => api(`/appointments/${id}/cancel`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/appointments/${id}/cancel`, { method: 'POST' }),
     onSuccess: () => { invalidate(); setCancelFor(null); setError(null) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się anulować wizyty.'),
   })
 
   const confirmAttendance = useMutation({
-    mutationFn: (id: number) => api(`/appointments/${id}/confirm-attendance`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/appointments/${id}/confirm-attendance`, { method: 'POST' }),
     onSuccess: () => { invalidate(); setError(null) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się potwierdzić obecności.'),
   })
@@ -431,7 +431,7 @@ function RescheduleModal({ visit, onClose, onDone }: {
   })
 
   const reschedule = useMutation({
-    mutationFn: (newId: number) => api(`/appointments/${visit.appointment_id}/reschedule`, {
+    mutationFn: (newId: string) => api(`/appointments/${visit.appointment_id}/reschedule`, {
       method: 'POST', body: { new_appointment_id: newId },
     }),
     onSuccess: onDone,

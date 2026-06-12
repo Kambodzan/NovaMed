@@ -29,7 +29,7 @@ export function Rodzina() {
   })
 
   const unlink = useMutation({
-    mutationFn: (id: number) => api(`/family/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/family/${id}`, { method: 'DELETE' }),
     onSuccess: (_d, id) => {
       if (activeId === id) setActiveId(null)
       void queryClient.invalidateQueries({ queryKey: ['family'] })

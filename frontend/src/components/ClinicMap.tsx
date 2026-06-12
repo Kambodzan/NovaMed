@@ -16,7 +16,7 @@ export function distanceKm(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 export interface MapClinic {
-  clinic_id: number
+  clinic_id: string
   clinic_name: string
   address: string
   city: string | null

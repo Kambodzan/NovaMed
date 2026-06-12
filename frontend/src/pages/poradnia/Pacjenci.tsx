@@ -4,9 +4,9 @@ import { Pencil, Search, ShieldCheck, Users } from 'lucide-react'
 import { Badge, Button, EmptyState, Field, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 
-interface Clinic { clinic_id: number; clinic_name: string }
+interface Clinic { clinic_id: string; clinic_name: string }
 interface PatientRow {
-  patient_id: number
+  patient_id: string
   first_name: string
   last_name: string
   pesel: string
@@ -27,7 +27,7 @@ export function PacjenciPlacowki() {
   })
 
   const verify = useMutation({
-    mutationFn: (patientId: number) => api(`/patients/${patientId}/verify-insurance`, { method: 'POST' }),
+    mutationFn: (patientId: string) => api(`/patients/${patientId}/verify-insurance`, { method: 'POST' }),
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Weryfikacja eWUŚ nie powiodła się.'),
   })

@@ -40,7 +40,7 @@ export function Udostepnij() {
   })
 
   const revoke = useMutation({
-    mutationFn: (id: number) => api(`/shares/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/shares/${id}`, { method: 'DELETE' }),
     onSuccess: (_d, id) => {
       if (lastCode?.share_id === id) setLastCode(null)
       void queryClient.invalidateQueries({ queryKey: ['shares'] })

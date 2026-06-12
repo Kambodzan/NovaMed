@@ -79,7 +79,7 @@ export function Gabinet() {
 
   const saveNote = useMutation({
     mutationFn: () => api(`/patients/${patientId}/notes`, {
-      method: 'POST', body: { appointment_id: Number(id), content: composeNote(note, rozpoznanie) },
+      method: 'POST', body: { appointment_id: id, content: composeNote(note, rozpoznanie) },
     }),
     onSuccess: () => {
       setNote(EMPTY_NOTE)
@@ -97,8 +97,8 @@ export function Gabinet() {
   const inProgress = visit.appointment_status === 'IN_PROGRESS'
   const confirmed = visit.appointment_status === 'CONFIRMED'
   const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
-  const visitDocs = (documents ?? []).filter(d => d.appointment_id === Number(id))
-  const historyDocs = (documents ?? []).filter(d => d.appointment_id !== Number(id))
+  const visitDocs = (documents ?? []).filter(d => d.appointment_id === id)
+  const historyDocs = (documents ?? []).filter(d => d.appointment_id !== id)
   const histShown = historyDocs.filter(d => histFilter === 'ALL' || d.document_type === histFilter)
   const histCount = (k: DocKind) => historyDocs.filter(d => d.document_type === k).length
 
@@ -259,7 +259,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
 
               <Tile className="p-5" delay={140}>
                 <TileHeader title="Wystaw dokument" />
-                {patientId && <WystawDokument patientId={patientId} appointmentId={Number(id)} hideKinds={['NOTE']} icd10={rozpoznanie} />}
+                {patientId && <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} />}
               </Tile>
             </>
           ) : confirmed ? (

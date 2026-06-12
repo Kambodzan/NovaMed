@@ -58,7 +58,7 @@ function AccountMenu() {
             <p className="px-3 pt-2 pb-1 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
               {t('Aktywny profil')}
             </p>
-            {[{ id: null as number | null, label: myName }, ...dependents.map(d => ({ id: d.patient_id as number | null, label: `${d.first_name} ${d.last_name}` }))].map(p => (
+            {[{ id: null as string | null, label: myName }, ...dependents.map(d => ({ id: d.patient_id as string | null, label: `${d.first_name} ${d.last_name}` }))].map(p => (
               <button
                 key={p.id ?? 'me'}
                 role="menuitem"

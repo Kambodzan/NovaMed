@@ -28,14 +28,14 @@ export function Zabiegi() {
   }
 
   const complete = useMutation({
-    mutationFn: ({ id, notes }: { id: number; notes: string }) =>
+    mutationFn: ({ id, notes }: { id: string; notes: string }) =>
       api(`/procedures/${id}/complete`, { method: 'POST', body: { notes } }),
     onSuccess: () => { invalidate(); setCompleteFor(null); setNotes(''); setError(null) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się odnotować zabiegu.'),
   })
 
   const cancel = useMutation({
-    mutationFn: (id: number) => api(`/procedures/${id}/cancel`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/procedures/${id}/cancel`, { method: 'POST' }),
     onSuccess: () => { invalidate(); setError(null) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się odwołać zabiegu.'),
   })

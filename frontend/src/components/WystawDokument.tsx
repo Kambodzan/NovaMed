@@ -9,7 +9,7 @@ import { Typeahead } from './Typeahead'
 import { DatePicker } from './DatePicker'
 
 interface Icd10Row { code: string; name: string }
-interface MedicationRow { med_id: number; name: string; form: string | null; strength: string | null }
+interface MedicationRow { med_id: string; name: string; form: string | null; strength: string | null }
 
 // po wybraniu w polu zostaje „B02 — Półpasiec", nie sam kod;
 // czysty kod wycinamy dopiero przy wysyłce (icdCode)
@@ -38,8 +38,8 @@ export const KIND_LABEL: Record<DocKind, string> = {
 }
 
 export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10 }: {
-  patientId: number
-  appointmentId: number
+  patientId: string
+  appointmentId: string
   hideKinds?: DocKind[]
   // rozpoznanie podane z zewnątrz (gabinet: jedno pole w notatce) —
   // formularz nie pokazuje wtedy własnego pola ICD-10
@@ -103,7 +103,7 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
   })
 
   const resend = useMutation({
-    mutationFn: (docId: number) => api<DocumentOut>(`/documents/${docId}/resend`, { method: 'POST' }),
+    mutationFn: (docId: string) => api<DocumentOut>(`/documents/${docId}/resend`, { method: 'POST' }),
     onSuccess: (doc) => { setResult(doc); refresh() },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Ponowna wysyłka nie powiodła się.'),
   })

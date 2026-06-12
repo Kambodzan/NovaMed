@@ -51,7 +51,7 @@ export function NotificationsBell() {
   })
 
   const markRead = useMutation({
-    mutationFn: (id: number) => api(`/notifications/${id}/read`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/notifications/${id}/read`, { method: 'POST' }),
     onSuccess: invalidate,
   })
 

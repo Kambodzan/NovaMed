@@ -1,7 +1,7 @@
 // Typy odpowiedzi backendu (FastAPI — patrz backend/app/api/*)
 
 export interface Me {
-  user_id: number
+  user_id: string
   email: string
   username: string
   role: string
@@ -12,18 +12,18 @@ export interface Me {
 }
 
 export interface AppointmentOut {
-  appointment_id: number
+  appointment_id: string
   appointment_datetime: string
   appointment_status: string
   appointment_type: 'ONLINE' | 'STATIONARY'
-  doctor_id: number | null  // NULL = badanie diagnostyczne (pracownia placówki)
+  doctor_id: string | null  // NULL = badanie diagnostyczne (pracownia placówki)
   doctor_name: string
   service_name: string | null
   referral_required: boolean
   specialization: string | null
-  clinic_id: number
+  clinic_id: string
   clinic_name: string
-  patient_id: number | null
+  patient_id: string | null
   patient_name: string | null
   price: number | null
   reviewed?: boolean | null
@@ -34,7 +34,7 @@ export interface AppointmentOut {
 }
 
 export interface NotificationOut {
-  notification_id: number
+  notification_id: string
   sent_at: string
   notification_title: string
   notification_content: string
@@ -42,13 +42,13 @@ export interface NotificationOut {
 }
 
 export interface WaitlistEntry {
-  entry_id: number
+  entry_id: string
   specialization: string
   created_at: string
 }
 
 export interface ShareOut {
-  share_id: number
+  share_id: string
   access_code: string
   scope: string
   scope_label: string
@@ -57,7 +57,7 @@ export interface ShareOut {
 }
 
 export interface SharedDocsOut {
-  patient_id: number
+  patient_id: string
   patient_name: string
   pesel: string
   scope_label: string
@@ -66,7 +66,7 @@ export interface SharedDocsOut {
 }
 
 export interface AdminUser {
-  user_id: number
+  user_id: string
   username: string
   email: string
   role: string
@@ -94,7 +94,7 @@ export interface AdminStats {
 }
 
 export interface PaymentInfo {
-  payment_id: number
+  payment_id: string
   provider_ref: string
   amount: number
   payment_status: 'PENDING' | 'PAID' | 'FAILED'
@@ -106,22 +106,22 @@ export interface BookOut {
 }
 
 export interface DocumentOut {
-  document_id: number
+  document_id: string
   document_type: 'PRESCRIPTION' | 'REFERRAL' | 'LAB_RESULT' | 'SICK_LEAVE' | 'NOTE'
   document_status: string
   issued_at: string
-  patient_id: number
+  patient_id: string
   patient_name: string
   doctor_name: string
   code: string | null
   details: string | null
   error_message: string | null
   referral_type: 'NURSING' | 'LAB' | 'SPECIALIST' | null
-  appointment_id: number | null
+  appointment_id: string | null
 }
 
 export interface ReviewOut {
-  review_id: number
+  review_id: string
   rating: number
   comment: string | null
   created_at: string
@@ -129,19 +129,19 @@ export interface ReviewOut {
 }
 
 export interface DoctorReviewsOut {
-  doctor_id: number
+  doctor_id: string
   average: number | null
   count: number
   items: ReviewOut[]
 }
 
 export interface ProcedureOut {
-  procedure_id: number
+  procedure_id: string
   procedure_datetime: string
   procedure_type: string
   procedure_status: 'PLANNED' | 'DONE' | 'CANCELLED'
   notes: string | null
-  patient_id: number
+  patient_id: string
   patient_name: string
   referral_code: string
   ordered_by: string
@@ -154,11 +154,11 @@ export interface ReportOut {
   cancelled: number
   no_show: number
   online_share_pct: number
-  per_doctor: Array<{ doctor_id: number; doctor_name: string; booked: number; completed: number }>
+  per_doctor: Array<{ doctor_id: string; doctor_name: string; booked: number; completed: number }>
 }
 
 export interface PatientInfo {
-  patient_id: number
+  patient_id: string
   first_name: string
   last_name: string
   pesel: string

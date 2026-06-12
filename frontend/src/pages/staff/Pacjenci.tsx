@@ -6,9 +6,9 @@ import { ChevronRight, Search, Users } from 'lucide-react'
 import { Badge, EmptyState, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api } from '../../lib/api'
 
-interface Clinic { clinic_id: number; clinic_name: string }
+interface Clinic { clinic_id: string; clinic_name: string }
 interface PatientRow {
-  patient_id: number
+  patient_id: string
   first_name: string
   last_name: string
   pesel: string

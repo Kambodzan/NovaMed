@@ -5,7 +5,7 @@ import { Button, EmptyState, PageHeader, Tile, TileHeader, Overline, cx, inputCl
 import { api, apiText } from '../../lib/api'
 import type { ReportOut } from '../../lib/types'
 
-interface Clinic { clinic_id: number; clinic_name: string }
+interface Clinic { clinic_id: string; clinic_name: string }
 
 const currentMonth = () => new Date().toISOString().slice(0, 7)
 
