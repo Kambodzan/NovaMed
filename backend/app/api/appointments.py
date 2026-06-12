@@ -295,7 +295,8 @@ def search_slots(
     """UC-P3: wyszukiwanie wolnych terminów (kalendarz pacjenta)."""
     q = (
         select(Appointment)
-        .join(Doctor, Doctor.doctor_id == Appointment.doctor_id)
+        # OUTER JOIN: sloty badań nie mają lekarza (doctor_id NULL) i też mają być widoczne
+        .outerjoin(Doctor, Doctor.doctor_id == Appointment.doctor_id)
         .where(Appointment.appointment_status == AppointmentStatus.FREE.value)
         .order_by(Appointment.appointment_datetime)
     )
