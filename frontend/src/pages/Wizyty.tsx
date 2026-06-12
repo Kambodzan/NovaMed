@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, CalendarPlus, Check, MapPin, Star, Video } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Check, ClipboardList, MapPin, Star, Video } from 'lucide-react'
+import { PodgladDokumentu } from '../components/PodgladDokumentu'
+import type { DocumentOut } from '../lib/types'
 import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -29,6 +31,7 @@ export function Wizyty() {
   const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
   const [reviewFor, setReviewFor] = useState<AppointmentOut | null>(null)
   const [payFor, setPayFor] = useState<AppointmentOut | null>(null)
+  const [summaryFor, setSummaryFor] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const { activeId, asPatient } = useFamily()
@@ -95,13 +98,15 @@ export function Wizyty() {
             <Button size="sm" variant="ghost" onClick={() => { setCancelFor(v); setError(null) }}>{t('Zwolnij rezerwację')}</Button>
           </div>
         )}
-        {!actions && v.appointment_status === 'COMPLETED' && !v.reviewed && (
-          <Button size="sm" variant="secondary" onClick={() => setReviewFor(v)}>
-            <Star size={14} /> {t('Oceń')}
+        {!actions && v.appointment_status === 'COMPLETED' && (
+          <Button size="sm" variant="secondary" onClick={() => setSummaryFor(v)}>
+            <ClipboardList size={14} /> {t('Podsumowanie')}
           </Button>
         )}
-        {!actions && v.appointment_status === 'COMPLETED' && v.reviewed && (
-          <span className="text-xs font-bold text-gray-400">{t('opinia wystawiona')}</span>
+        {!actions && v.appointment_status === 'COMPLETED' && !v.reviewed && (
+          <Button size="sm" variant="ghost" onClick={() => setReviewFor(v)}>
+            <Star size={14} /> {t('Oceń')}
+          </Button>
         )}
       </div>
     </Tile>
@@ -162,6 +167,10 @@ export function Wizyty() {
           onClose={() => setPayFor(null)}
           onDone={() => { invalidate(); setPayFor(null) }}
         />
+      )}
+
+      {summaryFor && (
+        <PodsumowanieWizyty visit={summaryFor} onClose={() => setSummaryFor(null)} />
       )}
 
       {reviewFor && (
@@ -247,6 +256,86 @@ function ReviewModal({ visit, onClose, onDone }: {
         {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       </div>
     </Modal>
+  )
+}
+
+// Podsumowanie zakończonej wizyty: co lekarz wpisał (notatki/zalecenia)
+// i jakie dokumenty wystawił — elektronicznie, nie tylko „kartka z gabinetu".
+function PodsumowanieWizyty({ visit, onClose }: {
+  visit: AppointmentOut
+  onClose: () => void
+}) {
+  const { t } = useI18n()
+  const { activeId, asPatient } = useFamily()
+  const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
+
+  const { data: docs } = useQuery({
+    queryKey: ['my-documents', activeId],
+    queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
+  })
+  const visitDocs = (docs ?? []).filter(d => d.appointment_id === visit.appointment_id)
+  const notes = visitDocs.filter(d => d.document_type === 'NOTE')
+  const others = visitDocs.filter(d => d.document_type !== 'NOTE')
+
+  const KIND: Record<string, string> = {
+    PRESCRIPTION: 'E-recepta', REFERRAL: 'E-skierowanie',
+    LAB_RESULT: 'Wynik badania', SICK_LEAVE: 'E-ZLA (zwolnienie)',
+  }
+
+  return (
+    <>
+      <Modal
+        overline={`${visit.doctor_name} · ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)}`}
+        title={t('Podsumowanie wizyty')}
+        onClose={onClose}
+        footer={<Button size="sm" onClick={onClose}>{t('Zamknij')}</Button>}
+      >
+        <div className="space-y-4 pb-2">
+          {visit.notes && (
+            <div className="rounded-2xl bg-gray-50 px-4 py-3">
+              <p className="mb-1 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Zgłoszony powód wizyty')}</p>
+              <p className="text-sm font-medium text-gray-700">{visit.notes}</p>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-primary-soft/40 px-4 py-3">
+            <p className="mb-1 text-xs font-extrabold tracking-wider text-primary/70 uppercase">{t('Notatki i zalecenia lekarza')}</p>
+            {notes.length === 0 ? (
+              <p className="text-sm font-medium text-gray-500">{t('Lekarz nie zostawił notatki z tej wizyty.')}</p>
+            ) : notes.map(n => (
+              <p key={n.document_id} className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">
+                {n.details}
+              </p>
+            ))}
+          </div>
+
+          {others.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Dokumenty z tej wizyty')}</p>
+              <ul className="space-y-1.5">
+                {others.map(d => (
+                  <li key={d.document_id}>
+                    <button
+                      onClick={() => setPreviewFor(d)}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5 text-left hover:bg-primary-soft/40"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-gray-900">
+                          {t(KIND[d.document_type] ?? 'Dokument')}{d.code ? ` · ${d.code}` : ''}
+                        </span>
+                        <span className="block truncate text-xs font-medium text-gray-500">{d.details}</span>
+                      </span>
+                      <StatusBadge status={d.document_status} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </Modal>
+      {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} />}
+    </>
   )
 }
 

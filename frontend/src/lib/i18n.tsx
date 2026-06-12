@@ -155,6 +155,12 @@ const EN: Record<string, string> = {
   'Status': 'Status',
   'Treść': 'Content',
   'Zamknij': 'Close',
+  'Podsumowanie': 'Summary',
+  'Podsumowanie wizyty': 'Visit summary',
+  'Zgłoszony powód wizyty': 'Reported reason for the visit',
+  'Notatki i zalecenia lekarza': "Doctor's notes and recommendations",
+  'Lekarz nie zostawił notatki z tej wizyty.': 'The doctor left no notes for this visit.',
+  'Dokumenty z tej wizyty': 'Documents from this visit',
 
   // Udostępnij
   'Udostępnij dokumentację': 'Share your records',

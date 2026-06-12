@@ -79,6 +79,7 @@ class DocumentOut(BaseModel):
     details: str | None = None
     error_message: str | None = None
     referral_type: str | None = None  # NURSING/LAB/SPECIALIST (tylko skierowania)
+    appointment_id: int | None = None  # wizyta, w której wystawiono dokument
 
 
 # ---------- pomocnicze ----------
@@ -126,6 +127,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         code=code,
         details=details,
         referral_type=referral_type,
+        appointment_id=doc.appointment_id,
         error_message=error_message,
     )
 
