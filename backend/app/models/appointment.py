@@ -39,7 +39,9 @@ class Appointment(Base):
     # podpięte skierowanie z apki LUB oświadczenie o zewnętrznym
     service_name: Mapped[str | None] = mapped_column(String(100))
     referral_required: Mapped[bool] = mapped_column(Boolean, default=False)
-    referral_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("medical_document.document_id"))
+    # FK dodawany w migracji osobno (cykl appointment<->medical_document psuje
+    # topologiczne sortowanie autogenerate)
+    referral_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("medical_document.document_id", use_alter=True, name="fk_appointment_referral_doc"))
     external_referral: Mapped[bool] = mapped_column(Boolean, default=False)
     # Potwierdzanie obecności (gdy placówka wymaga): czy wysłano prośbę
     # i czy pacjent potwierdził, że będzie
