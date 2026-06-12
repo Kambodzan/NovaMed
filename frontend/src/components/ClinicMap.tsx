@@ -14,13 +14,15 @@ export interface MapClinic {
   lng: number | null
 }
 
+// oba stany w primary teal — aktywny ciemniejszy i większy
 const pinIcon = (active: boolean) => L.divIcon({
   className: '',
-  html: `<div style="width:26px;height:26px;border-radius:9999px 9999px 9999px 0;transform:rotate(-45deg);
-    background:${active ? '#0D9488' : '#475569'};border:3px solid #fff;
-    box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>`,
-  iconSize: [26, 26],
-  iconAnchor: [13, 26],
+  html: `<div style="width:${active ? 30 : 24}px;height:${active ? 30 : 24}px;
+    border-radius:9999px 9999px 9999px 0;transform:rotate(-45deg);
+    background:${active ? '#0F766E' : '#0D9488'};border:3px solid #fff;
+    box-shadow:0 2px 6px rgba(13,148,136,.45)"></div>`,
+  iconSize: [active ? 30 : 24, active ? 30 : 24],
+  iconAnchor: [active ? 15 : 12, active ? 30 : 24],
   popupAnchor: [0, -24],
 })
 

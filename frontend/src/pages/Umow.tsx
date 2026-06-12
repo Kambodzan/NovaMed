@@ -130,6 +130,7 @@ export function Umow() {
   const [clinicFilter, setClinicFilter] = useState<string | null>(null)
   const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
+  const [locQuery, setLocQuery] = useState('')
   const [query, setQuery] = useState('')
   const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
@@ -338,12 +339,16 @@ export function Umow() {
                 placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
               />
               {clinicNames.length > 1 && (
-                <Button variant="secondary" onClick={() => setMapOpen(true)}>
-                  <MapPin size={15} />
+                <button
+                  onClick={() => setMapOpen(true)}
+                  className={cx(inputCls, 'flex w-auto cursor-pointer items-center gap-2 font-bold',
+                    clinicFilter ? 'text-primary' : 'text-gray-400 hover:text-gray-900')}
+                >
+                  <MapPin size={15} className={clinicFilter ? 'text-primary' : 'text-gray-400'} />
                   {clinicFilter
                     ? (clinicFilter.startsWith('city:') ? clinicFilter.slice(5) : shortLoc(clinicFilter.slice(4)))
                     : t('Lokalizacja')}
-                </Button>
+                </button>
               )}
             </div>
 
@@ -403,44 +408,40 @@ export function Umow() {
       {mapOpen && (
         <Modal overline={t('Placówki')} title={t('Wybierz lokalizację')} onClose={() => setMapOpen(false)}>
           <div className="space-y-3 pb-4">
+            <Typeahead
+              id="map-search"
+              minLength={1}
+              value={locQuery}
+              onChange={setLocQuery}
+              onPick={item => {
+                setClinicFilter(item.key)
+                setLocQuery('')
+                if (item.key.startsWith('cli:')) setMapOpen(false)  // miasto: zostań i pokaż piny
+              }}
+              search={async (text) => {
+                const fq = fold(text.trim())
+                const out: TypeaheadItem[] = []
+                for (const [city, names] of cityGroups.filter(([c]) => fold(c).includes(fq)))
+                  out.push({ key: `city:${city}`, label: `${city} — ${t('miasto')} (${names.length})`, insert: city })
+                for (const c of (clinicList ?? []).filter(c => fold(c.clinic_name + c.address).includes(fq)))
+                  out.push({ key: `cli:${c.clinic_name}`, label: `${c.clinic_name}, ${c.address}`, insert: c.clinic_name })
+                return out.slice(0, 8)
+              }}
+              placeholder={t('Wpisz miasto lub adres…')}
+            />
             <ClinicMap
               clinics={clinicList ?? []}
               selected={clinicFilter}
               onSelect={f => { setClinicFilter(cur => cur === f ? null : f); setMapOpen(false) }}
             />
-            {cityGroups.map(([city, names]) => (
-              <div key={city}>
-                <p className="mb-1.5 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{city}</p>
-                <div className="flex flex-wrap gap-2">
-                  {names.length > 1 && (
-                    <button
-                      onClick={() => { setClinicFilter(`city:${city}`); setMapOpen(false) }}
-                      className="cursor-pointer rounded-full bg-primary-soft px-3.5 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white"
-                    >
-                      {t('Całe miasto')}: {city}
-                    </button>
-                  )}
-                  {names.map(n => (
-                    <button
-                      key={n}
-                      title={addressOf(n)}
-                      onClick={() => { setClinicFilter(`cli:${n}`); setMapOpen(false) }}
-                      className={cx(
-                        'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
-                        clinicFilter === `cli:${n}` ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900',
-                      )}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {clinicFilter && (
-              <Button variant="ghost" size="sm" onClick={() => { setClinicFilter(null); setMapOpen(false) }}>
-                {t('Wyczyść lokalizację')}
-              </Button>
-            )}
+            <div className="flex justify-between">
+              {clinicFilter ? (
+                <Button variant="ghost" size="sm" onClick={() => { setClinicFilter(null) }}>
+                  {t('Wyczyść lokalizację')}
+                </Button>
+              ) : <span />}
+              <Button size="sm" variant="secondary" onClick={() => setMapOpen(false)}>{t('Gotowe')}</Button>
+            </div>
           </div>
         </Modal>
       )}
