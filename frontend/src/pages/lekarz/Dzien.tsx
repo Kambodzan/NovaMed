@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, DoorOpen, MapPin, Video } from 'lucide-react'
-import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
+import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
+import { DatePicker } from '../../components/DatePicker'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
@@ -47,7 +48,7 @@ export function LekarzDzien() {
             {day !== todayIso() && (
               <Button size="sm" variant="secondary" onClick={() => setDay(todayIso())}>Dziś</Button>
             )}
-            <input type="date" className={cx(inputCls, 'w-44')} value={day} onChange={e => setDay(e.target.value)} />
+            <DatePicker className="w-52" value={day} onChange={setDay} />
           </>}
         />
       </div>

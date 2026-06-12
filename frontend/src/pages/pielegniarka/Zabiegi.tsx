@@ -6,6 +6,7 @@ import { Button, EmptyState, Field, Modal, Overline, PageHeader, StatusBadge, Ti
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { ProcedureOut } from '../../lib/types'
+import { DatePicker } from '../../components/DatePicker'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
@@ -49,7 +50,7 @@ export function Zabiegi() {
           overline="Plan dnia · ze skierowań lekarskich"
           title={formatDatePL(day + 'T00:00:00')}
           sub={`${done} wykonane · ${planned} zaplanowane`}
-          action={<input type="date" className={cx(inputCls, 'w-44')} value={day} onChange={e => setDay(e.target.value)} />}
+          action={<DatePicker className="w-52" value={day} onChange={setDay} />}
         />
       </div>
 

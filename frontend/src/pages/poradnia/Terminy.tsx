@@ -5,6 +5,7 @@ import { Button, DateChip, EmptyState, Field, PageHeader, Tile, TileHeader, cx, 
 import { api, ApiError } from '../../lib/api'
 import { dayNo, formatTime, monthShort } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
+import { DatePicker } from '../../components/DatePicker'
 
 interface Clinic {
   clinic_id: number; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number
@@ -179,7 +180,8 @@ export function Terminy() {
             </Field>
           )}
           <Field label="Data">
-            <input type="date" className={inputCls} required value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <DatePicker required value={form.date} min={new Date().toISOString().slice(0, 10)}
+              onChange={v => setForm(f => ({ ...f, date: v }))} />
           </Field>
           <Field label="Godzina" hint={`siatka co ${clinic?.slot_interval_min ?? 15} min`}>
             <input type="time" className={inputCls} required value={form.time}

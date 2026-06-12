@@ -9,6 +9,7 @@ import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
 import { peselValid } from '../lib/pesel'
 import { formatDatePL } from '../lib/format'
+import { DatePicker } from '../components/DatePicker'
 
 export function Rodzina() {
   const queryClient = useQueryClient()
@@ -99,8 +100,8 @@ export function Rodzina() {
             {peselBad && <p className="mt-1 text-xs font-bold text-red-600">{t('Nieprawidłowy PESEL (suma kontrolna).')}</p>}
           </Field>
           <Field label={t('Data urodzenia')}>
-            <input type="date" className={inputCls} required value={form.birth_date}
-              onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} />
+            <DatePicker required value={form.birth_date} max={new Date().toISOString().slice(0, 10)}
+              onChange={v => setForm(f => ({ ...f, birth_date: v }))} />
           </Field>
           <div className="flex items-end">
             <Button disabled={add.isPending || peselBad} type="submit"><Plus size={15} /> {t('Dodaj')}</Button>

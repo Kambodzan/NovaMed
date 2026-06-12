@@ -5,6 +5,7 @@ import { Button, EmptyState, Field, Modal, Overline, PageHeader, Tile, cx, input
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL } from '../../lib/format'
 import type { DocumentOut } from '../../lib/types'
+import { DatePicker } from '../../components/DatePicker'
 
 export function Skierowania() {
   const queryClient = useQueryClient()
@@ -87,7 +88,7 @@ export function Skierowania() {
           <div className="space-y-3 pb-2">
             <p className="text-sm font-medium text-gray-600">{planFor.details}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Data"><input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} /></Field>
+              <Field label="Data"><DatePicker value={date} min={new Date().toISOString().slice(0, 10)} onChange={setDate} /></Field>
               <Field label="Godzina"><input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} /></Field>
             </div>
             {error && <p className={cx('rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700')}>{error}</p>}

@@ -7,6 +7,7 @@ import { Button, Field, Tile, cx, inputCls } from '../ui'
 import { DEV_MODE, useAuth } from '../lib/auth'
 import { api } from '../lib/api'
 import { peselValid } from '../lib/pesel'
+import { DatePicker } from '../components/DatePicker'
 
 const STEPS = ['Konto', 'Twoje dane', 'Kontakt i zgody', 'Podsumowanie']
 
@@ -164,7 +165,8 @@ export function Rejestracja() {
               {peselBad && <p className="mt-1 text-xs font-bold text-red-600">Nieprawidłowy PESEL (suma kontrolna).</p>}
             </Field>
             <Field label="Data urodzenia">
-              <input className={inputCls} type="date" required value={profile.birth_date} onChange={set('birth_date')} />
+              <DatePicker required value={profile.birth_date} max={new Date().toISOString().slice(0, 10)}
+                onChange={v => setProfile(p => ({ ...p, birth_date: v }))} />
             </Field>
             <Button size="lg" className="w-full" disabled={peselBad} type="submit">Dalej</Button>
           </form>

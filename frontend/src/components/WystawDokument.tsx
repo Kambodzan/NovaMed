@@ -6,6 +6,7 @@ import { Button, Field, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import type { DocumentOut } from '../lib/types'
 import { Typeahead } from './Typeahead'
+import { DatePicker } from './DatePicker'
 
 interface Icd10Row { code: string; name: string }
 interface MedicationRow { med_id: number; name: string; form: string | null; strength: string | null }
@@ -203,8 +204,8 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
 
       {kind === 'SICK_LEAVE' && (
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Od"><input type="date" className={inputCls} required value={form.date_from} onChange={set('date_from')} /></Field>
-          <Field label="Do"><input type="date" className={inputCls} required value={form.date_to} onChange={set('date_to')} /></Field>
+          <Field label="Od"><DatePicker required value={form.date_from} onChange={v => setForm(f => ({ ...f, date_from: v }))} /></Field>
+          <Field label="Do"><DatePicker required value={form.date_to} min={form.date_from || undefined} onChange={v => setForm(f => ({ ...f, date_to: v }))} /></Field>
         </div>
       )}
 
