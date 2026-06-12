@@ -1,8 +1,9 @@
 // Recepty pacjenta — osobna strona (kod realizacji na pierwszym planie).
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Pill } from 'lucide-react'
+import { Download, Eye, Pill } from 'lucide-react'
 import { Button, EmptyState, Overline, StatusBadge, Tile } from '../ui'
+import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { API_URL, api, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
@@ -26,6 +27,7 @@ export function Recepty() {
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
+  const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
 
   const { data: docs } = useQuery({
     queryKey: ['my-documents', activeId],
@@ -63,16 +65,29 @@ export function Recepty() {
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <StatusBadge status={doc.document_status} />
-                    <Button size="sm" variant="secondary"
-                      onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
-                      <Download size={14} /> PDF
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => setPreviewFor(doc)}>
+                        <Eye size={14} /> {t('Podgląd')}
+                      </Button>
+                      <Button size="sm" variant="ghost"
+                        onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
+                        <Download size={14} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Tile>
             </li>
           ))}
         </ul>
+      )}
+
+      {previewFor && (
+        <PodgladDokumentu
+          documentId={previewFor.document_id}
+          title={`${t('E-recepta')}${previewFor.code ? ` · ${previewFor.code}` : ''}`}
+          onClose={() => setPreviewFor(null)}
+        />
       )}
     </div>
   )

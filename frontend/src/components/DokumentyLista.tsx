@@ -1,6 +1,7 @@
-// Lista dokumentów pacjenta (widok personelu) z pobieraniem PDF.
+// Lista dokumentów pacjenta (widok personelu) z podglądem i pobieraniem PDF.
 import { useState } from 'react'
-import { Download, FileSignature, FileText, FlaskConical, Pill } from 'lucide-react'
+import { Download, Eye, FileSignature, FileText, FlaskConical, Pill } from 'lucide-react'
+import { PodgladDokumentu } from './PodgladDokumentu'
 import { Button, EmptyState, StatusBadge } from '../ui'
 import { API_URL, getAuthToken } from '../lib/api'
 import { formatDatePL } from '../lib/format'
@@ -30,6 +31,7 @@ export function DokumentyLista({ documents, emptyHint }: {
   emptyHint?: string
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   if (documents.length === 0) {
     return (
       <EmptyState
@@ -61,15 +63,27 @@ export function DokumentyLista({ documents, emptyHint }: {
             </div>
             <div className="flex flex-col items-end gap-1.5">
               <StatusBadge status={d.document_status} />
-              <Button size="sm" variant="ghost"
-                onClick={() => downloadPdf(d.document_id).then(() => setError(null), () => setError('Nie udało się pobrać PDF — spróbuj ponownie.'))}>
-                <Download size={13} /> PDF
-              </Button>
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="ghost" onClick={() => setPreviewFor(d)}>
+                  <Eye size={13} /> Podgląd
+                </Button>
+                <Button size="sm" variant="ghost"
+                  onClick={() => downloadPdf(d.document_id).then(() => setError(null), () => setError('Nie udało się pobrać PDF — spróbuj ponownie.'))}>
+                  <Download size={13} />
+                </Button>
+              </div>
             </div>
           </li>
         )
       })}
     </ul>
+    {previewFor && (
+      <PodgladDokumentu
+        documentId={previewFor.document_id}
+        title={`${KIND_LABEL[previewFor.document_type]}${previewFor.code ? ` · ${previewFor.code}` : ''}`}
+        onClose={() => setPreviewFor(null)}
+      />
+    )}
     </>
   )
 }

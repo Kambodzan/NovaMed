@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, FileText, FlaskConical, FolderOpen } from 'lucide-react'
+import { Download, Eye, FileText, FlaskConical, FolderOpen } from 'lucide-react'
+import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
 import { API_URL, api, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -31,6 +32,7 @@ const docMeta: Record<string, { icon: typeof FileText; label: string }> = {
 export function Dokumentacja() {
   const [filter, setFilter] = useState<string>('ALL')
   const [error, setError] = useState<string | null>(null)
+  const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()
   const { data: docs } = useQuery({
@@ -92,10 +94,15 @@ export function Dokumentacja() {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={doc.document_status} />
-                      <Button size="sm" variant="secondary"
-                        onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
-                        <Download size={14} /> {t('Pobierz PDF')}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => setPreviewFor(doc)}>
+                          <Eye size={14} /> {t('Podgląd')}
+                        </Button>
+                        <Button size="sm" variant="ghost"
+                          onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
+                          <Download size={14} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Tile>
@@ -103,6 +110,14 @@ export function Dokumentacja() {
             )
           })}
         </ul>
+      )}
+
+      {previewFor && (
+        <PodgladDokumentu
+          documentId={previewFor.document_id}
+          title={previewFor.details ?? t('Dokument')}
+          onClose={() => setPreviewFor(null)}
+        />
       )}
     </div>
   )

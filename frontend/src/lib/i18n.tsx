@@ -145,6 +145,11 @@ const EN: Record<string, string> = {
     'E-prescriptions, referrals and test results will appear here after doctor visits.',
   'kod:': 'code:',
   'Pobierz PDF': 'Download PDF',
+  'Podgląd': 'Preview',
+  'Podgląd dokumentu': 'Document preview',
+  'Wczytywanie podglądu…': 'Loading preview…',
+  'Nie udało się wczytać podglądu — spróbuj pobrać PDF.': 'Could not load the preview — try downloading the PDF.',
+  'Dokument': 'Document',
 
   // Udostępnij
   'Udostępnij dokumentację': 'Share your records',

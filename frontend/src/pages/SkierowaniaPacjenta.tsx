@@ -2,8 +2,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarPlus, Download, FileSignature } from 'lucide-react'
+import { CalendarPlus, Download, Eye, FileSignature } from 'lucide-react'
 import { Button, EmptyState, Overline, StatusBadge, Tile } from '../ui'
+import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { API_URL, api, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
@@ -28,6 +29,7 @@ export function SkierowaniaPacjenta() {
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
+  const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
 
   const { data: docs } = useQuery({
     queryKey: ['my-documents', activeId],
@@ -78,10 +80,15 @@ export function SkierowaniaPacjenta() {
                           {t('Zabieg zaplanuje pielęgniarka — skierowanie czeka w jej kolejce.')}
                         </p>
                       )}
-                      <Button size="sm" variant="ghost"
-                        onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
-                        <Download size={14} /> PDF
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setPreviewFor(doc)}>
+                          <Eye size={14} /> {t('Podgląd')}
+                        </Button>
+                        <Button size="sm" variant="ghost"
+                          onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
+                          <Download size={14} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Tile>
@@ -89,6 +96,14 @@ export function SkierowaniaPacjenta() {
             )
           })}
         </ul>
+      )}
+
+      {previewFor && (
+        <PodgladDokumentu
+          documentId={previewFor.document_id}
+          title={`${t('E-skierowanie')}${previewFor.code ? ` · ${previewFor.code}` : ''}`}
+          onClose={() => setPreviewFor(null)}
+        />
       )}
     </div>
   )
