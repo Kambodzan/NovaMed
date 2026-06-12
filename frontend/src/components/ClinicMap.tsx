@@ -90,7 +90,14 @@ export function ClinicMap({ clinics, selected, onSelect, geo, selectLabel }: {
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; OpenStreetMap &copy; CARTO'
         />
-        <FitTo points={(focus.length ? focus : pts).map(c => [c.lat!, c.lng!])} />
+        <FitTo points={
+          focus.length ? focus.map(c => [c.lat!, c.lng!] as [number, number])
+            : geo
+              // brak placówek w obszarze — i tak doleć do zaznaczonego koła
+              ? [[geo.lat - geo.km / 111, geo.lng - geo.km / (111 * Math.cos(geo.lat * Math.PI / 180))],
+                 [geo.lat + geo.km / 111, geo.lng + geo.km / (111 * Math.cos(geo.lat * Math.PI / 180))]]
+              : pts.map(c => [c.lat!, c.lng!] as [number, number])
+        } />
         {geo && (
           <Circle
             center={[geo.lat, geo.lng]}

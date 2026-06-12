@@ -4,10 +4,33 @@ import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Ma
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
 
-const parseGeo = (filter: string | null): GeoArea | null => {
+const parseGeo = (filter: string | null): (GeoArea & { name: string | null }) | null => {
   if (!filter?.startsWith('geo:')) return null
-  const [lat, lng, km] = filter.slice(4).split(',').map(Number)
-  return { lat, lng, km }
+  const parts = filter.slice(4).split(',')
+  const [lat, lng, km] = parts.slice(0, 3).map(Number)
+  return { lat, lng, km, name: parts.slice(3).join(',') || null }
+}
+
+// geokoder OSM: dowolne miasto/okolica w PL (nie tylko te z naszymi placówkami)
+async function geocodeCity(q: string) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=pl&limit=4&accept-language=pl&q=${encodeURIComponent(q)}`,
+      { headers: { Accept: 'application/json' } },
+    )
+    if (!r.ok) return []
+    const rows = await r.json() as Array<{ lat: string; lon: string; display_name: string; boundingbox: string[]; addresstype?: string }>
+    return rows
+      .filter(x => ['city', 'town', 'village', 'suburb', 'administrative', 'borough'].includes(x.addresstype ?? ''))
+      .map(x => {
+        const [latMin, latMax, lonMin, lonMax] = x.boundingbox.map(Number)
+        const km = Math.min(30, Math.max(3, distanceKm(latMin, lonMin, latMax, lonMax) / 2))
+        const name = x.display_name.split(',')[0]
+        return { name, label: x.display_name.split(',').slice(0, 2).join(','), lat: Number(x.lat), lng: Number(x.lon), km }
+      })
+  } catch {
+    return []
+  }
 }
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
@@ -400,7 +423,7 @@ export function Umow() {
                   <MapPin size={15} className={clinicFilter ? 'text-primary' : 'text-gray-400'} />
                   {clinicFilter
                     ? (clinicFilter.startsWith('city:') ? clinicFilter.slice(5)
-                      : clinicFilter.startsWith('geo:') ? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`
+                      : clinicFilter.startsWith('geo:') ? (parseGeo(clinicFilter)?.name ?? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`)
                         : shortLoc(clinicFilter.slice(4)))
                     : t('Lokalizacja')}
                 </button>
@@ -459,7 +482,7 @@ export function Umow() {
                     title={clinicFilter.startsWith('cli:') ? addressOf(clinicFilter.slice(4)) : undefined}
                     className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
                     {clinicFilter.startsWith('city:') ? clinicFilter.slice(5)
-                      : clinicFilter.startsWith('geo:') ? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`
+                      : clinicFilter.startsWith('geo:') ? (parseGeo(clinicFilter)?.name ?? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`)
                         : clinicFilter.slice(4)} <X size={12} />
                   </button>
                 )}
@@ -506,15 +529,19 @@ export function Umow() {
               onPick={item => {
                 setClinicFilter(item.key)
                 setLocQuery('')
-                if (item.key.startsWith('cli:')) setMapOpen(false)  // miasto: zostań i pokaż piny
+                if (item.key.startsWith('cli:')) setMapOpen(false)  // obszar: zostań i pokaż zasięg
               }}
               search={async (text) => {
                 const fq = fold(text.trim())
                 const out: TypeaheadItem[] = []
-                for (const [city, names] of cityGroups.filter(([c]) => fold(c).includes(fq)))
-                  out.push({ key: `city:${city}`, label: `${city} — ${t('miasto')} (${names.length})`, insert: city })
                 for (const c of (clinicList ?? []).filter(c => fold(c.clinic_name + c.address).includes(fq)))
                   out.push({ key: `cli:${c.clinic_name}`, label: `${c.clinic_name}, ${c.address}`, insert: c.clinic_name })
+                // dowolne miasto/okolica z geokodera — zaznaczy realny obszar
+                for (const g of await geocodeCity(text))
+                  out.push({
+                    key: `geo:${g.lat.toFixed(4)},${g.lng.toFixed(4)},${Math.round(g.km)},${g.name}`,
+                    label: g.label, insert: g.name,
+                  })
                 return out.slice(0, 8)
               }}
               placeholder={t('Wpisz miasto lub adres…')}
