@@ -407,7 +407,8 @@ export function Umow() {
 
       {mapOpen && (
         <Modal overline={t('Placówki')} title={t('Wybierz lokalizację')} onClose={() => setMapOpen(false)}>
-          <div className="space-y-3 pb-4">
+          {/* pt/px: obramówka i focus-ring inputa nie mogą być ścinane przez scroll modala */}
+          <div className="space-y-3 px-0.5 pt-1.5 pb-4">
             <Typeahead
               id="map-search"
               minLength={1}
