@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, XCircle } from 'lucide-react'
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -29,76 +29,94 @@ interface DoctorCardData {
   days: ReadonlyArray<readonly [string, AppointmentOut[]]>
 }
 
-// Mini-kalendarz lekarza: 3 dni naraz, strzałki ‹ ›, godziny jako punkty.
+// Karta lekarza: zwinięta = ściąga z najbliższym terminem; klik rozwija
+// mini-kalendarz (3 dni, strzałki ‹ ›, godziny jako punkty).
 function DoctorCard({ d, multiClinic, onPick }: {
   d: DoctorCardData
   multiClinic: boolean
   onPick: (s: AppointmentOut) => void
 }) {
   const { t } = useI18n()
+  const [open, setOpen] = useState(false)
   const [offset, setOffset] = useState(0)
   const [showAll, setShowAll] = useState(false)
   const visible = d.days.slice(offset, offset + 3)
+  const nearest = d.days[0][1][0]
   const dayLabel = (day: string) =>
     `${formatDatePL(day + 'T00:00:00').split(',')[0]} ${dayNo(day + 'T00:00:00')} ${monthShort(day + 'T00:00:00')}`
 
   return (
-    <div className="rounded-2xl bg-gray-50 p-4">
-      <div className="flex items-center gap-3">
+    <div className="rounded-2xl bg-gray-50">
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="flex w-full cursor-pointer items-center gap-3 p-4 text-left"
+      >
         <Avatar initials={doctorInitials(d.name)} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="font-bold text-gray-900">{d.name}</p>
-          <p className="truncate text-xs font-semibold text-gray-500">
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-gray-900">{d.name}</span>
+          <span className="block truncate text-xs font-semibold text-gray-500">
             {d.spec}{multiClinic && <> · {d.clinics.map(shortLoc).join(', ')}</>}
-          </p>
-        </div>
-        <div className="flex gap-1">
-          <button aria-label={t('Wcześniejsze dni')} disabled={offset === 0}
-            onClick={() => setOffset(o => Math.max(0, o - 3))}
-            className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
-            <ChevronLeft size={16} />
-          </button>
-          <button aria-label={t('Kolejne dni')} disabled={offset + 3 >= d.days.length}
-            onClick={() => setOffset(o => o + 3)}
-            className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
+          </span>
+        </span>
+        <span className="text-right">
+          <span className="block text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">{t('najbliższy')}</span>
+          <span className="block text-sm font-extrabold text-primary [font-variant-numeric:tabular-nums]">
+            {dayLabel(nearest.appointment_datetime.slice(0, 10))}, {formatTime(nearest.appointment_datetime)}
+          </span>
+        </span>
+        <ChevronDown size={16} className={cx('shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+      </button>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {visible.map(([day, list]) => (
-          <div key={day} className="min-w-0">
-            <p className="mb-1.5 text-center text-[11px] font-extrabold tracking-wide text-gray-400 uppercase">
-              {dayLabel(day)}
-            </p>
-            <div className="flex flex-col items-stretch gap-1">
-              {(showAll ? list : list.slice(0, 5)).map(s => (
-                <button
-                  key={s.appointment_id}
-                  onClick={() => onPick(s)}
-                  title={s.clinic_name}
-                  className="cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-sm font-bold text-primary shadow-sm transition-colors hover:bg-primary hover:text-white"
-                >
-                  {formatTime(s.appointment_datetime)}
-                  {(s.price || multiClinic) && (
-                    <span className="block text-[10px] font-semibold opacity-70">
-                      {[multiClinic ? shortLoc(s.clinic_name) : null, s.price ? `${s.price} zł` : null]
-                        .filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                </button>
-              ))}
-              {!showAll && list.length > 5 && (
-                <button onClick={() => setShowAll(true)}
-                  className="cursor-pointer rounded-lg py-1 text-xs font-extrabold text-primary hover:underline">
-                  +{list.length - 5}
-                </button>
-              )}
-            </div>
+      {open && (
+        <div className="border-t border-gray-200/70 p-4 pt-3">
+          <div className="mb-2 flex justify-end gap-1">
+            <button aria-label={t('Wcześniejsze dni')} disabled={offset === 0}
+              onClick={() => setOffset(o => Math.max(0, o - 3))}
+              className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+              <ChevronLeft size={15} />
+            </button>
+            <button aria-label={t('Kolejne dni')} disabled={offset + 3 >= d.days.length}
+              onClick={() => setOffset(o => o + 3)}
+              className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+              <ChevronRight size={15} />
+            </button>
           </div>
-        ))}
-      </div>
+          <div className="grid grid-cols-3 gap-2">
+            {visible.map(([day, list]) => (
+              <div key={day} className="min-w-0">
+                <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
+                  {dayLabel(day)}
+                </p>
+                <div className="flex flex-col items-stretch gap-1">
+                  {(showAll ? list : list.slice(0, 4)).map(s => (
+                    <button
+                      key={s.appointment_id}
+                      onClick={() => onPick(s)}
+                      title={s.clinic_name}
+                      className="cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm transition-colors hover:bg-primary hover:text-white"
+                    >
+                      {formatTime(s.appointment_datetime)}
+                      {(s.price || multiClinic) && (
+                        <span className="block text-[9px] font-semibold opacity-70">
+                          {[multiClinic ? shortLoc(s.clinic_name) : null, s.price ? `${s.price} zł` : null]
+                            .filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  {!showAll && list.length > 4 && (
+                    <button onClick={() => setShowAll(true)}
+                      className="cursor-pointer rounded-lg py-0.5 text-xs font-extrabold text-primary hover:underline">
+                      +{list.length - 4}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -132,6 +150,12 @@ export function Umow() {
     queryKey: ['slots'],
     queryFn: () => api<AppointmentOut[]>('/slots'),
   })
+  const { data: clinicList } = useQuery({
+    queryKey: ['clinics'],
+    queryFn: () => api<{ clinic_id: number; clinic_name: string; address: string }[]>('/clinics'),
+    staleTime: 300_000,
+  })
+  const addressOf = (name: string) => clinicList?.find(c => c.clinic_name === name)?.address
 
   const q = fold(query.trim())
 
@@ -254,12 +278,13 @@ export function Umow() {
                     <button
                       key={c ?? 'all'}
                       onClick={() => setClinicFilter(c)}
+                      title={c ? addressOf(c) : undefined}
                       className={cx(
                         'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
                         clinicFilter === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900',
                       )}
                     >
-                      {c ? shortLoc(c) : t('Wszystkie placówki')}
+                      {c ?? t('Wszystkie placówki')}
                     </button>
                   ))}
                   <span className="mx-1 hidden w-px bg-gray-200 sm:block" />
@@ -278,6 +303,10 @@ export function Umow() {
                 </button>
               ))}
             </div>
+
+            {clinicFilter && addressOf(clinicFilter) && (
+              <p className="-mt-2 text-xs font-semibold text-gray-400">{clinicFilter} · {addressOf(clinicFilter)}</p>
+            )}
 
             {doctorCards.length === 0 ? (
               <EmptyState
@@ -316,7 +345,9 @@ export function Umow() {
             <div className="min-w-0 flex-1">
               <p className="font-extrabold text-gray-900">{slot.doctor_name}</p>
               <p className="text-sm font-semibold text-gray-500">
-                {slot.specialization} · {online ? t('teleporada') : slot.clinic_name}
+                {slot.specialization} · {online
+                  ? t('teleporada')
+                  : `${slot.clinic_name}${addressOf(slot.clinic_name) ? `, ${addressOf(slot.clinic_name)}` : ''}`}
               </p>
             </div>
             <span className={cx('text-xl font-extrabold', slot.price ? 'text-gray-900' : 'text-emerald-700')}>
