@@ -1,7 +1,7 @@
 // Podgląd dokumentu w aplikacji — natywny widok danych z bazy (te same pola,
 // z których w locie generowany jest PDF), bez osadzania PDF-a w przeglądarce.
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Printer } from 'lucide-react'
 import { Button, Modal, StatusBadge } from '../ui'
 import { API_URL, getAuthToken } from '../lib/api'
 import { useI18n } from '../lib/i18n'
@@ -23,17 +23,29 @@ export function PodgladDokumentu({ doc, onClose }: {
   const { t } = useI18n()
   const [error, setError] = useState(false)
 
-  const downloadPdf = async () => {
+  const fetchPdf = async () => {
     const resp = await fetch(`${API_URL}/documents/${doc.document_id}/pdf`, {
       headers: { Authorization: `Bearer ${getAuthToken()}` },
     })
-    if (!resp.ok) { setError(true); return }
-    const blob = await resp.blob()
+    if (!resp.ok) { setError(true); return null }
+    return new Blob([await resp.blob()], { type: 'application/pdf' })
+  }
+
+  const downloadPdf = async () => {
+    const blob = await fetchPdf()
+    if (!blob) return
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `novamed-dokument-${doc.document_id}.pdf`
     a.click()
     URL.revokeObjectURL(a.href)
+  }
+
+  // druk: PDF w nowej karcie — przeglądarkowa drukarka robi resztę
+  const printPdf = async () => {
+    const blob = await fetchPdf()
+    if (!blob) return
+    window.open(URL.createObjectURL(blob), '_blank')
   }
 
   return (
@@ -42,6 +54,9 @@ export function PodgladDokumentu({ doc, onClose }: {
       title={t(KIND[doc.document_type] ?? 'Dokument')}
       onClose={onClose}
       footer={<>
+        <Button size="sm" variant="ghost" onClick={() => void printPdf()}>
+          <Printer size={14} /> {t('Drukuj')}
+        </Button>
         <Button size="sm" variant="ghost" onClick={() => void downloadPdf()}>
           <Download size={14} /> {t('Pobierz PDF')}
         </Button>

@@ -159,6 +159,7 @@ const EN: Record<string, string> = {
   'Podsumowanie wizyty': 'Visit summary',
   'Potwierdzam, że będę': "I'll be there",
   'Wybierz datę': 'Pick a date',
+  'Drukuj': 'Print',
   'Dziś': 'Today',
   'Poprzedni': 'Previous',
   'Następny': 'Next',

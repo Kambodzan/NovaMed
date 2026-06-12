@@ -11,9 +11,13 @@ import { DatePicker } from './DatePicker'
 interface Icd10Row { code: string; name: string }
 interface MedicationRow { med_id: number; name: string; form: string | null; strength: string | null }
 
+// po wybraniu w polu zostaje „B02 — Półpasiec", nie sam kod;
+// czysty kod wycinamy dopiero przy wysyłce (icdCode)
 const searchIcd10 = (q: string) =>
   api<Icd10Row[]>(`/dictionaries/icd10?q=${encodeURIComponent(q)}`).then(rows =>
-    rows.map(r => ({ key: r.code, label: `${r.code} — ${r.name}`, insert: r.code })))
+    rows.map(r => ({ key: r.code, label: `${r.code} — ${r.name}`, insert: `${r.code} — ${r.name}` })))
+
+const icdCode = (s: string) => s.split('—')[0].trim()
 
 const searchMedications = (q: string) =>
   api<MedicationRow[]>(`/dictionaries/medications?q=${encodeURIComponent(q)}`).then(rows =>
@@ -67,11 +71,11 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [] }: {
       switch (kind) {
         case 'PRESCRIPTION':
           return api<DocumentOut>(`/patients/${patientId}/prescriptions`, {
-            method: 'POST', body: { ...base, icd10: form.icd10, drugs: form.drugs },
+            method: 'POST', body: { ...base, icd10: icdCode(form.icd10), drugs: form.drugs },
           })
         case 'REFERRAL':
           return api<DocumentOut>(`/patients/${patientId}/referrals`, {
-            method: 'POST', body: { ...base, icd10: form.icd10, referral_type: form.referral_type, notes: form.notes || null },
+            method: 'POST', body: { ...base, icd10: icdCode(form.icd10), referral_type: form.referral_type, notes: form.notes || null },
           })
         case 'SICK_LEAVE':
           return api<DocumentOut>(`/patients/${patientId}/sick-leaves`, {
