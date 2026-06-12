@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { ClinicMap, type MapClinic } from '../components/ClinicMap'
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
@@ -44,6 +44,11 @@ function DoctorCard({ d, multiClinic, onPick }: {
   const [showAll, setShowAll] = useState(false)
   const visible = d.days.slice(offset, offset + 3)
   const nearest = d.days[0][1][0]
+  const { data: rating } = useQuery({
+    queryKey: ['doctor-rating', d.id],
+    queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${d.id}`),
+    staleTime: 300_000,
+  })
   const dayLabel = (day: string) =>
     `${formatDatePL(day + 'T00:00:00').split(',')[0]} ${dayNo(day + 'T00:00:00')} ${monthShort(day + 'T00:00:00')}`
 
@@ -56,7 +61,16 @@ function DoctorCard({ d, multiClinic, onPick }: {
       >
         <Avatar initials={doctorInitials(d.name)} size="md" />
         <span className="min-w-0 flex-1">
-          <span className="block font-bold text-gray-900">{d.name}</span>
+          <span className="flex items-center gap-2 font-bold text-gray-900">
+            {d.name}
+            {rating && rating.count > 0 && rating.average != null && (
+              <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
+                <Star size={12} className="fill-amber-400 text-amber-400" />
+                {rating.average.toFixed(1)}
+                <span className="font-semibold text-gray-400">({rating.count})</span>
+              </span>
+            )}
+          </span>
           <span className="block truncate text-xs font-semibold text-gray-500">
             {d.spec}{multiClinic && <> · {d.clinics.map(shortLoc).join(', ')}</>}
           </span>
@@ -255,12 +269,21 @@ export function Umow() {
     else if (kind === 'doc') setDoctorFilter({ id: Number(rest[0]), name: rest.slice(1).join(':') })
     else if (kind === 'cli' || kind === 'city') setClinicFilter(item.key)
     setQuery('')
+    setStep(2)
   }
+
+  const popularSpecs = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const s of allSlots ?? []) {
+      if (s.specialization) counts.set(s.specialization, (counts.get(s.specialization) ?? 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+  }, [allSlots])
 
   const pickSlot = (s: AppointmentOut) => {
     setSlot(s)
     setOnline(s.appointment_type === 'ONLINE')
-    setStep(2)
+    setStep(3)
     setError(null)
     setBooked(null)
     setPayPhase('idle')
@@ -300,7 +323,7 @@ export function Umow() {
     setBooked(null)
     setPayPhase('idle')
     setError(null)
-    setStep(1)
+    setStep(2)
     book.reset()
     pay.reset()
   }
@@ -310,7 +333,7 @@ export function Umow() {
       <div className="fade-up flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900">{t('Umów wizytę')}</h1>
         <ol className="flex items-center gap-2">
-          {[t('Termin'), t('Potwierdzenie')].map((s, i) => (
+          {[t('Szukaj'), t('Lekarz i termin'), t('Potwierdzenie')].map((s, i) => (
             <li key={s} className="flex items-center gap-2">
               <span className={cx(
                 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold',
@@ -352,6 +375,37 @@ export function Umow() {
               )}
             </div>
 
+            {/* popularne specjalizacje — gotowe wejścia bez pisania */}
+            <div>
+              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Popularne specjalizacje')}</p>
+              <div className="flex flex-wrap gap-2">
+                {popularSpecs.map(([s, count]) => (
+                  <button
+                    key={s}
+                    onClick={() => { setSpec(s); setDoctorFilter(null); setStep(2) }}
+                    className="cursor-pointer rounded-full bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-primary-soft hover:text-primary"
+                  >
+                    {s} <span className="font-semibold text-gray-400">({count})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="text-center">
+              <Button variant="ghost" size="sm" onClick={() => setStep(2)}>
+                {t('Przeglądaj wszystkich lekarzy')} <ChevronRight size={14} />
+              </Button>
+            </div>
+          </div>
+        </Tile>
+      )}
+
+      {step === 2 && (
+        <Tile delay={60}>
+          <TileHeader
+            title={doctorFilter?.name ?? spec ?? t('Wszyscy lekarze')}
+            action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>{t('Zmień')}</Button>}
+          />
+          <div className="space-y-4">
             {(spec || clinicFilter || doctorFilter) && (
               <div className="flex flex-wrap items-center gap-2">
                 {doctorFilter && (
@@ -446,7 +500,7 @@ export function Umow() {
         </Modal>
       )}
 
-      {step === 2 && slot && (
+      {step === 3 && slot && (
         <Tile delay={60}>
           <TileHeader
             title={booked ? t('Płatność') : t('Potwierdzenie rezerwacji')}
