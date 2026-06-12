@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { ClinicMap, type MapClinic } from '../components/ClinicMap'
 import { Avatar, Button, DateChip, EmptyState, Field, Modal, Tile, TileHeader, cx, inputCls } from '../ui'
@@ -129,6 +129,7 @@ export function Umow() {
   const [spec, setSpec] = useState<string | null>(null)
   const [clinicFilter, setClinicFilter] = useState<string | null>(null)
   const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
+  const [mapOpen, setMapOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
@@ -326,23 +327,25 @@ export function Umow() {
         <Tile delay={60}>
           <TileHeader title={t('Kogo potrzebujesz?')} />
           <div className="space-y-4">
-            <Typeahead
-              id="umow-search"
-              minLength={0}
-              value={query}
-              onChange={setQuery}
-              onPick={applySuggestion}
-              search={suggest}
-              placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
-            />
-
-            {clinicNames.length > 1 && (
-              <ClinicMap
-                clinics={clinicList ?? []}
-                selected={clinicFilter}
-                onSelect={f => setClinicFilter(cur => cur === f ? null : f)}
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Typeahead
+                id="umow-search"
+                minLength={0}
+                value={query}
+                onChange={setQuery}
+                onPick={applySuggestion}
+                search={suggest}
+                placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
               />
-            )}
+              {clinicNames.length > 1 && (
+                <Button variant="secondary" onClick={() => setMapOpen(true)}>
+                  <MapPin size={15} />
+                  {clinicFilter
+                    ? (clinicFilter.startsWith('city:') ? clinicFilter.slice(5) : shortLoc(clinicFilter.slice(4)))
+                    : t('Lokalizacja')}
+                </Button>
+              )}
+            </div>
 
             {(spec || clinicFilter || doctorFilter) && (
               <div className="flex flex-wrap items-center gap-2">
@@ -396,6 +399,51 @@ export function Umow() {
       )}
 
       {waitlistOpen && <WaitlistModal onClose={() => setWaitlistOpen(false)} />}
+
+      {mapOpen && (
+        <Modal overline={t('Placówki')} title={t('Wybierz lokalizację')} onClose={() => setMapOpen(false)}>
+          <div className="space-y-3 pb-4">
+            <ClinicMap
+              clinics={clinicList ?? []}
+              selected={clinicFilter}
+              onSelect={f => { setClinicFilter(cur => cur === f ? null : f); setMapOpen(false) }}
+            />
+            {cityGroups.map(([city, names]) => (
+              <div key={city}>
+                <p className="mb-1.5 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{city}</p>
+                <div className="flex flex-wrap gap-2">
+                  {names.length > 1 && (
+                    <button
+                      onClick={() => { setClinicFilter(`city:${city}`); setMapOpen(false) }}
+                      className="cursor-pointer rounded-full bg-primary-soft px-3.5 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white"
+                    >
+                      {t('Całe miasto')}: {city}
+                    </button>
+                  )}
+                  {names.map(n => (
+                    <button
+                      key={n}
+                      title={addressOf(n)}
+                      onClick={() => { setClinicFilter(`cli:${n}`); setMapOpen(false) }}
+                      className={cx(
+                        'cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
+                        clinicFilter === `cli:${n}` ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900',
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {clinicFilter && (
+              <Button variant="ghost" size="sm" onClick={() => { setClinicFilter(null); setMapOpen(false) }}>
+                {t('Wyczyść lokalizację')}
+              </Button>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {step === 2 && slot && (
         <Tile delay={60}>

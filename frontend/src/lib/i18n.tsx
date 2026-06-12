@@ -202,6 +202,8 @@ const EN: Record<string, string> = {
   'Lokalizacja': 'Location',
   'Lokalizacje': 'Locations',
   'Całe miasto': 'Whole city',
+  'Wybierz lokalizację': 'Choose a location',
+  'Wyczyść lokalizację': 'Clear location',
   'miasto': 'city',
   'Popularne specjalizacje': 'Popular specialties',
   'wszystkie': 'all',

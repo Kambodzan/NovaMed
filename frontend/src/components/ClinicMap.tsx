@@ -54,10 +54,13 @@ export function ClinicMap({ clinics, selected, onSelect }: {
         center={[pts[0].lat!, pts[0].lng!]}
         zoom={11}
         scrollWheelZoom={false}
-        className="z-0 h-56 w-full"
-        attributionControl={false}
+        className="z-0 h-72 w-full"
       >
-        <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {/* monochromatyczna baza CARTO Positron — spójna z resztą UI */}
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; OpenStreetMap &copy; CARTO'
+        />
         <FitTo points={(focus.length ? focus : pts).map(c => [c.lat!, c.lng!])} />
         {pts.map(c => (
           <Marker
