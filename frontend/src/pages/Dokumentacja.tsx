@@ -1,26 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Eye, FileText, FlaskConical, FolderOpen } from 'lucide-react'
+import { FileText, FlaskConical, FolderOpen } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
-import { Button, EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
-import { API_URL, api, getAuthToken } from '../lib/api'
+import { EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
+import { api } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
 import { formatDatePL } from '../lib/format'
 import type { DocumentOut } from '../lib/types'
-
-async function downloadPdf(documentId: number) {
-  const resp = await fetch(`${API_URL}/documents/${documentId}/pdf`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  })
-  if (!resp.ok) throw new Error(`PDF HTTP ${resp.status}`)
-  const blob = await resp.blob()
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `novamed-dokument-${documentId}.pdf`
-  a.click()
-  URL.revokeObjectURL(a.href)
-}
 
 // recepty i skierowania mają własne strony — tu zostaje reszta dokumentacji
 const docMeta: Record<string, { icon: typeof FileText; label: string }> = {
@@ -31,7 +18,6 @@ const docMeta: Record<string, { icon: typeof FileText; label: string }> = {
 
 export function Dokumentacja() {
   const [filter, setFilter] = useState<string>('ALL')
-  const [error, setError] = useState<string | null>(null)
   const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()
@@ -47,8 +33,6 @@ export function Dokumentacja() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Moja dokumentacja')}</h1>
-
-      {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       <div className="fade-up flex flex-wrap gap-2" style={{ animationDelay: '50ms' }}>
         {['ALL', ...Object.keys(docMeta)].map(kind => (
@@ -77,7 +61,9 @@ export function Dokumentacja() {
             const m = docMeta[doc.document_type]
             return (
               <li key={doc.document_id}>
-                <Tile className="p-5" delay={100 + i * 40}>
+                <button type="button" className="block w-full cursor-pointer text-left"
+                  onClick={() => setPreviewFor(doc)} title={t('Podgląd')}>
+                <Tile className="p-5 transition-shadow hover:ring-2 hover:ring-primary/20" delay={100 + i * 40}>
                   <div className="flex flex-wrap items-start gap-4">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
                       <m.icon size={19} />
@@ -92,20 +78,10 @@ export function Dokumentacja() {
                         )}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <StatusBadge status={doc.document_status} />
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="secondary" onClick={() => setPreviewFor(doc)}>
-                          <Eye size={14} /> {t('Podgląd')}
-                        </Button>
-                        <Button size="sm" variant="ghost"
-                          onClick={() => downloadPdf(doc.document_id).then(() => setError(null), () => setError(t('Nie udało się pobrać PDF — spróbuj ponownie.')))}>
-                          <Download size={14} />
-                        </Button>
-                      </div>
-                    </div>
+                    <StatusBadge status={doc.document_status} />
                   </div>
                 </Tile>
+                </button>
               </li>
             )
           })}
