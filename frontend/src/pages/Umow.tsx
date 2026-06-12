@@ -471,17 +471,43 @@ export function Umow() {
               ))}
             </div>
 
-            <div className={cx('grid gap-2', bookKind === 'visit' ? 'sm:grid-cols-[1fr_auto]' : 'sm:grid-cols-[auto]')}>
-              {bookKind === 'visit' && (
-              <Typeahead
-                id="umow-search"
-                minLength={0}
-                value={query}
-                onChange={setQuery}
-                onPick={applySuggestion}
-                search={suggest}
-                placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
-              />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              {bookKind === 'visit' ? (
+                <Typeahead
+                  id="umow-search"
+                  minLength={0}
+                  value={query}
+                  onChange={setQuery}
+                  onPick={applySuggestion}
+                  search={suggest}
+                  placeholder={t('Szukaj lekarza, specjalizacji lub placówki…')}
+                />
+              ) : (
+                <Typeahead
+                  id="exam-search"
+                  minLength={0}
+                  value={query}
+                  onChange={setQuery}
+                  search={async (text) => {
+                    const fq = fold(text.trim())
+                    const counts = new Map<string, { count: number; ref: boolean }>()
+                    for (const s of allSlots ?? []) {
+                      if (!s.service_name) continue
+                      const c = counts.get(s.service_name) ?? { count: 0, ref: s.referral_required }
+                      c.count += 1
+                      counts.set(s.service_name, c)
+                    }
+                    return [...counts.entries()]
+                      .filter(([n]) => !fq || fold(n).includes(fq))
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([n, i]) => ({
+                        key: `svc:${n}`,
+                        label: `${n} (${i.count})${i.ref ? ` — ${t('wymaga skierowania')}` : ''}`,
+                        insert: n,
+                      }))
+                  }}
+                  placeholder={t('Szukaj badania (np. RTG, USG, spirometria)…')}
+                />
               )}
               {clinicNames.length > 1 && (
                 <button

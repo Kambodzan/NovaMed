@@ -220,6 +220,7 @@ const EN: Record<string, string> = {
   'Oświadczam, że mam skierowanie zewnętrzne (okażę przed badaniem)': 'I declare I have an external referral (will present it before the test)',
   'wymaga skierowania': 'referral required',
   'Umów na podstawie skierowania': 'Book using this referral',
+  'Szukaj badania (np. RTG, USG, spirometria)…': 'Search for a test (e.g. X-ray, ultrasound, spirometry)…',
   'Obszar': 'Area',
   'Wybierz placówkę': 'Choose this location',
   'Znajdź najbliżej mnie': 'Find nearest to me',
