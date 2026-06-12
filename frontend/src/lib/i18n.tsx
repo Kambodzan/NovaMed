@@ -210,6 +210,7 @@ const EN: Record<string, string> = {
   'Lekarz i termin': 'Doctor & time',
   'Wszyscy lekarze': 'All doctors',
   'Przeglądaj wszystkich lekarzy': 'Browse all doctors',
+  'prywatnie od': 'private from',
   'miasto': 'city',
   'Popularne specjalizacje': 'Popular specialties',
   'wszystkie': 'all',

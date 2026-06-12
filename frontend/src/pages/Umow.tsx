@@ -44,6 +44,11 @@ function DoctorCard({ d, multiClinic, onPick }: {
   const [showAll, setShowAll] = useState(false)
   const visible = d.days.slice(offset, offset + 3)
   const nearest = d.days[0][1][0]
+  // NFZ / ceny wizyt prywatnych — z dostępnych terminów lekarza
+  const flat = d.days.flatMap(([, list]) => list)
+  const hasNfz = flat.some(s => s.price == null)
+  const prices = flat.filter(s => s.price != null).map(s => s.price as number)
+  const minPrice = prices.length ? Math.min(...prices) : null
   const { data: rating } = useQuery({
     queryKey: ['doctor-rating', d.id],
     queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${d.id}`),
@@ -72,7 +77,10 @@ function DoctorCard({ d, multiClinic, onPick }: {
             )}
           </span>
           <span className="block truncate text-xs font-semibold text-gray-500">
-            {d.spec}{multiClinic && <> · {d.clinics.map(shortLoc).join(', ')}</>}
+            {d.spec}
+            {hasNfz && <> · <span className="text-emerald-700">NFZ</span></>}
+            {minPrice != null && <> · {t('prywatnie od')} {minPrice} zł</>}
+            {multiClinic && <> · {d.clinics.map(shortLoc).join(', ')}</>}
           </span>
         </span>
         <span className="text-right">
@@ -144,6 +152,7 @@ export function Umow() {
   const [clinicFilter, setClinicFilter] = useState<string | null>(null)
   const [doctorFilter, setDoctorFilter] = useState<{ id: number; name: string } | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
+  const [showAllDocs, setShowAllDocs] = useState(false)
   const [locQuery, setLocQuery] = useState('')
   const [query, setQuery] = useState('')
   const [online, setOnline] = useState(false)
@@ -269,7 +278,6 @@ export function Umow() {
     else if (kind === 'doc') setDoctorFilter({ id: Number(rest[0]), name: rest.slice(1).join(':') })
     else if (kind === 'cli' || kind === 'city') setClinicFilter(item.key)
     setQuery('')
-    setStep(2)
   }
 
   const popularSpecs = useMemo(() => {
@@ -280,10 +288,13 @@ export function Umow() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
   }, [allSlots])
 
+  // lekarze domyślnie schowani — pokazują się po wyborze/wyszukaniu lub „Przeglądaj wszystkich"
+  const showResults = !!(q || spec || clinicFilter || doctorFilter || showAllDocs)
+
   const pickSlot = (s: AppointmentOut) => {
     setSlot(s)
     setOnline(s.appointment_type === 'ONLINE')
-    setStep(3)
+    setStep(2)
     setError(null)
     setBooked(null)
     setPayPhase('idle')
@@ -323,7 +334,7 @@ export function Umow() {
     setBooked(null)
     setPayPhase('idle')
     setError(null)
-    setStep(2)
+    setStep(1)
     book.reset()
     pay.reset()
   }
@@ -333,7 +344,7 @@ export function Umow() {
       <div className="fade-up flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900">{t('Umów wizytę')}</h1>
         <ol className="flex items-center gap-2">
-          {[t('Szukaj'), t('Lekarz i termin'), t('Potwierdzenie')].map((s, i) => (
+          {[t('Termin'), t('Potwierdzenie')].map((s, i) => (
             <li key={s} className="flex items-center gap-2">
               <span className={cx(
                 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold',
@@ -382,32 +393,34 @@ export function Umow() {
                 {popularSpecs.map(([s, count]) => (
                   <button
                     key={s}
-                    onClick={() => { setSpec(s); setDoctorFilter(null); setStep(2) }}
-                    className="cursor-pointer rounded-full bg-gray-50 px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-primary-soft hover:text-primary"
+                    onClick={() => { setSpec(cur => cur === s ? null : s); setDoctorFilter(null) }}
+                    className={cx(
+                      'cursor-pointer rounded-full px-4 py-2 text-sm font-bold transition-colors',
+                      spec === s ? 'bg-primary text-white' : 'bg-gray-50 text-gray-700 hover:bg-primary-soft hover:text-primary',
+                    )}
                   >
-                    {s} <span className="font-semibold text-gray-400">({count})</span>
+                    {s} <span className={cx('font-semibold', spec === s ? 'text-white/70' : 'text-gray-400')}>({count})</span>
                   </button>
                 ))}
               </div>
             </div>
-            <div className="text-center">
-              <Button variant="ghost" size="sm" onClick={() => setStep(2)}>
-                {t('Przeglądaj wszystkich lekarzy')} <ChevronRight size={14} />
-              </Button>
-            </div>
-          </div>
-        </Tile>
-      )}
 
-      {step === 2 && (
-        <Tile delay={60}>
-          <TileHeader
-            title={doctorFilter?.name ?? spec ?? t('Wszyscy lekarze')}
-            action={<Button variant="ghost" size="sm" onClick={() => setStep(1)}>{t('Zmień')}</Button>}
-          />
-          <div className="space-y-4">
-            {(spec || clinicFilter || doctorFilter) && (
+            {!showResults && (
+              <div className="text-center">
+                <Button variant="ghost" size="sm" onClick={() => setShowAllDocs(true)}>
+                  {t('Przeglądaj wszystkich lekarzy')} <ChevronRight size={14} />
+                </Button>
+              </div>
+            )}
+
+            {showResults && (
               <div className="flex flex-wrap items-center gap-2">
+                {showAllDocs && !spec && !doctorFilter && !clinicFilter && !q && (
+                  <button onClick={() => setShowAllDocs(false)}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
+                    {t('Wszyscy lekarze')} <X size={12} />
+                  </button>
+                )}
                 {doctorFilter && (
                   <button onClick={() => setDoctorFilter(null)}
                     className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
@@ -433,7 +446,7 @@ export function Umow() {
               </div>
             )}
 
-            {doctorCards.length === 0 ? (
+            {showResults && (doctorCards.length === 0 ? (
               <div className="space-y-3 text-center">
                 <EmptyState
                   icon={<CalendarDays size={28} strokeWidth={1.5} />}
@@ -451,7 +464,7 @@ export function Umow() {
                   <DoctorCard key={d.id} d={d} multiClinic={clinicNames.length > 1} onPick={pickSlot} />
                 ))}
               </div>
-            )}
+            ))}
           </div>
         </Tile>
       )}
@@ -500,7 +513,7 @@ export function Umow() {
         </Modal>
       )}
 
-      {step === 3 && slot && (
+      {step === 2 && slot && (
         <Tile delay={60}>
           <TileHeader
             title={booked ? t('Płatność') : t('Potwierdzenie rezerwacji')}
