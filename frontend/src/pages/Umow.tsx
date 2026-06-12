@@ -154,10 +154,17 @@ export function Umow() {
   })
   const { data: clinicList } = useQuery({
     queryKey: ['clinics'],
-    queryFn: () => api<{ clinic_id: number; clinic_name: string; address: string }[]>('/clinics'),
+    queryFn: () => api<{ clinic_id: number; clinic_name: string; address: string; city: string | null }[]>('/clinics'),
     staleTime: 300_000,
   })
   const addressOf = (name: string) => clinicList?.find(c => c.clinic_name === name)?.address
+  const cityOf = (name: string) => clinicList?.find(c => c.clinic_name === name)?.city
+  // placówki pogrupowane po mieście (sieciówka: 3×Warszawa, 2×Kraków…)
+  const cityGroups = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const c of clinicList ?? []) map.set(c.city ?? '?', [...(map.get(c.city ?? '?') ?? []), c.clinic_name])
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [clinicList])
 
   const q = fold(query.trim())
 
@@ -171,7 +178,8 @@ export function Umow() {
     const map = new Map<number, { id: number; name: string; spec: string | null; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
       if (spec && s.specialization !== spec) continue
-      if (clinicFilter && s.clinic_name !== clinicFilter) continue
+      if (clinicFilter?.startsWith('city:') && cityOf(s.clinic_name) !== clinicFilter.slice(5)) continue
+      if (clinicFilter?.startsWith('cli:') && s.clinic_name !== clinicFilter.slice(4)) continue
       if (doctorFilter && s.doctor_id !== doctorFilter.id) continue
       const cur = map.get(s.doctor_id)
         ?? { id: s.doctor_id, name: s.doctor_name, spec: s.specialization, clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>() }
@@ -189,7 +197,8 @@ export function Umow() {
           .map(([day, list]) => [day, list.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
       }))
       .sort((a, b) => a.days[0][1][0].appointment_datetime.localeCompare(b.days[0][1][0].appointment_datetime))
-  }, [allSlots, q, spec, clinicFilter, doctorFilter])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSlots, q, spec, clinicFilter, doctorFilter, clinicList])
 
   // Omnisearch jak na portalach rezerwacyjnych: na focus (bez pisania) od razu
   // popularne specjalizacje i lekarze; pisanie filtruje wszystko z nagłówkami grup.
@@ -225,9 +234,12 @@ export function Umow() {
         out.push({ key: `doc:${id}:${d.name}`, label: `${d.name} — ${d.spec ?? ''}`, insert: d.name })
     }
 
-    const matchedClinics = (clinicList ?? []).filter(c => !fq || fold(c.clinic_name + c.address).includes(fq))
-    if (fq && matchedClinics.length) {
-      out.push({ key: 'h:cli', label: t('Placówki'), insert: '', header: true })
+    const matchedCities = cityGroups.filter(([city]) => fq && fold(city).includes(fq))
+    const matchedClinics = (clinicList ?? []).filter(c => fq && fold(c.clinic_name + c.address).includes(fq))
+    if (matchedCities.length || matchedClinics.length) {
+      out.push({ key: 'h:loc', label: t('Lokalizacje'), insert: '', header: true })
+      for (const [city, names] of matchedCities.slice(0, 3))
+        out.push({ key: `city:${city}`, label: `${city} — ${t('miasto')} (${names.length})`, insert: city })
       for (const c of matchedClinics.slice(0, 4))
         out.push({ key: `cli:${c.clinic_name}`, label: `${c.clinic_name}, ${c.address}`, insert: c.clinic_name })
     }
@@ -238,7 +250,7 @@ export function Umow() {
     const [kind, ...rest] = item.key.split(':')
     if (kind === 'spec') setSpec(rest.join(':'))
     else if (kind === 'doc') setDoctorFilter({ id: Number(rest[0]), name: rest.slice(1).join(':') })
-    else if (kind === 'cli') setClinicFilter(rest.join(':'))
+    else if (kind === 'cli' || kind === 'city') setClinicFilter(item.key)
     setQuery('')
   }
 
@@ -325,13 +337,18 @@ export function Umow() {
               />
               {clinicNames.length > 1 && (
                 <select
-                  aria-label={t('Placówka')}
+                  aria-label={t('Lokalizacja')}
                   className={cx(inputCls, 'sm:w-52')}
                   value={clinicFilter ?? ''}
                   onChange={e => setClinicFilter(e.target.value || null)}
                 >
-                  <option value="">{t('Placówka')}: {t('wszystkie')}</option>
-                  {clinicNames.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">{t('Lokalizacja')}: {t('wszystkie')}</option>
+                  {cityGroups.map(([city, names]) => (
+                    <optgroup key={city} label={city}>
+                      {names.length > 1 && <option value={`city:${city}`}>{t('Całe miasto')}: {city}</option>}
+                      {names.map(n => <option key={n} value={`cli:${n}`}>{n}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               )}
             </div>
@@ -351,13 +368,14 @@ export function Umow() {
                   </button>
                 )}
                 {clinicFilter && (
-                  <button onClick={() => setClinicFilter(null)} title={addressOf(clinicFilter)}
+                  <button onClick={() => setClinicFilter(null)}
+                    title={clinicFilter.startsWith('cli:') ? addressOf(clinicFilter.slice(4)) : undefined}
                     className="flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-extrabold text-primary hover:bg-primary hover:text-white">
-                    {clinicFilter} <X size={12} />
+                    {clinicFilter.startsWith('city:') ? clinicFilter.slice(5) : clinicFilter.slice(4)} <X size={12} />
                   </button>
                 )}
-                {clinicFilter && addressOf(clinicFilter) && (
-                  <span className="text-xs font-semibold text-gray-400">{addressOf(clinicFilter)}</span>
+                {clinicFilter?.startsWith('cli:') && addressOf(clinicFilter.slice(4)) && (
+                  <span className="text-xs font-semibold text-gray-400">{addressOf(clinicFilter.slice(4))}</span>
                 )}
               </div>
             )}
