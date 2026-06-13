@@ -2,7 +2,19 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { HeartPulse, LogIn } from 'lucide-react'
 import { Button, Field, Tile, inputCls } from '../ui'
-import { DEV_MODE, useAuth } from '../lib/auth'
+import { useAuth } from '../lib/auth'
+
+// Konta testowe (Supabase, hasło wspólne) — wygodne logowanie przy testach z LAN.
+// Widoczne TYLKO na serwerze deweloperskim (import.meta.env.DEV); w buildzie
+// produkcyjnym sekcja znika. To realne konta — logują się normalnym Supabase.
+const TEST_PASSWORD = 'NovaMed.Test1'
+const TEST_ACCOUNTS: Array<[string, string]> = [
+  ['janina.wisniewska@novamed.dev', 'Pacjentka'],
+  ['a.kowalczyk@novamed.dev', 'Lekarka'],
+  ['k.lis@novamed.dev', 'Pielęgniarka'],
+  ['rejestracja@novamed.dev', 'Rejestracja'],
+  ['admin@novamed.dev', 'Administrator'],
+]
 
 export function Login() {
   const { login } = useAuth()
@@ -12,11 +24,11 @@ export function Login() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const submit = async (loginEmail: string) => {
+  const submit = async (loginEmail: string, loginPassword: string) => {
     setBusy(true)
     setError(null)
     try {
-      await login(loginEmail, password)
+      await login(loginEmail, loginPassword)
       navigate('/')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Nie udało się zalogować. Spróbuj ponownie.')
@@ -38,13 +50,13 @@ export function Login() {
       <Tile className="w-full max-w-sm p-6" delay={80}>
         <form
           className="space-y-4"
-          onSubmit={e => { e.preventDefault(); void submit(email) }}
+          onSubmit={e => { e.preventDefault(); void submit(email, password) }}
         >
           <Field label="Adres e-mail">
             <input className={inputCls} type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="jan.kowalski@poczta.pl" />
           </Field>
-          <Field label="Hasło" hint={DEV_MODE ? 'Tryb deweloperski — hasło nie jest sprawdzane (logowanie Supabase wkrótce).' : undefined}>
-            <input className={inputCls} type="password" value={password} onChange={e => setPassword(e.target.value)} required={!DEV_MODE} />
+          <Field label="Hasło">
+            <input className={inputCls} type="password" value={password} onChange={e => setPassword(e.target.value)} required />
           </Field>
           {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
           <Button size="lg" className="w-full" disabled={busy} type="submit">
@@ -62,21 +74,16 @@ export function Login() {
         </p>
       </Tile>
 
-      {DEV_MODE && (
+      {import.meta.env.DEV && (
         <div className="fade-up mt-5 text-center" style={{ animationDelay: '160ms' }}>
-          <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">Konta demo (tryb dev)</p>
+          <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">Konta testowe</p>
           <div className="flex flex-wrap justify-center gap-2">
-            {[
-              ['janina.wisniewska@novamed.dev', 'Pacjentka'],
-              ['a.kowalczyk@novamed.dev', 'Lekarka'],
-              ['k.lis@novamed.dev', 'Pielęgniarka'],
-              ['rejestracja@novamed.dev', 'Rejestracja'],
-              ['admin@novamed.dev', 'Administrator'],
-            ].map(([demoEmail, label]) => (
+            {TEST_ACCOUNTS.map(([testEmail, label]) => (
               <button
-                key={demoEmail}
-                onClick={() => void submit(demoEmail)}
-                className="tile-shadow cursor-pointer rounded-full bg-surface px-3.5 py-1.5 text-xs font-bold text-gray-600 hover:text-primary"
+                key={testEmail}
+                disabled={busy}
+                onClick={() => { setEmail(testEmail); setPassword(TEST_PASSWORD); void submit(testEmail, TEST_PASSWORD) }}
+                className="tile-shadow cursor-pointer rounded-full bg-surface px-3.5 py-1.5 text-xs font-bold text-gray-600 hover:text-primary disabled:opacity-50"
               >
                 {label}
               </button>

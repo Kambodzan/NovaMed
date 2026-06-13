@@ -8,6 +8,13 @@ import { useAuth } from '../../lib/auth'
 import { formatDatePL } from '../../lib/format'
 import type { DoctorReviewsOut } from '../../lib/types'
 
+// odmiana liczebnika: 1 opinia, 2-4 opinie, 5+ opinii (z wyjątkiem 12-14)
+function plOpinie(n: number): string {
+  if (n === 1) return 'opinia'
+  const d = n % 10, h = n % 100
+  return d >= 2 && d <= 4 && (h < 12 || h > 14) ? 'opinie' : 'opinii'
+}
+
 function Stars({ value, size = 16 }: { value: number; size?: number }) {
   return (
     <span className="inline-flex gap-0.5" aria-label={`${value} z 5 gwiazdek`}>
@@ -39,7 +46,7 @@ export function LekarzOpinie() {
             <div>
               <Stars value={Math.round(data.average)} size={18} />
               <p className="mt-0.5 text-xs font-semibold text-gray-400">
-                średnia z {data.count} {data.count === 1 ? 'opinii' : 'opinii'}
+                średnia z {data.count} {plOpinie(data.count)}
               </p>
             </div>
           </div>
