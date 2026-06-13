@@ -3,9 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Download } from 'lucide-react'
 import { Button, EmptyState, PageHeader, Tile, TileHeader, Overline, cx, inputCls } from '../../ui'
 import { api, apiText } from '../../lib/api'
+import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import type { ReportOut } from '../../lib/types'
-
-interface Clinic { clinic_id: string; clinic_name: string }
 
 const currentMonth = () => new Date().toISOString().slice(0, 7)
 
@@ -22,8 +21,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 export function Raporty() {
   const [month, setMonth] = useState(currentMonth())
 
-  const { data: clinics } = useQuery({ queryKey: ['clinics'], queryFn: () => api<Clinic[]>('/clinics') })
-  const clinic = clinics?.[0]
+  const { clinics, clinic, setClinicId } = useClinicSelection()
 
   const { data: report } = useQuery({
     queryKey: ['report', clinic?.clinic_id, month],
@@ -51,6 +49,7 @@ export function Raporty() {
           overline={clinic?.clinic_name ?? '…'}
           title="Raporty i statystyki"
           action={<>
+            <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
             <input type="month" className={cx(inputCls, 'w-44')} value={month} onChange={e => setMonth(e.target.value)} />
             <Button variant="secondary" size="sm" onClick={() => void downloadCsv()}>
               <Download size={14} /> CSV

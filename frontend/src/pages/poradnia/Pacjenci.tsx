@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Search, ShieldCheck, Users } from 'lucide-react'
 import { Badge, Button, EmptyState, Field, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
+import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 
-interface Clinic { clinic_id: string; clinic_name: string }
 interface PatientRow {
   patient_id: string
   first_name: string
@@ -17,8 +17,7 @@ export function PacjenciPlacowki() {
   const queryClient = useQueryClient()
   const [q, setQ] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const { data: clinics } = useQuery({ queryKey: ['clinics'], queryFn: () => api<Clinic[]>('/clinics') })
-  const clinic = clinics?.[0]
+  const { clinics, clinic, setClinicId } = useClinicSelection()
 
   const { data: patients } = useQuery({
     queryKey: ['clinic-patients', clinic?.clinic_id],
@@ -53,9 +52,12 @@ export function PacjenciPlacowki() {
           overline={clinic?.clinic_name ?? '…'}
           title="Pacjenci placówki"
           action={
-            <div className="relative">
-              <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
-              <input className={cx(inputCls, 'w-64 pl-10')} placeholder="Nazwisko lub PESEL…" value={q} onChange={e => setQ(e.target.value)} />
+            <div className="flex flex-wrap items-center gap-2">
+              <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
+              <div className="relative">
+                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+                <input className={cx(inputCls, 'w-64 pl-10')} placeholder="Nazwisko lub PESEL…" value={q} onChange={e => setQ(e.target.value)} />
+              </div>
             </div>
           }
         />
