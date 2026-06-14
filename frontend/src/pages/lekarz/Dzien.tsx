@@ -10,6 +10,10 @@ import { DatePicker } from '../../components/DatePicker'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
+// wybrana data trzyma się przez sesję — powrót z kartoteki/gabinetu nie resetuje
+// jej na dziś (przycisk „Dziś" zawsze wraca na bieżący dzień)
+const DAY_KEY = 'novamed-doctor-day'
+
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'CANCELLED']
 
 function StatTile({ icon, label, value, sub, delay }: {
@@ -29,7 +33,8 @@ function StatTile({ icon, label, value, sub, delay }: {
 export function LekarzDzien() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [day, setDay] = useState(todayIso())
+  const [day, setDayState] = useState(() => sessionStorage.getItem(DAY_KEY) ?? todayIso())
+  const setDay = (d: string) => { sessionStorage.setItem(DAY_KEY, d); setDayState(d) }
   const [error, setError] = useState<string | null>(null)
   const [noShowFor, setNoShowFor] = useState<AppointmentOut | null>(null)
 
