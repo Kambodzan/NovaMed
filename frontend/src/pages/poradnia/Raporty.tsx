@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Download } from 'lucide-react'
 import { Button, EmptyState, PageHeader, Tile, TileHeader, Overline, cx, inputCls } from '../../ui'
@@ -7,6 +7,8 @@ import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import type { ReportOut } from '../../lib/types'
 
 const currentMonth = () => new Date().toISOString().slice(0, 7)
+// wybrany miesiąc trzyma się przez sesję (jak data w „Mój dzień" lekarza)
+const MONTH_KEY = 'novamed-report-month'
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -19,7 +21,8 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 export function Raporty() {
-  const [month, setMonth] = useState(currentMonth())
+  const [month, setMonth] = useState(() => sessionStorage.getItem(MONTH_KEY) ?? currentMonth())
+  useEffect(() => { sessionStorage.setItem(MONTH_KEY, month) }, [month])
 
   const { clinics, clinic, setClinicId } = useClinicSelection()
 

@@ -1,6 +1,6 @@
 // Kalendarz tygodniowy lekarza — siatka pon–nd z wizytami i wolnymi terminami.
 // Klik w wizytę otwiera gabinet; dzisiejsza kolumna wyróżniona.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, CheckCircle2, Video, XCircle } from 'lucide-react'
@@ -13,9 +13,13 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const isoDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const DAY_LABEL = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd']
 
+// wybrany tydzień (offset względem bieżącego) trzyma się przez sesję
+const OFFSET_KEY = 'novamed-doctor-week-offset'
+
 export function LekarzKalendarz() {
   const navigate = useNavigate()
-  const [offset, setOffset] = useState(0) // tygodnie względem bieżącego
+  const [offset, setOffset] = useState(() => Number(sessionStorage.getItem(OFFSET_KEY)) || 0)
+  useEffect(() => { sessionStorage.setItem(OFFSET_KEY, String(offset)) }, [offset])
 
   const days = useMemo(() => {
     const now = new Date()
