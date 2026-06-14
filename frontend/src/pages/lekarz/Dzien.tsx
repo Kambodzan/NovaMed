@@ -170,7 +170,7 @@ export function LekarzDzien() {
                   <div className="flex gap-2">
                     {v.appointment_status === 'CONFIRMED' && (
                       <>
-                        <Button size="sm" onClick={() => startVisit(v)}>
+                        <Button size="sm" disabled={changeStatus.isPending} onClick={() => startVisit(v)}>
                           {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : <><DoorOpen size={14} /> Rozpocznij</>}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setNoShowFor(v)}>
@@ -179,7 +179,7 @@ export function LekarzDzien() {
                       </>
                     )}
                     {v.appointment_status === 'NO_SHOW' && isToday && (
-                      <Button size="sm" variant="ghost" title="Pacjent dotarł spóźniony — podejmij wizytę" onClick={() => startVisit(v)}>
+                      <Button size="sm" variant="ghost" disabled={changeStatus.isPending} title="Pacjent dotarł spóźniony — podejmij wizytę" onClick={() => startVisit(v)}>
                         Jednak przyszedł
                       </Button>
                     )}

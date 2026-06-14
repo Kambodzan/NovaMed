@@ -178,3 +178,15 @@ def test_lekarz_nie_zmienia_cudzych_wizyt(client, setup, factory):
         headers=auth_header(other_doctor_token),
     )
     assert resp.status_code == 403
+
+
+def test_zmiana_statusu_idempotentna(client, setup):
+    # podwójne „Rozpocznij" (wyścig Mój dzień ↔ Gabinet) nie może dawać błędu
+    slot_id = make_slot(client, setup, days_ahead=2)
+    client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))
+    first = client.post(f"/appointments/{slot_id}/status", json={"new_status": "IN_PROGRESS"},
+                        headers=auth_header(setup["doctor_token"]))
+    second = client.post(f"/appointments/{slot_id}/status", json={"new_status": "IN_PROGRESS"},
+                         headers=auth_header(setup["doctor_token"]))
+    assert first.status_code == 200 and second.status_code == 200
+    assert second.json()["appointment_status"] == "IN_PROGRESS"

@@ -753,6 +753,11 @@ def change_status(
     a = get_appointment_or_404(appointment_id, db)
     if user.role.role_name == "lekarz" and a.doctor_id != user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest wizyta tego lekarza.")
+    # idempotencja: ustawienie statusu, który już obowiązuje = no-op (nie błąd).
+    # Chroni przed podwójnym kliknięciem / wyścigiem „Rozpocznij" z dwóch widoków
+    # (np. Mój dzień nawiguje do gabinetu, oba próbują ustawić IN_PROGRESS).
+    if a.appointment_status == body.new_status.value:
+        return appointment_out(db, a)
     assert_transition(a.appointment_status, body.new_status)
     # spóźniony pacjent (NO_SHOW → IN_PROGRESS) tylko w dniu wizyty —
     # po północy nieodbyta wizyta zostaje nieodbyta

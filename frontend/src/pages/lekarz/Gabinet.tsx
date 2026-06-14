@@ -144,7 +144,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           action={<>
             {confirmed && (
               <>
-                <Button onClick={() => changeStatus.mutate('IN_PROGRESS')}><Play size={15} /> Rozpocznij wizytę</Button>
+                <Button disabled={changeStatus.isPending} onClick={() => changeStatus.mutate('IN_PROGRESS')}><Play size={15} /> Rozpocznij wizytę</Button>
                 <Button variant="ghost" onClick={() => setConfirm('NO_SHOW')}>Nie stawił się</Button>
               </>
             )}
@@ -155,14 +155,14 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                     <Video size={15} /> Rozmowa wideo
                   </Button>
                 )}
-                <Button onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
+                <Button disabled={changeStatus.isPending} onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
                   <Square size={14} /> Zakończ wizytę
                 </Button>
               </>
             )}
             {visit.appointment_status === 'NO_SHOW'
               && new Date(visit.appointment_datetime).toDateString() === new Date().toDateString() && (
-              <Button onClick={() => changeStatus.mutate('IN_PROGRESS')}>
+              <Button disabled={changeStatus.isPending} onClick={() => changeStatus.mutate('IN_PROGRESS')}>
                 <Play size={15} /> Jednak przyszedł — rozpocznij
               </Button>
             )}
