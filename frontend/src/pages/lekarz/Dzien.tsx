@@ -155,9 +155,9 @@ export function LekarzDzien() {
                   </span>
                   <span className="text-gray-400">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
                   <button
-                    onClick={() => navigate(`/pacjent/${v.patient_id}`)}
+                    onClick={() => navigate(`/wizyta/${v.appointment_id}`)}
                     className="min-w-0 flex-1 cursor-pointer text-left"
-                    title="Otwórz kartotekę pacjenta"
+                    title="Otwórz wizytę (gabinet)"
                   >
                     <p className="text-sm font-extrabold text-gray-900 hover:text-primary">{v.patient_name}</p>
                     {v.notes && <p className="truncate text-xs font-medium text-gray-500">{v.notes}</p>}
