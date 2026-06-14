@@ -10,9 +10,14 @@ import { DatePicker } from '../../components/DatePicker'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
+// wybrana data trzyma się przez sesję — powrót z innej zakładki nie resetuje
+// jej na dziś (osobny klucz niż „Mój dzień" lekarza)
+const DAY_KEY = 'novamed-nurse-day'
+
 export function Zabiegi() {
   const queryClient = useQueryClient()
-  const [day, setDay] = useState(todayIso())
+  const [day, setDayState] = useState(() => sessionStorage.getItem(DAY_KEY) ?? todayIso())
+  const setDay = (d: string) => { sessionStorage.setItem(DAY_KEY, d); setDayState(d) }
   const [completeFor, setCompleteFor] = useState<ProcedureOut | null>(null)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
