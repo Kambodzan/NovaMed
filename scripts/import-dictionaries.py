@@ -1,8 +1,11 @@
 # Import słowników ICD-10 i leków do bazy NovaMed (plug-and-play, idempotentny upsert).
 #
-# Domyślnie ładuje startowe zestawy z data/dictionaries/ (ICD-10 + popularne leki PL).
-# Można podać własne pliki — np. pełne oficjalne wykazy:
-#   --icd10 sciezka.csv   CSV "code;name" (separator ; lub , — wykrywany automatycznie)
+# Domyślnie ładuje data/dictionaries/icd10.csv — pełną dwujęzyczną klasyfikację
+# ICD-10 WHO (~12 tys. kodów): polskie nazwy z dane.gov.pl (oficjalny ICD10pl.csv),
+# angielskie z WHO ICD-X, złączone po kodzie.
+# Można podać własne pliki — np. inne oficjalne wykazy:
+#   --icd10 sciezka.csv   CSV "code;name_pl;name_en" (lub starsze "code;name");
+#                         separator ; lub , wykrywany automatycznie
 #   --meds  sciezka.csv   CSV "name;form;strength"
 #   --rpl   sciezka.csv   oficjalny CSV Rejestru Produktów Leczniczych (rejestrymedyczne.ezdrowie.gov.pl)
 #                         — kolumny mapowane po nagłówkach (Nazwa Produktu Leczniczego / Postać farmaceutyczna / Moc)
@@ -32,17 +35,23 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def import_icd10(db, path: Path) -> int:
+    """Obsługuje CSV dwujęzyczny (code;name_pl;name_en) oraz starszy (code;name).
+    Brakująca nazwa PL fallbackuje na EN (i odwrotnie) — żaden kod bez nazwy."""
     count = 0
     for row in read_csv(path):
         code = (row.get("code") or row.get("Kod") or "").strip()
-        name = (row.get("name") or row.get("Nazwa") or "").strip()
-        if not code or not name:
+        name_pl = (row.get("name_pl") or row.get("name") or row.get("Nazwa") or "").strip()
+        name_en = (row.get("name_en") or row.get("name_eng") or "").strip()
+        if not code or not (name_pl or name_en):
             continue
+        name_pl = name_pl or name_en  # PL używane w dokumentach — nie może być puste
         entry = db.get(Icd10Entry, code)
         if entry:
-            entry.name = name[:255]
+            entry.name = name_pl[:255]
+            entry.name_en = (name_en or None) and name_en[:255]
         else:
-            db.add(Icd10Entry(code=code[:10], name=name[:255]))
+            db.add(Icd10Entry(code=code[:10], name=name_pl[:255],
+                              name_en=(name_en or None) and name_en[:255]))
         count += 1
     return count
 

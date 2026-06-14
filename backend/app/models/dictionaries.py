@@ -14,7 +14,8 @@ class Icd10Entry(Base):
     __tablename__ = "icd10_dict"
 
     code: Mapped[str] = mapped_column(String(10), primary_key=True)
-    name: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(255))               # nazwa polska (dokumenty PL)
+    name_en: Mapped[str | None] = mapped_column(String(255))     # nazwa angielska (apka PL/EN)
 
 
 class MedicationEntry(Base):

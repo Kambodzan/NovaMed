@@ -17,7 +17,8 @@ STAFF = ("lekarz", "pielegniarka", "rejestracja", "kierownik", "administrator")
 
 class Icd10Out(BaseModel):
     code: str
-    name: str
+    name: str               # nazwa polska
+    name_en: str | None = None
 
 
 class MedicationOut(BaseModel):
@@ -35,11 +36,15 @@ def search_icd10(
 ):
     rows = db.scalars(
         select(Icd10Entry)
-        .where(or_(Icd10Entry.code.ilike(f"{q}%"), Icd10Entry.name.ilike(f"%{q}%")))
+        .where(or_(
+            Icd10Entry.code.ilike(f"{q}%"),
+            Icd10Entry.name.ilike(f"%{q}%"),
+            Icd10Entry.name_en.ilike(f"%{q}%"),  # wyszukiwanie działa też po angielsku
+        ))
         .order_by(Icd10Entry.code)
         .limit(15)
     )
-    return [Icd10Out(code=r.code, name=r.name) for r in rows]
+    return [Icd10Out(code=r.code, name=r.name, name_en=r.name_en) for r in rows]
 
 
 @router.get("/medications", response_model=list[MedicationOut])
