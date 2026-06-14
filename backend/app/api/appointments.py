@@ -304,7 +304,12 @@ def search_slots(
         select(Appointment)
         # OUTER JOIN: sloty badań nie mają lekarza (doctor_id NULL) i też mają być widoczne
         .outerjoin(Doctor, Doctor.doctor_id == Appointment.doctor_id)
-        .where(Appointment.appointment_status == AppointmentStatus.FREE.value)
+        .where(
+            Appointment.appointment_status == AppointmentStatus.FREE.value,
+            # tylko przyszłe terminy — przeszłe wolne sloty (nieodebrane) nie są
+            # już dostępne do rezerwacji (spójnie z /public/slots)
+            Appointment.appointment_datetime > datetime.now(),
+        )
         .order_by(Appointment.appointment_datetime)
     )
     if specialization:
@@ -334,6 +339,8 @@ def book_appointment(
     a = get_appointment_or_404(appointment_id, db)
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
+    if a.appointment_datetime < datetime.now():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
 
     # badanie ze skierowaniem: wymagane nasze skierowanie ALBO oświadczenie o zewnętrznym
     if a.referral_required:

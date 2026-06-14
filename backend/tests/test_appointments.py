@@ -21,8 +21,9 @@ def setup(client, factory):
     }
 
 
-def make_slot(client, setup, days_ahead=3, hour=10) -> int:
-    dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
+def make_slot(client, setup, days_ahead=3, hour=10, dt=None) -> int:
+    if dt is None:
+        dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     resp = client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",
         json={"doctor_id": str(setup["doctor"].user_id), "datetimes": [dt.isoformat()]},
@@ -91,7 +92,9 @@ def test_anulowanie_zwraca_slot_do_puli(client, setup):
 
 
 def test_anulowanie_pozniej_niz_24h_409(client, setup):
-    slot_id = make_slot(client, setup, days_ahead=0, hour=datetime.now().hour)  # dziś
+    # wizyta dziś za ~2 h (przyszła, ale w oknie <24h → polityka blokuje anulowanie)
+    soon = (datetime.now() + timedelta(hours=2)).replace(minute=0, second=0, microsecond=0)
+    slot_id = make_slot(client, setup, dt=soon)
     client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))
     resp = client.post(f"/appointments/{slot_id}/cancel", headers=auth_header(setup["patient_token"]))
     assert resp.status_code == 409

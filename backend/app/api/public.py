@@ -76,6 +76,8 @@ def guest_book(body: GuestBookIn, db: Session = Depends(get_db)):
     a = get_appointment_or_404(body.appointment_id, db)
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
+    if a.appointment_datetime < datetime.now():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
     if a.price is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="Terminy płatne rezerwuje się po zalogowaniu (płatność online). Załóż konto.")
