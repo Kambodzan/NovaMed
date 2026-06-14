@@ -96,6 +96,8 @@ export function Gabinet() {
 
   const inProgress = visit.appointment_status === 'IN_PROGRESS'
   const confirmed = visit.appointment_status === 'CONFIRMED'
+  // wizytę rozpoczyna się w dniu jej terminu (spójnie ze strażnikiem backendu)
+  const visitToday = new Date(visit.appointment_datetime).toDateString() === new Date().toDateString()
   const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
   const visitDocs = (documents ?? []).filter(d => d.appointment_id === id)
   const historyDocs = (documents ?? []).filter(d => d.appointment_id !== id)
@@ -142,12 +144,13 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           overline={`Gabinet · ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)} · ${visit.appointment_type === 'ONLINE' ? 'teleporada' : 'stacjonarna'}`}
           title={visit.patient_name ?? 'Wizyta'}
           action={<>
-            {confirmed && (
+            {confirmed && visitToday && (
               <>
                 <Button disabled={changeStatus.isPending} onClick={() => changeStatus.mutate('IN_PROGRESS')}><Play size={15} /> Rozpocznij wizytę</Button>
                 <Button variant="ghost" onClick={() => setConfirm('NO_SHOW')}>Nie stawił się</Button>
               </>
             )}
+            {confirmed && !visitToday && <StatusBadge status={visit.appointment_status} />}
             {inProgress && (
               <>
                 {visit.appointment_type === 'ONLINE' && (

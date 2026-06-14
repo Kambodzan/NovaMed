@@ -104,7 +104,9 @@ export function LekarzDzien() {
       )}
 
       <Tile className="p-3 sm:p-4" delay={150}>
-        {(visits ?? []).length === 0 ? (
+        {visits === undefined ? (
+          <p className="py-10 text-center text-sm font-semibold text-gray-400">Wczytywanie grafiku…</p>
+        ) : visits.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={28} strokeWidth={1.5} />}
             title="Brak terminów tego dnia"
@@ -173,7 +175,7 @@ export function LekarzDzien() {
                   )}
                   <StatusBadge status={v.appointment_status} />
                   <div className="flex gap-2">
-                    {v.appointment_status === 'CONFIRMED' && (
+                    {isToday && v.appointment_status === 'CONFIRMED' && (
                       <>
                         <Button size="sm" disabled={changeStatus.isPending} onClick={() => startVisit(v)}>
                           {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : <><DoorOpen size={14} /> Rozpocznij</>}

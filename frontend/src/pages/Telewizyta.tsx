@@ -245,7 +245,7 @@ export function Telewizyta() {
     <div className="space-y-4">
       <div className="fade-up flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Overline>Telewizyta · wizyta #{id}</Overline>
+          <Overline>Telewizyta · wideokonsultacja</Overline>
           <h1 className="text-[24px] font-extrabold tracking-tight text-gray-900">
             {peerPresent ? 'Rozmowa w toku' : 'Oczekiwanie na rozmówcę…'}
           </h1>
