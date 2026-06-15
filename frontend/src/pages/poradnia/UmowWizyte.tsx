@@ -18,6 +18,8 @@ interface DoctorRow { doctor_id: string; name: string; specializations: string[]
 interface PickedPatient { patient_id: string; name: string; pesel: string; isNew?: boolean }
 
 const NEW_PATIENT = { first_name: '', last_name: '', pesel: '', birth_date: '', phone_number: '', email: '' }
+// szukanie bez wrażliwości na polskie znaki ("kardio" ↔ "Kardiolog", "zielinski" ↔ "Zieliński")
+const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
 export function UmowWizyte() {
   const queryClient = useQueryClient()
@@ -31,15 +33,14 @@ export function UmowWizyte() {
   const [picked, setPicked] = useState<PickedPatient | null>(null)
   const [newForm, setNewForm] = useState(NEW_PATIENT)
 
-  // krok 2: termin
-  const [doctorFilter, setDoctorFilter] = useState('')
+  // krok 2: termin — wyszukiwarka tekstowa (lekarz/specjalizacja) + filtr dnia
+  const [query, setQuery] = useState('')
   const [dayFilter, setDayFilter] = useState('')
   // wejście z „Grafiku dnia" (klik „Umów" przy wolnym slocie) — preselekcja
   const navState = useLocation().state as { doctorId?: string | null; day?: string } | null
   useEffect(() => {
-    if (navState?.doctorId) setDoctorFilter(navState.doctorId)
     if (navState?.day) setDayFilter(navState.day)
-  }, [navState?.doctorId, navState?.day])
+  }, [navState?.day])
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [reason, setReason] = useState('')
   const [referralChoice, setReferralChoice] = useState('')  // '' | 'external' | <document_id>
@@ -54,6 +55,13 @@ export function UmowWizyte() {
     queryFn: () => api<DoctorRow[]>(`/clinics/${clinic!.clinic_id}/doctors`),
     enabled: !!clinic,
   })
+  // preselekcja lekarza z „Grafiku dnia": wpisz jego nazwisko do wyszukiwarki
+  useEffect(() => {
+    if (navState?.doctorId && doctors) {
+      const d = doctors.find(x => x.doctor_id === navState.doctorId)
+      if (d) setQuery(d.name)
+    }
+  }, [navState?.doctorId, doctors])
   const { data: slots } = useQuery({
     queryKey: ['clinic-slots', clinic?.clinic_id],
     queryFn: () => api<AppointmentOut[]>(`/slots?clinic_id=${clinic!.clinic_id}`),
@@ -78,11 +86,22 @@ export function UmowWizyte() {
   }, [patients, q])
 
   const freeSlots = useMemo(() => {
+    const needle = fold(query.trim())
     return (slots ?? [])
-      .filter(s => !doctorFilter || s.doctor_id === doctorFilter)
+      .filter(s => !needle || fold(`${s.doctor_name} ${s.service_name ?? ''} ${s.specializations.join(' ')}`).includes(needle))
       .filter(s => !dayFilter || s.appointment_datetime.slice(0, 10) === dayFilter)
       .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))
-  }, [slots, doctorFilter, dayFilter])
+  }, [slots, query, dayFilter])
+
+  // grupowanie po dniu — czytelniejsze niż płaska lista z powtórzoną datą
+  const slotsByDay = useMemo(() => {
+    const m = new Map<string, AppointmentOut[]>()
+    for (const s of freeSlots) {
+      const day = s.appointment_datetime.slice(0, 10)
+      m.set(day, [...(m.get(day) ?? []), s])
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [freeSlots])
 
   const reset = () => {
     setPicked(null); setNewForm(NEW_PATIENT); setQ(''); setMode('existing')
@@ -243,47 +262,64 @@ export function UmowWizyte() {
             <span className="text-xs font-bold text-gray-400">{freeSlots.length} dostępnych</span>
           } />
           <div className="mb-3 flex flex-wrap gap-2">
-            <Select
-              ariaLabel="Lekarz" className="min-w-[13rem] flex-1"
-              value={doctorFilter} onChange={setDoctorFilter}
-              options={[{ value: '', label: 'Wszyscy lekarze' },
-                ...(doctors ?? []).map(d => ({ value: d.doctor_id, label: d.name, hint: d.specializations.join(' · ') || undefined }))]}
-            />
+            <div className="relative min-w-[13rem] flex-1">
+              <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+              <input className={cx(inputCls, 'w-full pl-10 pr-8')} placeholder="Szukaj: lekarz lub specjalizacja…"
+                value={query} onChange={e => setQuery(e.target.value)} />
+              {query && (
+                <button onClick={() => setQuery('')} aria-label="Wyczyść"
+                  className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-700">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
             <div className="w-40"><DatePicker value={dayFilter} placeholder="dowolny dzień" onChange={setDayFilter} /></div>
             {dayFilter && <button onClick={() => setDayFilter('')} className="cursor-pointer text-xs font-extrabold text-gray-400 hover:text-gray-700">wyczyść</button>}
           </div>
 
           {freeSlots.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm font-medium text-gray-400">
-              Brak wolnych terminów dla wybranego filtra. Dodaj je w zakładce „Terminy".
+              {query || dayFilter ? 'Brak wolnych terminów dla tego filtra.' : 'Brak wolnych terminów. Dodaj je w zakładce „Terminy".'}
             </p>
           ) : (
-            <ul className="max-h-[44vh] space-y-1.5 overflow-y-auto pr-1">
-              {freeSlots.map(s => {
-                const sel = slot?.appointment_id === s.appointment_id
-                return (
-                  <li key={s.appointment_id}>
-                    <button onClick={() => setSlot(sel ? null : s)}
-                      className={cx('flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-2.5 text-left transition-colors',
-                        sel ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50 hover:bg-gray-100')}>
-                      <span className="text-gray-400">{s.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">
-                          {formatDatePL(s.appointment_datetime)}, {formatTime(s.appointment_datetime)}
-                        </span>
-                        <span className="block truncate text-xs font-medium text-gray-500">
-                          {s.doctor_id ? s.doctor_name : s.service_name}
-                          {s.specializations.length ? ` · ${s.specializations.join(' · ')}` : ''}
-                        </span>
-                      </span>
-                      <span className={cx('shrink-0 text-xs font-extrabold', s.price ? 'text-gray-900' : 'text-emerald-700')}>
-                        {s.price ? `${s.price} zł` : 'NFZ'}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="max-h-[46vh] space-y-3 overflow-y-auto pr-1">
+              {slotsByDay.map(([day, list]) => (
+                <div key={day}>
+                  <p className="sticky top-0 z-10 bg-surface/95 py-1 text-xs font-extrabold tracking-wide text-gray-500 backdrop-blur">
+                    {formatDatePL(day + 'T00:00:00')} <span className="font-bold text-gray-400">· {list.length}</span>
+                  </p>
+                  <ul className="space-y-1.5">
+                    {list.map(s => {
+                      const sel = slot?.appointment_id === s.appointment_id
+                      const online = s.appointment_type === 'ONLINE'
+                      return (
+                        <li key={s.appointment_id}>
+                          <button onClick={() => setSlot(sel ? null : s)}
+                            className={cx('flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-2.5 text-left transition-colors',
+                              sel ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50 hover:bg-gray-100')}>
+                            <span className="shrink-0 text-base font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">
+                              {formatTime(s.appointment_datetime)}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold text-gray-900">
+                                {s.doctor_id ? s.doctor_name : s.service_name}
+                              </span>
+                              <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-500">
+                                {online ? <><Video size={12} className="shrink-0" /> teleporada</> : <><MapPin size={12} className="shrink-0" /> stacjonarna</>}
+                                {s.specializations.length ? ` · ${s.specializations.join(' · ')}` : ''}
+                              </span>
+                            </span>
+                            <span className={cx('shrink-0 text-xs font-extrabold', s.price ? 'text-gray-900' : 'text-emerald-700')}>
+                              {s.price ? `${s.price} zł` : 'NFZ'}
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </Tile>
       </div>
