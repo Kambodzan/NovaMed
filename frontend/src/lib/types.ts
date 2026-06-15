@@ -16,6 +16,7 @@ export interface AppointmentOut {
   appointment_datetime: string
   appointment_status: string
   appointment_type: 'ONLINE' | 'STATIONARY'
+  allow_online: boolean      // slot STATIONARY: czy pacjent może wybrać teleporadę
   doctor_id: string | null  // NULL = badanie diagnostyczne (pracownia placówki)
   doctor_name: string
   service_name: string | null

@@ -197,25 +197,28 @@ upcoming_visit(ursus, ziel_id, tom_id, days_ahead=4, hour=10)
 # --- pula WOLNYCH terminów do rezerwacji (inaczej wyszukiwarka pacjenta pusta) -
 print("Wolne terminy do rezerwacji…")
 saw_id = next(v for k, v in docs.items() if "Sawicka" in k)
-# (lekarz, placówka, [(godz, min, online, cena)]) — czasy per-lekarz rozłączne
-# między placówkami (kolizja slotów lekarza jest globalna)
+# (lekarz, placówka, [(godz, min, tryb, cena)]) — czasy per-lekarz rozłączne
+# między placówkami (kolizja slotów lekarza jest globalna). tryb: 'stat'
+# (stacjonarna z opcją teleporady), 'stat_only' (tylko stacjonarna), 'online'.
 SLOT_PLAN = [
-    (kow_id, piastow, [(9, 0, False, None), (10, 0, False, None), (11, 0, False, 150.0)]),
-    (kow_id, next(v for k, v in clinics.items() if "Praga" in k), [(13, 0, True, None), (14, 0, False, None)]),
-    (ziel_id, piastow, [(9, 30, False, None), (10, 30, False, None)]),
-    (ziel_id, ursus, [(13, 30, False, None), (14, 30, False, None)]),
-    (saw_id, piastow, [(11, 30, False, None), (12, 30, False, 200.0)]),
-    (saw_id, ursus, [(15, 0, False, None), (16, 0, True, None)]),
+    (kow_id, piastow, [(9, 0, "stat", None), (10, 0, "stat", None), (11, 0, "stat", 150.0)]),
+    (kow_id, next(v for k, v in clinics.items() if "Praga" in k), [(13, 0, "online", None), (14, 0, "stat", None)]),
+    (ziel_id, piastow, [(9, 30, "stat", None), (10, 30, "stat_only", None)]),
+    (ziel_id, ursus, [(13, 30, "stat", None), (14, 30, "stat", None)]),
+    (saw_id, piastow, [(11, 30, "stat", None), (12, 30, "stat", 200.0)]),
+    (saw_id, ursus, [(15, 0, "stat_only", None), (16, 0, "online", None)]),
 ]
 free_made = 0
 for day in range(1, 7):  # następne 6 dni
     d0 = datetime.now() + timedelta(days=day)
     for doctor_id, clinic_id, times in SLOT_PLAN:
-        for hh, mm, online, price in times:
+        for hh, mm, mode, price in times:
             dt = d0.replace(hour=hh, minute=mm, second=0, microsecond=0)
             extra = {}
-            if online:
+            if mode == "online":
                 extra["appointment_type"] = "ONLINE"
+            elif mode == "stat_only":
+                extra["allow_online"] = False  # tylko stacjonarnie
             if price:
                 extra["price"] = price
             r = api("POST", f"/clinics/{clinic_id}/slots", reg,

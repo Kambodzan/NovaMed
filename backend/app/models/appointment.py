@@ -26,6 +26,10 @@ class Appointment(Base):
     appointment_datetime: Mapped[datetime] = mapped_column(DateTime)
     appointment_status: Mapped[str] = mapped_column(String(50))
     appointment_type: Mapped[str] = mapped_column(String(50))  # ONLINE / STATIONARY
+    # Dla slotu STATIONARY: czy pacjent może wybrać teleporadę (wideo). False =
+    # wyłącznie stacjonarnie (np. gabinet niedostosowany / wizyta wymaga obecności).
+    # Dla slotu ONLINE bez znaczenia.
+    allow_online: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     appointment_notes: Mapped[str | None] = mapped_column(Text)
     # Cena wizyty prywatnej; NULL = wizyta bezpłatna/NFZ (rozszerzenie ERD)
     price: Mapped[float | None] = mapped_column(Numeric(8, 2))

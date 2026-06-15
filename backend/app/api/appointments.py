@@ -117,6 +117,7 @@ class SlotsCreateIn(BaseModel):
     referral_required: bool = False
     datetimes: list[datetime]
     appointment_type: AppointmentType = AppointmentType.STATIONARY
+    allow_online: bool = True  # slot STATIONARY: czy pacjent może wybrać teleporadę
     price: float | None = Field(default=None, ge=0, description="Cena wizyty prywatnej; brak = NFZ/bezpłatna")
 
 
@@ -125,6 +126,7 @@ class AppointmentOut(BaseModel):
     appointment_datetime: datetime
     appointment_status: str
     appointment_type: str
+    allow_online: bool = True  # czy wizytę stacjonarną można wykonać jako teleporadę
     doctor_id: UUID | None
     doctor_name: str
     specializations: list[str] = []
@@ -200,6 +202,7 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         appointment_datetime=a.appointment_datetime,
         appointment_status=a.appointment_status,
         appointment_type=a.appointment_type,
+        allow_online=a.allow_online,
         doctor_id=a.doctor_id,
         doctor_name=doctor_user.username if doctor_user else (a.service_name or "Pracownia diagnostyczna"),
         specializations=list(doctor.specialization_names) if doctor else [],
@@ -294,6 +297,8 @@ def create_slots(
             appointment_datetime=dt,
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=body.appointment_type.value,
+            # slot ONLINE jest z definicji online; STATIONARY niesie wybór allow_online
+            allow_online=body.allow_online if body.appointment_type == AppointmentType.STATIONARY else True,
             price=body.price,
             service_name=body.service_name,
             # NFZ-owe badanie (bez ceny) ZAWSZE wymaga skierowania; prywatne (z ceną) — nie
@@ -410,6 +415,10 @@ def book_appointment(
             a.appointment_notes = body.reason.strip()[:500]
         a.notify_earlier = body.notify_earlier
         if body.online and a.service_name is None:  # badania zawsze stacjonarnie
+            # teleporada dozwolona tylko gdy slot jest online albo na nią zezwala
+            if a.appointment_type != AppointmentType.ONLINE.value and not a.allow_online:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Ten termin jest dostępny wyłącznie stacjonarnie.")
             a.appointment_type = AppointmentType.ONLINE.value
 
     # eWUŚ — automatyczna weryfikacja przy rejestracji wizyty; awaria nie blokuje rezerwacji
@@ -747,6 +756,7 @@ def cancel_appointment(
             appointment_datetime=a.appointment_datetime,
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=a.appointment_type,
+            allow_online=a.allow_online,
             price=a.price,
             service_name=a.service_name,            # badanie: zachowaj rodzaj…
             referral_required=a.referral_required,  # …i wymóg skierowania
@@ -820,6 +830,7 @@ def reschedule_appointment(
             appointment_datetime=old.appointment_datetime,
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=old.appointment_type,
+            allow_online=old.allow_online,
             price=old.price,
             service_name=old.service_name,
             referral_required=old.referral_required,

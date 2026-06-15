@@ -64,6 +64,31 @@ def test_wyszukiwanie_po_specjalizacji(client, setup, factory):
     assert resp.json() == []
 
 
+def test_tryb_slotu_online_dozwolony_lub_nie(client, setup):
+    """Slot stacjonarny może (domyślnie) ALBO nie może być wykonany jako teleporada
+    (allow_online). Próba online na slocie tylko-stacjonarnym → 409."""
+    cid = setup["clinic"].clinic_id
+    did = str(setup["doctor"].user_id)
+    reg = auth_header(setup["reg_token"])
+    pat = auth_header(setup["patient_token"])
+
+    def slot(hour, allow_online):
+        dt = (datetime.now() + timedelta(days=3)).replace(hour=hour, minute=0, second=0, microsecond=0)
+        r = client.post(f"/clinics/{cid}/slots", headers=reg,
+                        json={"doctor_id": did, "datetimes": [dt.isoformat()], "allow_online": allow_online})
+        assert r.status_code == 201
+        return r.json()[0]
+
+    only_stat = slot(11, False)
+    assert only_stat["allow_online"] is False
+    r = client.post(f"/appointments/{only_stat['appointment_id']}/book", json={"online": True}, headers=pat)
+    assert r.status_code == 409 and "stacjonarnie" in r.json()["detail"]
+
+    can_online = slot(12, True)
+    r = client.post(f"/appointments/{can_online['appointment_id']}/book", json={"online": True}, headers=pat)
+    assert r.status_code == 200 and r.json()["appointment"]["appointment_type"] == "ONLINE"
+
+
 def test_lekarz_z_wieloma_specjalizacjami(client, factory):
     """Lekarz z kilkoma specjalizacjami jest znajdowany pod KAŻDĄ z nich,
     a slot wystawia pełną listę specjalizacji (UC-P3)."""

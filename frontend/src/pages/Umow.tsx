@@ -168,7 +168,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
                       {(s.price || multiClinic || s.appointment_type === 'ONLINE') && (
                         <span className="block text-[9px] font-semibold opacity-70">
                           {[s.appointment_type === 'ONLINE' ? t('online') : null,
-                            multiClinic ? shortLoc(s.clinic_name) : null,
+                            multiClinic && s.appointment_type !== 'ONLINE' ? shortLoc(s.clinic_name) : null,
                             s.price ? `${s.price} zł` : null]
                             .filter(Boolean).join(' · ')}
                         </span>
@@ -785,7 +785,7 @@ export function Umow() {
                     </label>
                   </div>
                 )}
-                {slot.appointment_type !== 'ONLINE' && !slot.service_name && (
+                {slot.appointment_type !== 'ONLINE' && !slot.service_name && slot.allow_online && (
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
                     <input
                       type="checkbox"
@@ -797,6 +797,12 @@ export function Umow() {
                       {t('Wolę teleporadę (wideo) — bez przychodzenia do placówki')}
                     </span>
                   </label>
+                )}
+                {slot.appointment_type !== 'ONLINE' && !slot.service_name && !slot.allow_online && (
+                  <p className="flex items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600">
+                    <MapPin size={16} className="mt-0.5 shrink-0 text-gray-400" />
+                    {t('Ta wizyta odbywa się wyłącznie stacjonarnie (bez teleporady).')}
+                  </p>
                 )}
                 {slot.appointment_type === 'ONLINE' && (
                   <p className="flex items-start gap-2.5 rounded-2xl bg-primary-soft px-4 py-3 text-sm font-semibold text-primary">

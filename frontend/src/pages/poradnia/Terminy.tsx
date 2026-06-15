@@ -46,7 +46,9 @@ export function Terminy() {
     doctor_id: '',
     date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
     time: '09:00',
-    type: 'STATIONARY',
+    // tryb wizyty: STATIONARY = stacjonarna z opcją teleporady, STATIONARY_ONLY =
+    // tylko stacjonarna, ONLINE = teleporada na sztywno
+    modality: 'STATIONARY',
     price: '',
     weeks: '1', // QW-5: 1 = jednorazowo, N = co tydzień przez N tygodni
   })
@@ -69,7 +71,8 @@ export function Terminy() {
           doctor_id: form.kind === 'visit' ? doctorId : null,
           service_name: form.kind === 'exam' ? form.service.trim() : null,
           datetimes,
-          appointment_type: form.type,
+          appointment_type: form.modality === 'ONLINE' ? 'ONLINE' : 'STATIONARY',
+          allow_online: form.modality !== 'STATIONARY_ONLY',
           price: form.price ? Number(form.price) : null,
         },
       })
@@ -182,8 +185,12 @@ export function Terminy() {
               onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
           </Field>
           <Field label="Forma">
-            <Select value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
-              options={[{ value: 'STATIONARY', label: 'stacjonarna' }, { value: 'ONLINE', label: 'teleporada' }]} />
+            <Select value={form.modality} onChange={v => setForm(f => ({ ...f, modality: v }))}
+              options={[
+                { value: 'STATIONARY', label: 'stacjonarna (z opcją teleporady)' },
+                { value: 'STATIONARY_ONLY', label: 'stacjonarna (tylko)' },
+                { value: 'ONLINE', label: 'teleporada' },
+              ]} />
           </Field>
           <Field label="Cena [zł]" hint="puste = NFZ">
             <input type="number" min="0" step="10" className={inputCls} value={form.price}

@@ -291,6 +291,8 @@ const EN: Record<string, string> = {
   'online': 'online',
   'To jest termin teleporady (wideo) — wizyta odbędzie się online, bez przychodzenia do placówki.':
     'This is a video appointment slot — the visit will take place online, without coming to the clinic.',
+  'Ta wizyta odbywa się wyłącznie stacjonarnie (bez teleporady).':
+    'This visit is in-person only (no video option).',
   'Spróbuj zmienić kryteria — albo daj znać, że czekasz:': 'Try different criteria — or let us know you are waiting:',
 
   // Rodzina
