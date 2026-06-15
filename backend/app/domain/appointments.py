@@ -15,6 +15,7 @@ class AppointmentStatus(str, Enum):
     CANCELLED = "CANCELLED"        # Odwołana
     NO_SHOW = "NO_SHOW"            # NieOdbyta
     INTERRUPTED = "INTERRUPTED"    # Przerwana
+    PAUSED = "PAUSED"             # Wstrzymana — pauza (pacjent np. na badaniu), wznawialna
 
 
 class AppointmentType(str, Enum):
@@ -30,7 +31,13 @@ ALLOWED_TRANSITIONS: dict[AppointmentStatus, set[AppointmentStatus]] = {
         AppointmentStatus.CANCELLED,
         AppointmentStatus.NO_SHOW,
     },
-    AppointmentStatus.IN_PROGRESS: {AppointmentStatus.COMPLETED, AppointmentStatus.INTERRUPTED},
+    AppointmentStatus.IN_PROGRESS: {
+        AppointmentStatus.COMPLETED, AppointmentStatus.INTERRUPTED, AppointmentStatus.PAUSED,
+    },
+    # wstrzymana (pauza) — wznawialna; można też od razu zakończyć/przerwać
+    AppointmentStatus.PAUSED: {
+        AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED, AppointmentStatus.INTERRUPTED,
+    },
     # stany końcowe — brak wyjść (Odwołana "wraca do puli" przez NOWY wolny slot,
     # nie przez zmianę statusu odwołanej wizyty; historia zostaje)
     AppointmentStatus.COMPLETED: set(),

@@ -103,6 +103,7 @@ const statusMap: Record<string, { label: string; tone: Tone }> = {
   TEMP_LOCK: { label: 'blokada tymczasowa', tone: 'warn' },
   CONFIRMED: { label: 'potwierdzona', tone: 'success' },
   IN_PROGRESS: { label: 'w trakcie', tone: 'info' },
+  PAUSED: { label: 'wstrzymana', tone: 'warn' },
   COMPLETED: { label: 'zakończona', tone: 'neutral' },
   CANCELLED: { label: 'odwołana', tone: 'error' },
   NO_SHOW: { label: 'nieodbyta', tone: 'error' },

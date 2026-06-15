@@ -759,6 +759,21 @@ def change_status(
     if a.appointment_status == body.new_status.value:
         return appointment_out(db, a)
     assert_transition(a.appointment_status, body.new_status)
+    # tylko JEDNA wizyta w toku na lekarza — przed rozpoczęciem kolejnej trzeba
+    # bieżącą wstrzymać (pauza) albo zakończyć
+    if body.new_status == AppointmentStatus.IN_PROGRESS and a.doctor_id is not None:
+        other = db.scalar(select(Appointment).where(
+            Appointment.doctor_id == a.doctor_id,
+            Appointment.appointment_status == AppointmentStatus.IN_PROGRESS.value,
+            Appointment.appointment_id != a.appointment_id,
+        ))
+        if other is not None:
+            p = db.get(Patient, other.patient_id) if other.patient_id else None
+            who = f"{p.first_name} {p.last_name}" if p else "inny pacjent"
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Masz już wizytę w toku ({who}). Wstrzymaj ją lub zakończ, zanim rozpoczniesz kolejną.",
+            )
     # spóźniony pacjent (NO_SHOW → IN_PROGRESS) tylko w dniu wizyty —
     # po północy nieodbyta wizyta zostaje nieodbyta
     if (a.appointment_status == AppointmentStatus.NO_SHOW.value

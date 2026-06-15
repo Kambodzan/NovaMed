@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ClipboardPen, FileCheck2, FolderOpen, History, Lock, Play, Plus, Printer, ShieldCheck, Square, User, Users, Video } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ClipboardPen, FileCheck2, FolderOpen, History, Lock, Pause, Play, Plus, Printer, ShieldCheck, Square, User, Users, Video } from 'lucide-react'
 import { Badge, Button, Field, Modal, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -125,7 +125,8 @@ export function Gabinet() {
       void queryClient.invalidateQueries({ queryKey: ['appointment', id] })
       void queryClient.invalidateQueries({ queryKey: ['doctor-day'] })
       invalidateNote()  // zakończenie auto-podpisuje notę
-      if (status === 'COMPLETED' || status === 'NO_SHOW') navigate('/')
+      // zakończona/nieodbyta — koniec wizyty; wstrzymana — lekarz wraca po kolejnego pacjenta
+      if (status === 'COMPLETED' || status === 'NO_SHOW' || status === 'PAUSED') navigate('/')
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zmienić statusu.'),
   })
@@ -157,7 +158,13 @@ export function Gabinet() {
   }
 
   const inProgress = visit.appointment_status === 'IN_PROGRESS'
+  const paused = visit.appointment_status === 'PAUSED'
+  const active = inProgress || paused  // wizyta otwarta — nota i dokumenty dostępne
   const confirmed = visit.appointment_status === 'CONFIRMED'
+  // wstrzymanie: najpierw zapisz szkic (żeby nie utracić wypełnień), potem pauza
+  const pauseVisit = () => unsavedNote
+    ? saveDraft.mutate(undefined, { onSuccess: () => changeStatus.mutate('PAUSED') })
+    : changeStatus.mutate('PAUSED')
   // wizytę rozpoczyna się w dniu jej terminu (spójnie ze strażnikiem backendu)
   const visitToday = new Date(visit.appointment_datetime).toDateString() === new Date().toDateString()
   const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
@@ -224,8 +231,21 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                     <Video size={15} /> Rozmowa wideo
                   </Button>
                 )}
+                <Button variant="secondary" disabled={changeStatus.isPending || saveDraft.isPending} onClick={pauseVisit}>
+                  <Pause size={14} /> Wstrzymaj
+                </Button>
                 <Button disabled={changeStatus.isPending} onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
                   <Square size={14} /> Zakończ wizytę
+                </Button>
+              </>
+            )}
+            {paused && (
+              <>
+                <Button disabled={changeStatus.isPending} onClick={() => changeStatus.mutate('IN_PROGRESS')}>
+                  <Play size={15} /> Wznów wizytę
+                </Button>
+                <Button variant="ghost" disabled={changeStatus.isPending} onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
+                  <Square size={14} /> Zakończ
                 </Button>
               </>
             )}
@@ -235,7 +255,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 <Play size={15} /> Jednak przyszedł — rozpocznij
               </Button>
             )}
-            {!confirmed && !inProgress && <StatusBadge status={visit.appointment_status} />}
+            {!confirmed && !inProgress && !paused && <StatusBadge status={visit.appointment_status} />}
           </>}
         />
       </div>
@@ -341,9 +361,14 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 </div>
               )}
             </Tile>
-          ) : inProgress ? (
+          ) : active ? (
             <Tile className="p-5" delay={100}>
               <TileHeader title={<span className="inline-flex items-center gap-1.5"><ClipboardPen size={13} /> Nota z wizyty <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 normal-case">szkic</span></span>} />
+              {paused && (
+                <p className="mb-3 flex items-center gap-1.5 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-bold text-amber-800">
+                  <Pause size={13} /> Wizyta wstrzymana — wypełnienia są zachowane. Kliknij „Wznów wizytę", aby kontynuować.
+                </p>
+              )}
               <div className="space-y-3">
                 {NOTE_SECTIONS.slice(0, 2).map(s => (
                   <Field key={s.key} label={s.label}>
@@ -385,7 +410,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           ) : null}
 
           {/* wystawianie dokumentów — przez cały czas trwania wizyty (też po podpisie noty) */}
-          {inProgress && patientId && (
+          {active && patientId && (
             <Tile className="p-5" delay={140}>
               <TileHeader title="Wystaw dokument" />
               <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} />
@@ -437,7 +462,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
         {/* dokumentacja: efekty TEJ wizyty na wierzchu, historia zwinięta
             (za dużo informacji w trakcie pracy = szum) */}
         <Tile className="p-5" delay={120}>
-          {(inProgress || visitDocs.length > 0 || signed) && (
+          {(active || visitDocs.length > 0 || signed) && (
             <div className="mb-5">
               <TileHeader
                 title={<span className="inline-flex items-center gap-1.5 text-primary"><ClipboardPen size={13} /> Z tej wizyty</span>}

@@ -245,3 +245,39 @@ def test_historia_wizyt_z_notami(client, visit, fakes, db_session):
     assert any("recepta" in d["label"].lower() for d in hist[0]["documents"])
     assert client.get(f"/patients/{visit['patient'].user_id}/history",
                       headers=auth_header(visit["patient_token"])).status_code == 403
+
+
+def test_pauza_i_jedna_wizyta_w_toku(client, visit, db_session):
+    """Wstrzymanie wizyty (pauza) + wymuszenie jednej wizyty w toku na lekarza."""
+    from uuid import UUID
+    from app.models import Appointment
+
+    dt = auth_header(visit["doctor_token"])
+    a_id = visit["appointment_id"]
+    clinic_id = db_session.get(Appointment, UUID(a_id)).clinic_id
+    # druga wizyta tego samego lekarza
+    b = Appointment(
+        patient_id=visit["patient"].user_id, doctor_id=visit["doctor"].user_id,
+        clinic_id=clinic_id, appointment_datetime=datetime.now() + timedelta(days=2, hours=1),
+        appointment_status="CONFIRMED", appointment_type="STATIONARY",
+    )
+    db_session.add(b)
+    db_session.commit()
+    b_id = str(b.appointment_id)
+
+    def status(aid, s):
+        return client.post(f"/appointments/{aid}/status", json={"new_status": s}, headers=dt)
+
+    assert status(a_id, "IN_PROGRESS").status_code == 200
+    # nie można rozpocząć drugiej, gdy pierwsza w toku
+    blocked = status(b_id, "IN_PROGRESS")
+    assert blocked.status_code == 409
+    assert "w toku" in blocked.json()["detail"]
+    # wstrzymanie zwalnia „slot" aktywnej wizyty
+    assert status(a_id, "PAUSED").status_code == 200
+    assert status(b_id, "IN_PROGRESS").status_code == 200
+    # teraz wznowienie pierwszej jest zablokowane (druga aktywna)
+    assert status(a_id, "IN_PROGRESS").status_code == 409
+    # po zakończeniu drugiej pierwszą można wznowić
+    assert status(b_id, "COMPLETED").status_code == 200
+    assert status(a_id, "IN_PROGRESS").status_code == 200

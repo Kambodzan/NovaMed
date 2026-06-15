@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, CheckCircle2, Clock, DoorOpen, MapPin, Users, Video, XCircle } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock, DoorOpen, MapPin, Pause, Users, Video, XCircle } from 'lucide-react'
 import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -51,8 +51,11 @@ export function LekarzDzien() {
   })
 
   const startVisit = (v: AppointmentOut) => {
-    changeStatus.mutate({ id: v.appointment_id, status: 'IN_PROGRESS' })
-    navigate(v.appointment_type === 'ONLINE' ? `/telewizyta/${v.appointment_id}` : `/wizyta/${v.appointment_id}`)
+    // nawigacja dopiero po sukcesie — przy „masz już wizytę w toku" (409)
+    // zostajemy na liście z komunikatem, zamiast wchodzić do nieotwartej wizyty
+    changeStatus.mutate({ id: v.appointment_id, status: 'IN_PROGRESS' }, {
+      onSuccess: () => navigate(v.appointment_type === 'ONLINE' ? `/telewizyta/${v.appointment_id}` : `/wizyta/${v.appointment_id}`),
+    })
   }
 
   // „teraz" odświeżane co 30 s — przesuwa krechę i statystyki bez przeładowania
@@ -116,6 +119,7 @@ export function LekarzDzien() {
           <ul className="space-y-1.5">
             {(visits ?? []).map((v, i) => {
               const live = v.appointment_status === 'IN_PROGRESS'
+              const paused = v.appointment_status === 'PAUSED'
               const finished = FINISHED.includes(v.appointment_status)
               const past = new Date(v.appointment_datetime) < now
               const nowLine = isToday && i === nowIdx && (
@@ -146,11 +150,13 @@ export function LekarzDzien() {
                 <li
                   className={cx(
                     'flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3',
-                    live ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50',
+                    live ? 'bg-primary-soft ring-2 ring-primary'
+                      : paused ? 'bg-amber-50 ring-1 ring-amber-200' : 'bg-gray-50',
                     finished && 'opacity-60 transition-opacity hover:opacity-100',
                   )}
                 >
-                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : 'text-gray-400')}>
+                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : paused ? 'text-amber-600' : 'text-gray-400')}>
+                    {paused && <Pause size={13} className="shrink-0" />}
                     {v.appointment_status === 'COMPLETED' && <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />}
                     {(v.appointment_status === 'NO_SHOW' || v.appointment_status === 'CANCELLED') && <XCircle size={14} className="shrink-0 text-gray-300" />}
                     {formatTime(v.appointment_datetime)}
@@ -188,6 +194,11 @@ export function LekarzDzien() {
                     {v.appointment_status === 'NO_SHOW' && isToday && (
                       <Button size="sm" variant="ghost" disabled={changeStatus.isPending} title="Pacjent dotarł spóźniony — podejmij wizytę" onClick={() => startVisit(v)}>
                         Jednak przyszedł
+                      </Button>
+                    )}
+                    {paused && (
+                      <Button size="sm" disabled={changeStatus.isPending} onClick={() => startVisit(v)}>
+                        <DoorOpen size={14} /> Wznów
                       </Button>
                     )}
                     {live && (
