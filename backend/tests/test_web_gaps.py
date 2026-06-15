@@ -9,6 +9,7 @@ from tests.conftest import auth_header
 @pytest.fixture()
 def setup(client, factory):
     _, reg_token = factory.user("rejestracja")
+    _, admin_token = factory.user("administrator")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     _, nurse_token = factory.user("pielegniarka")
@@ -17,7 +18,7 @@ def setup(client, factory):
     return {
         "clinic": clinic, "doctor": doctor_user, "doctor_token": doctor_token,
         "patient": patient_user, "patient_token": patient_token,
-        "reg_token": reg_token, "nurse_token": nurse_token,
+        "reg_token": reg_token, "nurse_token": nurse_token, "admin_token": admin_token,
     }
 
 
@@ -31,7 +32,7 @@ def test_reminder_mode_3_pozycyjny(client, setup, db_session):
     cid = s["clinic"].clinic_id
     base = {"earlier_notice_min_hours": 24, "slot_interval_min": 15}
 
-    r = client.patch(f"/clinics/{cid}/settings", headers=auth_header(s["reg_token"]), json={**base, "reminder_mode": "NONE"})
+    r = client.patch(f"/clinics/{cid}/settings", headers=auth_header(s["admin_token"]), json={**base, "reminder_mode": "NONE"})
     assert r.status_code == 200 and r.json()["reminder_mode"] == "NONE" and r.json()["confirmation_required"] is False
 
     a = Appointment(patient_id=s["patient"].user_id, doctor_id=s["doctor"].user_id, clinic_id=cid,
@@ -41,7 +42,7 @@ def test_reminder_mode_3_pozycyjny(client, setup, db_session):
     db_session.commit()
     assert send_due_reminders(db_session) == 0  # NONE → brak przypomnień
 
-    client.patch(f"/clinics/{cid}/settings", headers=auth_header(s["reg_token"]), json={**base, "reminder_mode": "CONFIRM"})
+    client.patch(f"/clinics/{cid}/settings", headers=auth_header(s["admin_token"]), json={**base, "reminder_mode": "CONFIRM"})
     assert db_session.get(Clinic, cid).confirmation_required is True  # zsynchronizowane
     db_session.refresh(a); a.reminder_sent = False; db_session.commit()
     assert send_due_reminders(db_session) == 1  # CONFIRM (≠NONE) → wysyła

@@ -112,12 +112,14 @@ def list_clinics(db: Session = Depends(get_db), _: AppUser = Depends(get_current
 def update_clinic_settings(
     clinic_id: UUID,
     body: ClinicSettingsIn,
-    _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    user: AppUser = Depends(require_roles("kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
-    """Ustawienia placówki — wyprzedzenie powiadomień, siatka terminów,
-    potwierdzanie obecności przez pacjenta."""
+    """Ustawienia placówki (polityka: wyprzedzenie powiadomień, siatka terminów,
+    tryb przypomnień/potwierdzania). To decyzje OPERACYJNE placówki — może je
+    zmieniać kierownik SWOJEJ placówki albo administrator, nie rejestracja."""
     clinic = get_clinic_or_404(clinic_id, db)
+    assert_staff_in_clinic(db, user, clinic_id)
     clinic.earlier_notice_min_hours = body.earlier_notice_min_hours
     clinic.slot_interval_min = body.slot_interval_min
     clinic.confirmation_hours = body.confirmation_hours

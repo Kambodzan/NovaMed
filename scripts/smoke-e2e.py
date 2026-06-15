@@ -121,8 +121,10 @@ def main() -> None:
     clinics = api("GET", "/clinics", reg).json()
     check("lista placówek", len(clinics) >= 1)
     clinic_id = clinics[0]["clinic_id"]
-    r = api("PATCH", f"/clinics/{clinic_id}/settings", reg, json={"earlier_notice_min_hours": 24})
-    check("ustawienia placówki (PATCH)", r.status_code == 200 and r.json()["earlier_notice_min_hours"] == 24)
+    r = api("PATCH", f"/clinics/{clinic_id}/settings", adm, json={"earlier_notice_min_hours": 24})
+    check("ustawienia placówki (PATCH, admin)", r.status_code == 200 and r.json()["earlier_notice_min_hours"] == 24)
+    check("rejestracja NIE zmienia ustawień (403)",
+          api("PATCH", f"/clinics/{clinic_id}/settings", reg, json={"earlier_notice_min_hours": 24}).status_code == 403)
     doctors = api("GET", f"/clinics/{clinic_id}/doctors", reg).json()
     check("lekarze placówki (3)", len(doctors) >= 3, str(len(doctors)))
     kow_id = next(d["doctor_id"] for d in doctors if "Kowalczyk" in d["name"])

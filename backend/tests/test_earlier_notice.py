@@ -11,13 +11,15 @@ from tests.conftest import auth_header
 @pytest.fixture()
 def setup(client, factory):
     _, reg_token = factory.user("rejestracja")
+    _, admin_token = factory.user("administrator")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
     return {
         "clinic": clinic, "doctor": doctor_user, "doctor_token": doctor_token,
-        "patient": patient_user, "patient_token": patient_token, "reg_token": reg_token,
+        "patient": patient_user, "patient_token": patient_token,
+        "reg_token": reg_token, "admin_token": admin_token,
     }
 
 
@@ -93,7 +95,7 @@ def test_limit_wyprzedzenia_placowki(client, setup):
     resp = client.patch(
         f"/clinics/{setup['clinic'].clinic_id}/settings",
         json={"earlier_notice_min_hours": 240},
-        headers=auth_header(setup["reg_token"]),
+        headers=auth_header(setup["admin_token"]),
     )
     assert resp.status_code == 200
     assert resp.json()["earlier_notice_min_hours"] == 240
@@ -110,12 +112,16 @@ def test_limit_wyprzedzenia_placowki(client, setup):
 
 def test_ustawienia_placowki_rbac_i_walidacja(client, setup):
     url = f"/clinics/{setup['clinic'].clinic_id}/settings"
+    # ustawienia placówki: pacjent ANI rejestracja nie mogą (polityka = kierownik/admin)
     assert client.patch(url, json={"earlier_notice_min_hours": 48},
                         headers=auth_header(setup["patient_token"])).status_code == 403
+    assert client.patch(url, json={"earlier_notice_min_hours": 48},
+                        headers=auth_header(setup["reg_token"])).status_code == 403
+    # admin: zła wartość → 422 (walidacja)
     assert client.patch(url, json={"earlier_notice_min_hours": 9999},
-                        headers=auth_header(setup["reg_token"])).status_code == 422
-    # wartość widoczna na liście placówek
-    client.patch(url, json={"earlier_notice_min_hours": 48}, headers=auth_header(setup["reg_token"]))
+                        headers=auth_header(setup["admin_token"])).status_code == 422
+    # wartość ustawiona przez admina widoczna na liście placówek
+    client.patch(url, json={"earlier_notice_min_hours": 48}, headers=auth_header(setup["admin_token"]))
     clinics = client.get("/clinics", headers=auth_header(setup["patient_token"])).json()
     me = next(c for c in clinics if c["clinic_id"] == str(setup["clinic"].clinic_id))
     assert me["earlier_notice_min_hours"] == 48

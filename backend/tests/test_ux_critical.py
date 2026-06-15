@@ -12,13 +12,15 @@ from tests.conftest import auth_header
 @pytest.fixture()
 def setup(client, factory):
     _, reg_token = factory.user("rejestracja")
+    _, admin_token = factory.user("administrator")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
     return {
         "clinic": clinic, "doctor": doctor_user, "doctor_token": doctor_token,
-        "patient": patient_user, "patient_token": patient_token, "reg_token": reg_token,
+        "patient": patient_user, "patient_token": patient_token,
+        "reg_token": reg_token, "admin_token": admin_token,
     }
 
 
@@ -128,7 +130,7 @@ def test_slot_poza_siatka_odrzucony(client, setup):
     # zmiana siatki na 20 min: 10:15 już nie przejdzie, 10:20 tak
     client.patch(f"/clinics/{setup['clinic'].clinic_id}/settings",
                  json={"earlier_notice_min_hours": 24, "slot_interval_min": 20},
-                 headers=auth_header(setup["reg_token"]))
+                 headers=auth_header(setup["admin_token"]))
     day2 = base + timedelta(days=1)
     assert client.post(
         f"/clinics/{setup['clinic'].clinic_id}/slots",

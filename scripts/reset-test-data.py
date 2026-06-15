@@ -26,7 +26,7 @@ from app.core.db import SessionLocal  # noqa: E402
 SEED_EMAILS = [
     "admin@novamed.dev",
     "a.kowalczyk@novamed.dev", "p.zielinski@novamed.dev", "m.sawicka@novamed.dev",
-    "k.lis@novamed.dev", "rejestracja@novamed.dev",
+    "k.lis@novamed.dev", "rejestracja@novamed.dev", "kierownik@novamed.dev",
     "janina.wisniewska@novamed.dev", "tomasz.borkowski@novamed.dev",
 ]
 

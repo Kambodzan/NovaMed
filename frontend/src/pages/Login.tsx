@@ -13,6 +13,7 @@ const TEST_ACCOUNTS: Array<[string, string]> = [
   ['a.kowalczyk@novamed.dev', 'Lekarka'],
   ['k.lis@novamed.dev', 'Pielęgniarka'],
   ['rejestracja@novamed.dev', 'Rejestracja'],
+  ['kierownik@novamed.dev', 'Kierownik'],
   ['admin@novamed.dev', 'Administrator'],
 ]
 

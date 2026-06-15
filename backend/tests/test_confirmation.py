@@ -11,13 +11,15 @@ from tests.conftest import auth_header
 @pytest.fixture()
 def setup(client, factory):
     _, reg_token = factory.user("rejestracja")
+    _, admin_token = factory.user("administrator")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
     return {
         "clinic": clinic, "doctor": doctor_user, "doctor_token": doctor_token,
-        "patient": patient_user, "patient_token": patient_token, "reg_token": reg_token,
+        "patient": patient_user, "patient_token": patient_token,
+        "reg_token": reg_token, "admin_token": admin_token,
     }
 
 
@@ -26,7 +28,7 @@ def enable_confirmation(client, s, hours=48):
         f"/clinics/{s['clinic'].clinic_id}/settings",
         json={"earlier_notice_min_hours": 24, "slot_interval_min": 15,
               "confirmation_required": True, "confirmation_hours": hours},
-        headers=auth_header(s["reg_token"]),
+        headers=auth_header(s["admin_token"]),
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["confirmation_required"] is True

@@ -73,6 +73,7 @@ USERS = [
      {"specializations": ["Endokrynolog", "Diabetolog"], "academic_title": "dr n. med.", "license": "3456789"}),
     ("k.lis@novamed.dev", "piel. Katarzyna Lis", "pielegniarka", {"license": "7654321"}),
     ("rejestracja@novamed.dev", "Barbara Krawczyk", "rejestracja", {}),
+    ("kierownik@novamed.dev", "Magdalena Wójcik (kierownik)", "kierownik", {}),
     ("janina.wisniewska@novamed.dev", "Janina Wiśniewska", "pacjent",
      {"first_name": "Janina", "last_name": "Wiśniewska", "pesel_base": "4703081234",
       "birth_date": date(1947, 3, 8), "phone": "601234567"}),
@@ -91,6 +92,7 @@ CLINIC_ASSIGNMENT = {
     "m.sawicka@novamed.dev": [0, 2],        # Endokrynolog — Piastów + Ursus
     "k.lis@novamed.dev": [0],               # pielęgniarka — Piastów
     "rejestracja@novamed.dev": [0, 1, 2],   # recepcja centralna — wszystkie placówki
+    "kierownik@novamed.dev": [0, 1, 2],     # kierownik — zarządza ustawieniami placówek
     "janina.wisniewska@novamed.dev": [0],   # pacjentka — Piastów
     "tomasz.borkowski@novamed.dev": [0, 2], # pacjent — Piastów + Ursus
 }
@@ -224,7 +226,7 @@ def main() -> None:
             else:
                 target = {c.clinic_id for c in clinics}
 
-            if role_name in ("lekarz", "pielegniarka", "rejestracja"):
+            if role_name in ("lekarz", "pielegniarka", "rejestracja", "kierownik"):
                 model, fk = StaffClinic, StaffClinic.user_id
             elif role_name == "pacjent":
                 model, fk = PatientClinic, PatientClinic.patient_id

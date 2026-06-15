@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, Check, ChevronLeft, ChevronRight, Plus, Search, Settings2, Video, X } from 'lucide-react'
 import { Button, EmptyState, Field, Loading, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { formatDatePL, formatTime } from '../../lib/format'
 import { confirm } from '../../lib/confirm'
 import type { AppointmentOut } from '../../lib/types'
@@ -27,6 +28,9 @@ interface DoctorRow { doctor_id: string; name: string; specializations: string[]
 export function Kalendarz() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { me } = useAuth()
+  // ustawienia placówki (polityka) zmienia tylko kierownik/administrator, nie rejestracja
+  const canManage = me?.role === 'kierownik' || me?.role === 'administrator'
   const { clinics, clinic, setClinicId } = useClinicSelection()
   const [day, setDayState] = useState(() => sessionStorage.getItem(DAY_KEY) ?? todayIso())
   const setDay = (d: string) => { sessionStorage.setItem(DAY_KEY, d); setDayState(d) }
@@ -122,7 +126,7 @@ export function Kalendarz() {
                 {day !== todayIso() && <Button variant="ghost" size="sm" onClick={() => setDay(todayIso())}>Dziś</Button>}
               </div>
               <Button variant="secondary" size="sm" onClick={() => setModal('add')}><Plus size={14} /> Dodaj terminy</Button>
-              <Button variant="secondary" size="sm" onClick={() => setModal('settings')}><Settings2 size={14} /> Ustawienia</Button>
+              {canManage && <Button variant="secondary" size="sm" onClick={() => setModal('settings')}><Settings2 size={14} /> Ustawienia</Button>}
             </div>
           }
         />
