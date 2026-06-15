@@ -59,8 +59,8 @@ def dev_token(body: DevTokenIn):
     skonfigurowany (SUPABASE_URL puste). Token podpisany tym samym sekretem,
     którym backend weryfikuje — identyczny przepływ jak z prawdziwym Supabase.
     Tożsamość deterministyczna: sub = uuid5(email)."""
-    if settings.supabase_url:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Niedostępne — skonfigurowano Supabase.")
+    if not settings.dev_mode or settings.supabase_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Niedostępne — logowanie przez Supabase.")
     sub = str(uuid.uuid5(uuid.NAMESPACE_DNS, body.email.lower()))
     token = jwt.encode(
         {
@@ -99,12 +99,16 @@ def register_profile(
     # wizyt/dokumentów zostaje, bez duplikatu pacjenta.
     guest = db.scalar(select(AppUser).where(
         AppUser.email == email.lower(), AppUser.active_account.is_(False)))
-    if guest is None:
+    # PESEL nie jest sekretem — żeby scalić kartę gościa po PESEL, wymagamy też
+    # zgodnego telefonu (recepcja go zapisuje). Inaczej znajomość samego PESEL-u
+    # pozwalałaby przejąć cudzą kartotekę gościa (account takeover).
+    if guest is None and body.phone_number:
         gp = db.scalar(
             select(Patient).join(AppUser, AppUser.user_id == Patient.patient_id).where(
                 Patient.pesel == body.pesel,
                 AppUser.active_account.is_(False),
                 Patient.guardian_id.is_(None),  # podopiecznych nie przejmujemy tym trybem
+                AppUser.phone_number == body.phone_number.strip(),
             ))
         if gp is not None:
             guest = db.get(AppUser, gp.patient_id)

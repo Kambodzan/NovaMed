@@ -7,16 +7,23 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
 from app.core.db import get_db
 from app.domain.audit import log_access
 from app.api.documents import DocumentOut, document_out
-from app.models import Appointment, AppUser, ClinicalNote, DocumentShare, MedicalDocument, Patient
+from app.models import (
+    Appointment, AppUser, AuditLog, ClinicalNote, DocumentShare, MedicalDocument, Patient,
+)
 
 router = APIRouter(prefix="/shares", tags=["shares"])
+
+# Ochrona przed zgadywaniem kodów (enumeracja) przez konto personelu: po serii
+# nieudanych prób w krótkim oknie blokujemy /access (licznik z audit logu).
+SHARE_FAIL_WINDOW_MIN = 10
+SHARE_FAIL_LIMIT = 10
 
 # bez znaków mylących (0/O, 1/I/L)
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -183,15 +190,31 @@ def access_by_code(
     db: Session = Depends(get_db),
 ):
     """Personel otwiera dokumentację kodem od pacjenta (podgląd w zakresie kodu)."""
+    # Rate-limit: zbyt wiele nieudanych prób z jednego konta = próba zgadywania kodu.
+    recent_fails = db.scalar(
+        select(func.count()).select_from(AuditLog).where(
+            AuditLog.actor_id == user.user_id,
+            AuditLog.action == "ACCESS_SHARE_FAIL",
+            AuditLog.created_at >= datetime.now() - timedelta(minutes=SHARE_FAIL_WINDOW_MIN),
+        )) or 0
+    if recent_fails >= SHARE_FAIL_LIMIT:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Zbyt wiele nieudanych prób z tego konta — odczekaj kilka minut.")
+
     code = body.code.strip().upper()
     share = db.scalar(select(DocumentShare).where(DocumentShare.access_code == code))
     if share is None:
+        log_access(db, actor=user, action="ACCESS_SHARE_FAIL", detail=f"zly kod {code[:12]}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Nie ma takiego kodu — sprawdź pisownię (bez O/0 i I/1).")
     if share.revoked:
+        log_access(db, actor=user, action="ACCESS_SHARE_FAIL", patient_id=share.patient_id,
+                   detail=f"kod uniewazniony {code}")
         raise HTTPException(status_code=status.HTTP_410_GONE,
                             detail="Ten kod został unieważniony przez pacjenta — poproś o nowy.")
     if share.expires_at <= datetime.now():
+        log_access(db, actor=user, action="ACCESS_SHARE_FAIL", patient_id=share.patient_id,
+                   detail=f"kod wygasl {code}")
         raise HTTPException(status_code=status.HTTP_410_GONE,
                             detail=f"Ten kod wygasł {share.expires_at.strftime('%d.%m.%Y %H:%M')} — poproś pacjenta o nowy.")
 

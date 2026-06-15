@@ -585,13 +585,15 @@ class PatientContactIn(BaseModel):
 def update_patient_contact(
     patient_id: UUID,
     body: PatientContactIn,
-    _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    actor: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
     """UC-PP3: edycja danych kontaktowych pacjenta przez rejestrację."""
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    log_access(db, actor=actor, action="EDIT_CONTACT", patient_id=patient_id,
+               detail="dane kontaktowe (telefon/imie/nazwisko)")
     user = db.get(AppUser, patient_id)
     if body.phone_number is not None:
         user.phone_number = body.phone_number.strip() or None
@@ -647,6 +649,8 @@ def verify_insurance(
         p.insurance_status = ewus.verify(pesel=p.pesel)
     except IntegrationError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    log_access(db, actor=user, action="VERIFY_INSURANCE", patient_id=patient_id,
+               detail=f"eWUS -> {p.insurance_status}")
     db.commit()
     return patient_info_out(db, p)
 

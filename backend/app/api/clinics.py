@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
+from app.domain.audit import log_access
 from app.models import AppUser, Clinic, Doctor, Patient, PatientClinic, StaffClinic
 
 router = APIRouter(prefix="/clinics", tags=["clinics"])
@@ -188,10 +189,11 @@ def assign_patient(
 @router.get("/{clinic_id}/patients", response_model=list[PatientOut])
 def list_clinic_patients(
     clinic_id: UUID,
-    _: AppUser = Depends(require_roles(*STAFF_MANAGERS, "lekarz", "pielegniarka")),
+    user: AppUser = Depends(require_roles(*STAFF_MANAGERS, "lekarz", "pielegniarka")),
     db: Session = Depends(get_db),
 ):
     get_clinic_or_404(clinic_id, db)
+    log_access(db, actor=user, action="VIEW_PATIENT_LIST", detail=f"placowka {clinic_id}")
     rows = db.scalars(
         select(Patient)
         .join(PatientClinic, PatientClinic.patient_id == Patient.patient_id)

@@ -174,12 +174,15 @@ def add_addendum(
 ):
     """Uzupełnienie do podpisanej noty (osobny, niezmienny wpis z autorem i datą).
     Może je dodać KAŻDY lekarz (np. konsultujący), nie tylko prowadzący — jak w EHR."""
-    if db.get(Appointment, appointment_id) is None:
+    appt = db.get(Appointment, appointment_id)
+    if appt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
     note = db.scalar(select(ClinicalNote).where(ClinicalNote.appointment_id == appointment_id))
     if note is None or note.status != "SIGNED":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="Uzupełnienie można dodać dopiero do podpisanej noty.")
+    log_access(db, actor=user, action="ADD_ADDENDUM", patient_id=appt.patient_id,
+               detail="uzupelnienie do podpisanej noty")
     db.add(NoteAddendum(note_id=note.note_id, author_id=user.user_id, content=body.content))
     db.add(NoteEvent(note_id=note.note_id, actor_id=user.user_id, action="ADDENDUM",
                      content_snapshot=body.content))

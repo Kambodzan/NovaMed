@@ -109,3 +109,24 @@ def test_przejecie_po_pesel_gosc_z_recepcji(client, setup, db_session):
 
     mine = client.get("/appointments/my", headers=auth_header(token)).json()
     assert any(v["appointment_id"] == slot["appointment_id"] for v in mine)
+
+
+def test_pesel_zly_telefon_nie_przejmuje(client, setup, db_session):
+    """Sam PESEL nie wystarczy do scalenia kartoteki gościa — bez zgodnego
+    telefonu powstaje NOWE konto (ochrona przed account takeover po PESEL)."""
+    reg = auth_header(setup["reg_token"])
+    r = client.post("/patients/register", headers=reg, json={
+        "first_name": "Jan", "last_name": "Cichy", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "603999888",
+    })
+    assert r.status_code == 201
+    pid = r.json()["patient_id"]
+
+    # napastnik zna PESEL, ale podaje inny telefon → nie wpina się do cudzej kartoteki
+    token = make_token(email="napastnik@example.com")
+    rp = client.post("/auth/register-profile", headers=auth_header(token), json={
+        "first_name": "Jan", "last_name": "Cichy", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "111000111",
+    })
+    assert rp.status_code == 201
+    assert str(rp.json()["user_id"]) != str(pid)  # nowe konto, NIE kartoteka gościa

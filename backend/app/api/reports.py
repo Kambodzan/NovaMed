@@ -63,6 +63,15 @@ def resolve_period(month: str | None, date_from: str | None, date_to: str | None
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Podaj miesiąc (month) albo zakres (from/to).")
 
 
+def _csv_safe(value: str) -> str:
+    """Ochrona przed CSV formula injection (Excel/Sheets traktują =,+,-,@ jako wzór).
+    Pole zaczynające się od takiego znaku poprzedzamy apostrofem — staje się tekstem."""
+    s = str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 def build_report(db: Session, clinic_id: UUID, month: str | None = None,
                  date_from: str | None = None, date_to: str | None = None) -> ReportOut:
     """UC-PP4: statystyki okresu. „Wizyta" = termin z przypisanym pacjentem
@@ -141,7 +150,7 @@ def clinic_report_csv(
     w.writerow([])
     w.writerow(["Lekarz", "Wizyty", "Zakończone"])
     for d in report.per_doctor:
-        w.writerow([d.doctor_name, d.booked, d.completed])
+        w.writerow([_csv_safe(d.doctor_name), d.booked, d.completed])
     return PlainTextResponse(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",

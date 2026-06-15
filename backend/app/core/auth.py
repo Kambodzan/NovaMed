@@ -45,13 +45,20 @@ def decode_supabase_token(token: str) -> dict:
         if header.get("alg") == "ES256" and settings.supabase_url:
             key = _jwks().get_signing_key_from_jwt(token).key
             return jwt.decode(token, key, algorithms=["ES256"],
-                              audience=settings.supabase_jwt_aud, leeway=CLOCK_LEEWAY_S)
+                              audience=settings.supabase_jwt_aud, leeway=CLOCK_LEEWAY_S,
+                              options={"require": ["exp", "sub"]})
+        # HS256 (dev-token / testy) — TYLKO w trybie deweloperskim. W produkcji
+        # (DEV_MODE=false) akceptujemy wyłącznie ES256 z JWKS, więc znajomość
+        # sekretu nie pozwala podrobić tokenu (alg-confusion/downgrade niemożliwy).
+        if not settings.dev_mode:
+            raise jwt.InvalidAlgorithmError("Token HS256 niedozwolony w produkcji.")
         return jwt.decode(
             token,
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
             audience=settings.supabase_jwt_aud,
             leeway=CLOCK_LEEWAY_S,
+            options={"require": ["exp", "sub"]},
         )
     except jwt.PyJWTError as exc:
         raise HTTPException(

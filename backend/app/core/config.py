@@ -1,4 +1,7 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_JWT_SECRET = "dev-secret-do-podmiany"
 
 
 class Settings(BaseSettings):
@@ -7,11 +10,16 @@ class Settings(BaseSettings):
     app_name: str = "NovaMed API"
     database_url: str = "***REMOVED***"
 
+    # Tryb deweloperski: login bez hasła (/auth/dev-token), fallback HS256 i luźny
+    # CORS dla LAN. W PRODUKCJI ustaw DEV_MODE=false — wtedy akceptowane są
+    # wyłącznie tokeny ES256 z JWKS Supabase (nie da się podrobić tokenu sekretem).
+    dev_mode: bool = True
+
     # Supabase Auth — backend tylko weryfikuje tokeny (legacy HS256 JWT secret
     # z dashboardu: Settings → API → JWT Secret). Service role key używany
     # WYŁĄCZNIE przez scripts/provision-users.py (zakładanie kont testowych).
     supabase_url: str = ""
-    supabase_jwt_secret: str = "dev-secret-do-podmiany"
+    supabase_jwt_secret: str = DEFAULT_JWT_SECRET
     supabase_jwt_aud: str = "authenticated"
     supabase_service_role_key: str = ""
 
@@ -36,6 +44,17 @@ class Settings(BaseSettings):
 
     # Po ilu minutach porzucona płatność (TEMP_LOCK) zwalnia termin z powrotem do puli
     temp_lock_minutes: int = 15
+
+    @model_validator(mode="after")
+    def _production_guards(self):
+        """Twardy fail przy starcie produkcyjnym z niebezpieczną konfiguracją —
+        żeby aplikacja nie ruszyła z domyślnym sekretem (podrabialne tokeny)."""
+        if not self.dev_mode:
+            if self.supabase_jwt_secret == DEFAULT_JWT_SECRET:
+                raise ValueError("Produkcja (DEV_MODE=false) wymaga ustawienia własnego SUPABASE_JWT_SECRET.")
+            if not self.supabase_url:
+                raise ValueError("Produkcja (DEV_MODE=false) wymaga SUPABASE_URL.")
+        return self
 
 
 settings = Settings()
