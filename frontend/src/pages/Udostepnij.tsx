@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Share2, Trash2 } from 'lucide-react'
-import { Button, EmptyState, Field, Overline, Tile, TileHeader, inputCls } from '../ui'
+import { Button, EmptyState, Field, Overline, Tile, TileHeader } from '../ui'
+import { Select } from '../components/Select'
 import { api, ApiError } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { formatDatePL, formatTime } from '../lib/format'
@@ -77,19 +78,21 @@ export function Udostepnij() {
       <Tile delay={60}>
         <div className="space-y-4">
           <Field label={t('Zakres udostępnienia')}>
-            <select className={inputCls} value={scope} onChange={e => setScope(e.target.value)}>
-              <option value="ALL">{t('Cała dokumentacja')}</option>
-              <option value="LAB_RESULT">{t('Tylko wyniki badań')}</option>
-              <option value="PRESCRIPTION">{t('Tylko e-recepty')}</option>
-              <option value="LAST_12M">{t('Dokumenty z ostatnich 12 miesięcy')}</option>
-            </select>
+            <Select value={scope} onChange={setScope}
+              options={[
+                { value: 'ALL', label: t('Cała dokumentacja') },
+                { value: 'LAB_RESULT', label: t('Tylko wyniki badań') },
+                { value: 'PRESCRIPTION', label: t('Tylko e-recepty') },
+                { value: 'LAST_12M', label: t('Dokumenty z ostatnich 12 miesięcy') },
+              ]} />
           </Field>
           <Field label={t('Ważność kodu')}>
-            <select className={inputCls} value={hours} onChange={e => setHours(e.target.value)}>
-              <option value="24">{t('24 godziny')}</option>
-              <option value="168">{t('7 dni')}</option>
-              <option value="720">{t('30 dni')}</option>
-            </select>
+            <Select value={hours} onChange={setHours}
+              options={[
+                { value: '24', label: t('24 godziny') },
+                { value: '168', label: t('7 dni') },
+                { value: '720', label: t('30 dni') },
+              ]} />
           </Field>
           {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 

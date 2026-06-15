@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, RotateCcw, Send } from 'lucide-react'
 import { Button, Field, cx, inputCls } from '../ui'
+import { Select } from './Select'
 import { api, ApiError } from '../lib/api'
 import type { DocumentOut } from '../lib/types'
 import { Typeahead } from './Typeahead'
@@ -227,11 +228,12 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       {kind === 'REFERRAL' && (
         <>
           <Field label="Typ skierowania" hint="Zabieg pielęgniarski trafia wprost do Portalu Pielęgniarki (bez P1).">
-            <select className={inputCls} value={form.referral_type} onChange={set('referral_type')}>
-              <option value="NURSING">Zabieg pielęgniarski</option>
-              <option value="LAB">Badanie laboratoryjne (przez P1)</option>
-              <option value="SPECIALIST">Konsultacja specjalistyczna (przez P1)</option>
-            </select>
+            <Select value={form.referral_type} onChange={v => setForm(f => ({ ...f, referral_type: v }))}
+              options={[
+                { value: 'NURSING', label: 'Zabieg pielęgniarski' },
+                { value: 'LAB', label: 'Badanie laboratoryjne (przez P1)' },
+                { value: 'SPECIALIST', label: 'Konsultacja specjalistyczna (przez P1)' },
+              ]} />
           </Field>
           <Field label="Zalecenia (opcjonalnie)">
             <input className={inputCls} value={form.notes} onChange={set('notes')} placeholder="np. iniekcje 1×dz. przez 10 dni" />
@@ -260,13 +262,11 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       {kind === 'CERTIFICATE' && (
         <>
           <Field label="Przeznaczenie (cel)" hint="komu/do czego — od tego zależy treść">
-            <select
-              className={inputCls}
+            <Select
               value={CERT_PURPOSES.includes(form.purpose) ? form.purpose : 'inne (wpisz)'}
-              onChange={e => setForm(f => ({ ...f, purpose: e.target.value === 'inne (wpisz)' ? '' : e.target.value }))}
-            >
-              {CERT_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
+              onChange={v => setForm(f => ({ ...f, purpose: v === 'inne (wpisz)' ? '' : v }))}
+              options={CERT_PURPOSES.map(p => ({ value: p, label: p }))}
+            />
             {!CERT_PURPOSES.includes(form.purpose) && (
               <input className={cx(inputCls, 'mt-2')} required minLength={2} value={form.purpose}
                 onChange={set('purpose')} placeholder="Wpisz cel zaświadczenia (np. do ZUS)" />

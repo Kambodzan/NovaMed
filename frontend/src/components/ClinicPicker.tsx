@@ -3,8 +3,8 @@
 // renderuje select tylko gdy placówek jest >1.
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { cx, inputCls } from '../ui'
 import { api } from '../lib/api'
+import { Select } from './Select'
 
 export interface ClinicLite { clinic_id: string; clinic_name: string }
 
@@ -22,13 +22,10 @@ export function ClinicSelect({ clinics, value, onChange }: {
 }) {
   if (clinics.length <= 1) return null
   return (
-    <select
-      aria-label="Placówka"
-      className={cx(inputCls, 'w-56')}
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value)}
-    >
-      {clinics.map(c => <option key={c.clinic_id} value={c.clinic_id}>{c.clinic_name}</option>)}
-    </select>
+    <Select
+      ariaLabel="Placówka" className="w-56"
+      value={value ?? ''} onChange={onChange}
+      options={clinics.map(c => ({ value: c.clinic_id, label: c.clinic_name }))}
+    />
   )
 }

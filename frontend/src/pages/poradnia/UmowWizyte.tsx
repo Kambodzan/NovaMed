@@ -10,6 +10,7 @@ import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
+import { Select } from '../../components/Select'
 
 interface PatientRow { patient_id: string; first_name: string; last_name: string; pesel: string; insurance_status: boolean }
 interface DoctorRow { doctor_id: string; name: string; specialization: string | null }
@@ -222,10 +223,12 @@ export function UmowWizyte() {
             <span className="text-xs font-bold text-gray-400">{freeSlots.length} dostępnych</span>
           } />
           <div className="mb-3 flex flex-wrap gap-2">
-            <select aria-label="Lekarz" className={cx(inputCls, 'h-10 max-w-[14rem]')} value={doctorFilter} onChange={e => setDoctorFilter(e.target.value)}>
-              <option value="">Wszyscy lekarze</option>
-              {(doctors ?? []).map(d => <option key={d.doctor_id} value={d.doctor_id}>{d.name} — {d.specialization}</option>)}
-            </select>
+            <Select
+              ariaLabel="Lekarz" className="min-w-[13rem] flex-1"
+              value={doctorFilter} onChange={setDoctorFilter}
+              options={[{ value: '', label: 'Wszyscy lekarze' },
+                ...(doctors ?? []).map(d => ({ value: d.doctor_id, label: d.name, hint: d.specialization ?? undefined }))]}
+            />
             <div className="w-40"><DatePicker value={dayFilter} placeholder="dowolny dzień" onChange={setDayFilter} /></div>
             {dayFilter && <button onClick={() => setDayFilter('')} className="cursor-pointer text-xs font-extrabold text-gray-400 hover:text-gray-700">wyczyść</button>}
           </div>

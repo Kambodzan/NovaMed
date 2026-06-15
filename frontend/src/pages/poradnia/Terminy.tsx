@@ -6,6 +6,7 @@ import { api, ApiError } from '../../lib/api'
 import { dayNo, formatTime, monthShort } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
+import { Select } from '../../components/Select'
 
 interface Clinic {
   clinic_id: string; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number
@@ -141,14 +142,11 @@ export function Terminy() {
           title="Terminy wizyt"
           sub="Dodawanie wolnych terminów do kalendarzy lekarzy (UC-PP2)"
           action={(clinics ?? []).length > 1 && (
-            <select
-              aria-label="Placówka"
-              className={cx(inputCls, 'w-56')}
-              value={clinic?.clinic_id ?? ''}
-              onChange={e => setClinicId(e.target.value)}
-            >
-              {(clinics ?? []).map(c => <option key={c.clinic_id} value={c.clinic_id}>{c.clinic_name}</option>)}
-            </select>
+            <Select
+              ariaLabel="Placówka" className="w-56"
+              value={clinic?.clinic_id ?? ''} onChange={setClinicId}
+              options={(clinics ?? []).map(c => ({ value: c.clinic_id, label: c.clinic_name }))}
+            />
           )}
         />
       </div>
@@ -160,18 +158,13 @@ export function Terminy() {
           onSubmit={e => { e.preventDefault(); addSlot.mutate() }}
         >
           <Field label="Rodzaj">
-            <select className={inputCls} value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
-              <option value="visit">wizyta lekarska</option>
-              <option value="exam">badanie (pracownia)</option>
-            </select>
+            <Select value={form.kind} onChange={v => setForm(f => ({ ...f, kind: v }))}
+              options={[{ value: 'visit', label: 'wizyta lekarska' }, { value: 'exam', label: 'badanie (pracownia)' }]} />
           </Field>
           {form.kind === 'visit' ? (
             <Field label="Lekarz">
-              <select className={inputCls} value={doctorId} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))}>
-                {(doctors ?? []).map(d => (
-                  <option key={d.doctor_id} value={d.doctor_id}>{d.name} — {d.specialization}</option>
-                ))}
-              </select>
+              <Select value={doctorId} onChange={v => setForm(f => ({ ...f, doctor_id: v }))}
+                options={(doctors ?? []).map(d => ({ value: String(d.doctor_id), label: d.name, hint: d.specialization ?? undefined }))} />
             </Field>
           ) : (
             <Field label="Badanie" hint="bez ceny = NFZ (wymagane skierowanie); z ceną = prywatne, bez skierowania">
@@ -189,22 +182,17 @@ export function Terminy() {
               onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
           </Field>
           <Field label="Forma">
-            <select className={inputCls} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-              <option value="STATIONARY">stacjonarna</option>
-              <option value="ONLINE">teleporada</option>
-            </select>
+            <Select value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
+              options={[{ value: 'STATIONARY', label: 'stacjonarna' }, { value: 'ONLINE', label: 'teleporada' }]} />
           </Field>
           <Field label="Cena [zł]" hint="puste = NFZ">
             <input type="number" min="0" step="10" className={inputCls} value={form.price}
               onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="—" />
           </Field>
           <Field label="Powtarzanie">
-            <select className={inputCls} value={form.weeks} onChange={e => setForm(f => ({ ...f, weeks: e.target.value }))}>
-              <option value="1">jednorazowo</option>
-              {[2, 3, 4, 6, 8, 12].map(n => (
-                <option key={n} value={n}>co tydzień ×{n}</option>
-              ))}
-            </select>
+            <Select value={form.weeks} onChange={v => setForm(f => ({ ...f, weeks: v }))}
+              options={[{ value: '1', label: 'jednorazowo' },
+                ...[2, 3, 4, 6, 8, 12].map(n => ({ value: String(n), label: `co tydzień ×${n}` }))]} />
           </Field>
           <div className="flex items-end">
             <Button disabled={addSlot.isPending || (form.kind === 'visit' && !doctorId)} type="submit"><Plus size={15} /> Dodaj</Button>
@@ -218,9 +206,8 @@ export function Terminy() {
         <TileHeader title={<span className="inline-flex items-center gap-1.5"><BellRing size={13} /> Ustawienia placówki</span>} />
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Siatka terminów [min]" hint="godziny slotów co 15/20/30 min">
-            <select className={cx(inputCls, 'w-32')} value={intervalMin} onChange={e => setIntervalMin(e.target.value)}>
-              {[5, 10, 15, 20, 30, 60].map(n => <option key={n} value={n}>{n} min</option>)}
-            </select>
+            <Select className="w-32" value={intervalMin} onChange={setIntervalMin}
+              options={[5, 10, 15, 20, 30, 60].map(n => ({ value: String(n), label: `${n} min` }))} />
           </Field>
           <Field label="Min. wyprzedzenie [h]" hint="powiadomienia o wcześniejszym terminie">
             <input
@@ -229,20 +216,13 @@ export function Terminy() {
             />
           </Field>
           <Field label="Potwierdzanie obecności" hint="pacjent potwierdza, że przyjdzie">
-            <select
-              className={cx(inputCls, 'w-44')}
-              value={confirmRequired ? 'on' : 'off'}
-              onChange={e => setConfirmRequired(e.target.value === 'on')}
-            >
-              <option value="off">tylko przypomnienia</option>
-              <option value="on">wymagaj potwierdzenia</option>
-            </select>
+            <Select className="w-52" value={confirmRequired ? 'on' : 'off'} onChange={v => setConfirmRequired(v === 'on')}
+              options={[{ value: 'off', label: 'tylko przypomnienia' }, { value: 'on', label: 'wymagaj potwierdzenia' }]} />
           </Field>
           {confirmRequired && (
             <Field label="Prośba o potwierdzenie" hint="ile godzin przed wizytą">
-              <select className={cx(inputCls, 'w-32')} value={confirmHours} onChange={e => setConfirmHours(e.target.value)}>
-                {[12, 24, 48, 72, 168].map(n => <option key={n} value={n}>{n} h</option>)}
-              </select>
+              <Select className="w-32" value={confirmHours} onChange={setConfirmHours}
+                options={[12, 24, 48, 72, 168].map(n => ({ value: String(n), label: `${n} h` }))} />
             </Field>
           )}
           <Button size="sm" disabled={saveNotice.isPending || noticeHours === ''} onClick={() => saveNotice.mutate()}>
