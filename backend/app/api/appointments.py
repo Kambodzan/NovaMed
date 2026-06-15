@@ -1,12 +1,13 @@
 from uuid import UUID
-from datetime import datetime, timedelta
+import uuid
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.family import allowed_patient_ids, resolve_patient_id
+from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.appointments import (
@@ -20,8 +21,11 @@ from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
 from app.integrations.payments import PaymentsClient, get_payments_client
 from app.models import (
-    Appointment, AppUser, Clinic, Doctor, Patient, Payment, StaffClinic, WaitingListEntry,
+    Appointment, AppUser, Clinic, Doctor, Patient, Payment, Role, StaffClinic, WaitingListEntry,
 )
+
+# role, które mogą umawiać w imieniu pacjenta (rejestracja/okienko/telefon)
+RECEPTION_ROLES = ("rejestracja", "kierownik", "administrator")
 
 
 def visit_label(db: Session, a: Appointment) -> str:
@@ -413,6 +417,127 @@ def book_appointment(
             amount=float(a.price), payment_status="PENDING",
         ),
     )
+
+
+class RegisterPatientIn(BaseModel):
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: str = Field(min_length=1, max_length=50)
+    pesel: str = Field(min_length=11, max_length=11, pattern=r"^\d{11}$")
+    birth_date: date
+    phone_number: str = Field(min_length=7, max_length=20)
+    email: EmailStr | None = None
+
+    @field_validator("pesel")
+    @classmethod
+    def check_pesel(cls, v: str) -> str:
+        if not pesel_valid(v):
+            raise ValueError("Nieprawidłowy numer PESEL (błędna suma kontrolna).")
+        return v
+
+
+class ReceptionPatientOut(BaseModel):
+    patient_id: UUID
+    first_name: str
+    last_name: str
+    pesel: str
+    phone_number: str | None
+    existing: bool  # pacjent już był w systemie (znaleziony po PESEL)
+
+
+@router.post("/patients/register", status_code=status.HTTP_201_CREATED, response_model=ReceptionPatientOut)
+def reception_register_patient(
+    body: RegisterPatientIn,
+    _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Rejestracja zakłada konto pacjenta przy zgłoszeniu telefonicznym/osobistym
+    (gdy dzwoniący nie ma jeszcze konta). Konto nieaktywne (jak gość z M8.6) —
+    pacjent przejmuje je przy samodzielnej rejestracji tym samym e-mailem.
+    Dedup po PESEL: istniejący pacjent jest zwracany (existing=True), bez dubla."""
+    existing = db.scalar(select(Patient).where(Patient.pesel == body.pesel))
+    if existing:
+        owner = db.get(AppUser, existing.patient_id)
+        if not owner.active_account and body.phone_number:
+            owner.phone_number = body.phone_number  # uzupełnij kontakt na koncie-gościu
+            db.commit()
+        return ReceptionPatientOut(
+            patient_id=existing.patient_id, first_name=existing.first_name,
+            last_name=existing.last_name, pesel=existing.pesel,
+            phone_number=owner.phone_number, existing=True,
+        )
+
+    role = db.scalar(select(Role).where(Role.role_name == "pacjent"))
+    guest = AppUser(
+        role_id=role.role_id, supabase_uid=uuid.uuid4(),
+        username=f"{body.first_name} {body.last_name}",
+        email=str(body.email).lower() if body.email else f"guest-{uuid.uuid4().hex[:12]}@novamed.local",
+        phone_number=body.phone_number, active_account=False,
+    )
+    db.add(guest)
+    db.flush()
+    db.add(Patient(
+        patient_id=guest.user_id, first_name=body.first_name, last_name=body.last_name,
+        pesel=body.pesel, birth_date=body.birth_date,
+    ))
+    db.commit()
+    return ReceptionPatientOut(
+        patient_id=guest.user_id, first_name=body.first_name, last_name=body.last_name,
+        pesel=body.pesel, phone_number=body.phone_number, existing=False,
+    )
+
+
+class BookForIn(BaseModel):
+    patient_id: UUID
+    reason: str | None = Field(default=None, max_length=500)
+    external_referral: bool = False
+
+
+@router.post("/appointments/{appointment_id}/book-for", response_model=AppointmentOut)
+def book_for_patient(
+    appointment_id: UUID,
+    body: BookForIn,
+    _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    db: Session = Depends(get_db),
+    ewus: EwusClient = Depends(get_ewus_client),
+):
+    """Rezerwacja przez rejestrację w imieniu pacjenta (telefon/okienko) — UC-PP1.
+    Termin FREE→CONFIRMED od razu (bez TEMP_LOCK): płatność za wizytę płatną
+    rozlicza recepcja na miejscu, więc zapisujemy ją jako opłaconą."""
+    a = get_appointment_or_404(appointment_id, db)
+    if a.appointment_status != AppointmentStatus.FREE.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
+    if a.appointment_datetime < datetime.now():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
+    patient = db.get(Patient, body.patient_id)
+    if patient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    if a.referral_required and not body.external_referral:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Badanie „{a.service_name}” na NFZ wymaga skierowania — potwierdź, że pacjent je ma.",
+        )
+
+    if a.referral_required:
+        a.external_referral = True
+    if body.reason:
+        a.appointment_notes = body.reason.strip()[:500]
+    try:
+        patient.insurance_status = ewus.verify(pesel=patient.pesel)
+    except IntegrationError:
+        pass
+
+    assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
+    a.patient_id = body.patient_id
+    a.appointment_status = AppointmentStatus.CONFIRMED.value
+    if a.price is not None:
+        db.add(Payment(
+            appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
+            provider_ref="RECEPCJA", created_at=datetime.now(), paid_at=datetime.now(),
+        ))
+    notify(db, body.patient_id, "Wizyta potwierdzona",
+           f"Zarejestrowaliśmy Twoją wizytę: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
+    db.commit()
+    return appointment_out(db, a)
 
 
 @router.post("/appointments/{appointment_id}/pay", response_model=BookOut)

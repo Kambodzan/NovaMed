@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, ShieldCheck, Star, Users } from 'lucide-react'
+import { Activity, BarChart3, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, ShieldCheck, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { PowrotDoWizyty } from './components/PowrotDoWizyty'
@@ -30,6 +30,7 @@ import { PacjentRecord } from './pages/staff/PacjentRecord'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
 import { Terminy } from './pages/poradnia/Terminy'
+import { UmowWizyte } from './pages/poradnia/UmowWizyte'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
 import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
@@ -93,7 +94,8 @@ function PoradniaLayout() {
     <ProShell
       brand="Panel Poradni"
       nav={[
-        { to: '/', label: 'Terminy', icon: CalendarRange, end: true },
+        { to: '/', label: 'Umów wizytę', icon: CalendarCheck, end: true },
+        { to: '/terminy', label: 'Terminy', icon: CalendarRange },
         { to: '/pacjenci', label: 'Pacjenci placówki', icon: Users },
         { to: '/raporty', label: 'Raporty', icon: BarChart3 },
       ]}
@@ -170,7 +172,8 @@ export default function App() {
 
       {token && me && (role === 'rejestracja' || role === 'kierownik') && (
         <Route path="/" element={<PoradniaLayout />}>
-          <Route index element={<Terminy />} />
+          <Route index element={<UmowWizyte />} />
+          <Route path="terminy" element={<Terminy />} />
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="raporty" element={<Raporty />} />
           <Route path="*" element={<Navigate to="/" replace />} />

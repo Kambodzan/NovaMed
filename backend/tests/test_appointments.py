@@ -190,3 +190,49 @@ def test_zmiana_statusu_idempotentna(client, setup):
                          headers=auth_header(setup["doctor_token"]))
     assert first.status_code == 200 and second.status_code == 200
     assert second.json()["appointment_status"] == "IN_PROGRESS"
+
+
+def test_rejestracja_umawia_pacjenta(client, setup):
+    """UC-PP1: rejestracja zakłada konto dzwoniącego i umawia go na wolny termin."""
+    reg = auth_header(setup["reg_token"])
+    slot = make_slot(client, setup)
+
+    # nowy dzwoniący — rejestracja zakłada konto-gościa
+    r = client.post("/patients/register", headers=reg, json={
+        "first_name": "Halina", "last_name": "Nowak", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "601234567",
+    })
+    assert r.status_code == 201, r.text
+    assert r.json()["existing"] is False
+    pid = r.json()["patient_id"]
+
+    # ten sam PESEL drugi raz → ten sam pacjent (dedup, bez dubla)
+    r2 = client.post("/patients/register", headers=reg, json={
+        "first_name": "Halina", "last_name": "Nowak", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "601234567",
+    })
+    assert r2.status_code == 201 and r2.json()["existing"] is True and r2.json()["patient_id"] == pid
+
+    # rezerwacja w imieniu pacjenta → CONFIRMED od razu
+    b = client.post(f"/appointments/{slot}/book-for", headers=reg,
+                    json={"patient_id": pid, "reason": "ból gardła"})
+    assert b.status_code == 200, b.text
+    assert b.json()["appointment_status"] == "CONFIRMED" and b.json()["patient_id"] == pid
+
+    # zajęty termin → 409
+    assert client.post(f"/appointments/{slot}/book-for", headers=reg,
+                       json={"patient_id": pid}).status_code == 409
+
+    # pacjent nie może umawiać w cudzym imieniu (to rola rejestracji)
+    slot2 = make_slot(client, setup, hour=11)
+    assert client.post(f"/appointments/{slot2}/book-for",
+                       headers=auth_header(setup["patient_token"]),
+                       json={"patient_id": pid}).status_code == 403
+
+
+def test_rejestracja_odrzuca_bledny_pesel(client, setup):
+    r = client.post("/patients/register", headers=auth_header(setup["reg_token"]), json={
+        "first_name": "Jan", "last_name": "Test", "pesel": "12345678901",
+        "birth_date": "1990-01-01", "phone_number": "601234567",
+    })
+    assert r.status_code == 422
