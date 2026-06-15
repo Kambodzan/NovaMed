@@ -343,3 +343,25 @@ def test_dane_kliniczne_pacjenta(client, visit):
     r2 = client.patch(f"/patients/{pid}/clinical", json={"allergies": ""}, headers=dt)
     assert r2.json()["allergies"] is None
     assert r2.json()["chronic_diseases"] == "nadciśnienie"  # niepodane → bez zmian
+
+
+def test_admin_bledy_integracji_i_ponowienie(client, visit, fakes, factory):
+    """Admin widzi nieudane wysyłki do P1/ZUS i może je ponowić."""
+    p1, _ = fakes
+    p1.fail = True
+    dt = auth_header(visit["doctor_token"])
+    rx = client.post(f"/patients/{visit['patient'].user_id}/prescriptions",
+                     json={"appointment_id": visit["appointment_id"], "icd10": "I10", "drugs": "Bisocard 5 mg"},
+                     headers=dt)
+    assert rx.json()["document_status"] == "ERROR"
+    did = rx.json()["document_id"]
+
+    _, admin_token = factory.user("administrator")
+    at = auth_header(admin_token)
+    errs = client.get("/admin/integration-errors", headers=at).json()
+    assert any(e["document_id"] == did for e in errs)
+
+    p1.fail = False
+    r = client.post(f"/documents/{did}/resend", headers=at)
+    assert r.status_code == 200 and r.json()["document_status"] == "CONFIRMED"
+    assert client.get("/admin/integration-errors", headers=at).json() == []

@@ -403,24 +403,24 @@ def issue_certificate(
 @router.post("/documents/{document_id}/resend", response_model=DocumentOut)
 def resend_document(
     document_id: UUID,
-    user: AppUser = Depends(require_roles("lekarz")),
+    user: AppUser = Depends(require_roles("lekarz", "administrator")),
     db: Session = Depends(get_db),
     p1: P1Client = Depends(get_p1_client),
     zus: ZusClient = Depends(get_zus_client),
 ):
     """Ponowna wysyłka dokumentu po błędzie (ERROR → SENT_TO_P1 → CONFIRMED/SENT).
-    Realizuje pętlę Error → Draft → SentToP1 z diagramu stanów e-recepty."""
+    Lekarz ponawia własne dokumenty; administrator dowolny (panel integracji)."""
     doc = db.get(MedicalDocument, document_id)
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nie istnieje.")
-    if doc.doctor_id != user.user_id:
+    if user.role.role_name == "lekarz" and doc.doctor_id != user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest dokument tego lekarza.")
     if doc.document_status != DocumentStatus.ERROR.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ponowna wysyłka możliwa tylko dla dokumentów z błędem.")
 
     patient = db.get(Patient, doc.patient_id)
     data = json.loads(doc.document_content or "{}")
-    pwz = doctor_pwz(db, user.user_id)
+    pwz = doctor_pwz(db, doc.doctor_id)  # PWZ lekarza-wystawcy (działa też dla admina)
     try:
         if doc.document_type == DocumentType.PRESCRIPTION.value:
             code = p1.issue_prescription(pesel=patient.pesel, doctor_pwz=pwz,

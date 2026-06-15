@@ -1,15 +1,22 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Lock, LockOpen, UserX } from 'lucide-react'
+import { KeyRound, Lock, LockOpen, UserX } from 'lucide-react'
 import { Badge, Button, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { Select } from '../../components/Select'
 import { api, ApiError } from '../../lib/api'
+import { supabase, useAuth } from '../../lib/auth'
 import { confirm } from '../../lib/confirm'
+import { pushToast } from '../../lib/toast'
 import type { AdminUser } from '../../lib/types'
+
+const ROLES = ['administrator', 'lekarz', 'pielegniarka', 'rejestracja', 'kierownik', 'pacjent']
 
 export function AdminUzytkownicy() {
   const queryClient = useQueryClient()
+  const { me } = useAuth()
   const [q, setQ] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const refreshUsers = () => void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
 
   const { data: users } = useQuery({
     queryKey: ['admin-users'],
@@ -18,8 +25,29 @@ export function AdminUzytkownicy() {
 
   const toggle = useMutation({
     mutationFn: (id: string) => api(`/admin/users/${id}/toggle-active`, { method: 'POST' }),
-    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['admin-users'] }) },
+    onSuccess: () => { setError(null); refreshUsers() },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Operacja nie powiodła się.'),
+  })
+
+  const changeRole = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      api(`/admin/users/${id}/role`, { method: 'POST', body: { role } }),
+    onSuccess: () => { setError(null); refreshUsers(); pushToast('Rola zmieniona.', 'success') },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zmienić roli.'),
+  })
+
+  const resetPassword = useMutation({
+    mutationFn: (id: string) => api<{ email: string }>(`/admin/users/${id}/password-reset`, { method: 'POST' }),
+    onSuccess: async ({ email }) => {
+      setError(null)
+      if (supabase) {
+        try { await supabase.auth.resetPasswordForEmail(email) } catch { /* link i tak zarejestrowany */ }
+        pushToast(`Wysłano link resetu hasła na ${email}.`, 'success')
+      } else {
+        pushToast(`Reset hasła zlecony dla ${email} (tryb dev — bez wysyłki e-mail).`, 'success')
+      }
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zlecić resetu hasła.'),
   })
 
   // RODO: prawo do bycia zapomnianym — anonimizacja danych pacjenta
@@ -65,12 +93,33 @@ export function AdminUzytkownicy() {
                   <p className="font-extrabold text-gray-900">{u.username}</p>
                   <p className="text-xs font-medium text-gray-400">{u.email}</p>
                 </td>
-                <td className="border-t border-gray-100 px-4 py-3.5"><Badge tone="neutral">{u.role}</Badge></td>
+                <td className="border-t border-gray-100 px-4 py-3.5">
+                  {u.user_id === me?.user_id ? (
+                    <Badge tone="neutral">{u.role}</Badge>
+                  ) : (
+                    <Select className="w-40" ariaLabel="Rola" value={u.role}
+                      options={ROLES.map(r => ({ value: r, label: r }))}
+                      onChange={role => { if (role !== u.role) void confirm({
+                        title: `Zmienić rolę: ${u.username}?`,
+                        message: `Rola zostanie zmieniona z „${u.role}" na „${role}". Wpłynie to na uprawnienia użytkownika.`,
+                        confirmLabel: 'Zmień rolę',
+                      }).then(ok => ok && changeRole.mutate({ id: u.user_id, role })) }} />
+                  )}
+                </td>
                 <td className="border-t border-gray-100 px-4 py-3.5">
                   {u.active_account ? <Badge tone="success">aktywne</Badge> : <Badge tone="error">zablokowane</Badge>}
                 </td>
                 <td className="border-t border-gray-100 px-4 py-3.5 text-right">
                   <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" disabled={resetPassword.isPending}
+                      title="Wyślij link resetu hasła na e-mail konta"
+                      onClick={() => void confirm({
+                        title: `Zresetować hasło: ${u.username}?`,
+                        message: `Na adres ${u.email} zostanie wysłany link do ustawienia nowego hasła.`,
+                        confirmLabel: 'Wyślij link',
+                      }).then(ok => ok && resetPassword.mutate(u.user_id))}>
+                      <KeyRound size={14} /> Reset hasła
+                    </Button>
                     {u.role === 'pacjent' && (
                       <Button size="sm" variant="ghost" disabled={anonymize.isPending}
                         title="RODO: prawo do bycia zapomnianym"

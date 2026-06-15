@@ -196,3 +196,26 @@ def test_edycja_opinii_upsert(client, setup):
     # srednia lekarza liczy 1 opinie (nie zdublowana)
     rev = client.get(f"/reviews/doctor/{s['doctor'].user_id}", headers=auth_header(s["patient_token"])).json()
     assert rev["count"] == 1 and rev["average"] == 5.0
+
+
+def test_admin_zmiana_roli_i_audyt(client, setup):
+    """Admin zmienia rolę użytkownika; akcja trafia do dziennika audytu."""
+    at = auth_header(setup["admin_token"])
+    pid = str(setup["patient"].user_id)
+    r = client.post(f"/admin/users/{pid}/role", json={"role": "rejestracja"}, headers=at)
+    assert r.status_code == 200 and r.json()["role"] == "rejestracja"
+    # nieznana rola → 422
+    assert client.post(f"/admin/users/{pid}/role", json={"role": "krol"}, headers=at).status_code == 422
+    # audyt zawiera zmianę roli
+    audit = client.get("/admin/audit", headers=at).json()
+    assert any(a["action"] == "ROLE_CHANGE" for a in audit)
+    # nie-admin nie zmienia ról
+    assert client.post(f"/admin/users/{pid}/role", json={"role": "lekarz"},
+                       headers=auth_header(setup["doctor_token"])).status_code == 403
+
+
+def test_admin_reset_hasla_loguje(client, setup):
+    at = auth_header(setup["admin_token"])
+    r = client.post(f"/admin/users/{setup['patient'].user_id}/password-reset", headers=at)
+    assert r.status_code == 200 and "@" in r.json()["email"]
+    assert any(a["action"] == "PASSWORD_RESET" for a in client.get("/admin/audit", headers=at).json())

@@ -1,9 +1,21 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FlaskConical, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, FlaskConical, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react'
 import { Badge, Button, PageHeader, Tile, TileHeader } from '../../ui'
 import { api, ApiError } from '../../lib/api'
+import { formatDatePL, formatTime } from '../../lib/format'
 import type { IntegrationStatus } from '../../lib/types'
+
+interface IntegrationError {
+  document_id: string
+  document_type: string
+  patient_name: string
+  doctor_name: string
+  issued_at: string
+}
+const DOC_LABEL: Record<string, string> = {
+  PRESCRIPTION: 'e-recepta', REFERRAL: 'e-skierowanie', SICK_LEAVE: 'e-ZLA',
+}
 
 export function AdminIntegracje() {
   const queryClient = useQueryClient()
@@ -19,6 +31,20 @@ export function AdminIntegracje() {
     mutationFn: () => api<{ imported: number; skipped: number }>('/integrations/lab/sync', { method: 'POST' }),
     onSuccess: (r) => { setError(null); setInfo(`Synchronizacja zakończona: zaimportowano ${r.imported}, pominięto ${r.skipped}.`) },
     onError: (e) => { setInfo(null); setError(e instanceof ApiError ? e.message : 'Synchronizacja nie powiodła się.') },
+  })
+
+  // dokumenty, które nie poszły do P1/ZUS (status ERROR) — admin ponawia wysyłkę
+  const { data: failures } = useQuery({
+    queryKey: ['integration-errors'],
+    queryFn: () => api<IntegrationError[]>('/admin/integration-errors'),
+  })
+  const resend = useMutation({
+    mutationFn: (id: string) => api(`/documents/${id}/resend`, { method: 'POST' }),
+    onSuccess: () => {
+      setError(null); setInfo('Ponowiono wysyłkę dokumentu.')
+      void queryClient.invalidateQueries({ queryKey: ['integration-errors'] })
+    },
+    onError: (e) => { setInfo(null); setError(e instanceof ApiError ? e.message : 'Ponowna wysyłka nie powiodła się.') },
   })
 
   return (
@@ -61,6 +87,27 @@ export function AdminIntegracje() {
           </Tile>
         ))}
       </div>
+
+      <Tile delay={250} className={(failures?.length ?? 0) > 0 ? 'ring-1 ring-red-200' : undefined}>
+        <TileHeader title={<span className="inline-flex items-center gap-1.5"><AlertTriangle size={13} className={(failures?.length ?? 0) > 0 ? 'text-red-600' : 'text-gray-400'} /> Nieudane wysyłki do P1/ZUS {(failures?.length ?? 0) > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-700">{failures!.length}</span>}</span>} />
+        {(failures?.length ?? 0) === 0 ? (
+          <p className="text-sm font-medium text-gray-400">Brak nieudanych wysyłek — wszystkie dokumenty trafiły do systemu centralnego.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {failures!.map(f => (
+              <li key={f.document_id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-red-50/60 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold text-gray-900">{DOC_LABEL[f.document_type] ?? f.document_type} · {f.patient_name}</p>
+                  <p className="text-xs font-semibold text-gray-500">{f.doctor_name} · {formatDatePL(f.issued_at)}, {formatTime(f.issued_at)}</p>
+                </div>
+                <Button size="sm" variant="secondary" disabled={resend.isPending} onClick={() => resend.mutate(f.document_id)}>
+                  <RotateCcw size={14} /> Ponów wysyłkę
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Tile>
 
       <Tile delay={300}>
         <TileHeader title="Polityki bezpieczeństwa (UC-A4)" />

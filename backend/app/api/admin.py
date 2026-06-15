@@ -70,10 +70,59 @@ def toggle_active(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Użytkownik nie istnieje.")
     user.active_account = not user.active_account
     db.commit()
+    log_access(db, actor=admin, action="UNBLOCK_ACCOUNT" if user.active_account else "BLOCK_ACCOUNT",
+               detail=f"{user.username} ({user.email})")
     return AdminUserOut(
         user_id=user.user_id, username=user.username, email=user.email,
         role=user.role.role_name, active_account=user.active_account, created_at=user.created_at,
     )
+
+
+class RoleChangeIn(BaseModel):
+    role: str
+
+
+@router.post("/users/{user_id}/role", response_model=AdminUserOut)
+def change_role(
+    user_id: UUID,
+    body: RoleChangeIn,
+    admin: AppUser = Depends(require_roles(*ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Zmiana roli użytkownika (UC-A1). Własnej roli nie można zmienić (ochrona
+    przed odebraniem sobie uprawnień). Akcja w dzienniku audytu."""
+    if user_id == admin.user_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nie można zmienić własnej roli.")
+    user = db.get(AppUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Użytkownik nie istnieje.")
+    role = db.scalar(select(Role).where(Role.role_name == body.role))
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nieznana rola.")
+    old_role = user.role.role_name
+    user.role_id = role.role_id
+    db.commit()
+    log_access(db, actor=admin, action="ROLE_CHANGE",
+               detail=f"{user.username}: {old_role} → {body.role}")
+    return AdminUserOut(
+        user_id=user.user_id, username=user.username, email=user.email,
+        role=body.role, active_account=user.active_account, created_at=user.created_at,
+    )
+
+
+@router.post("/users/{user_id}/password-reset")
+def request_password_reset(
+    user_id: UUID,
+    admin: AppUser = Depends(require_roles(*ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Inicjuje reset hasła: link wysyła Supabase (z UI, na adres e-mail konta).
+    Backend rejestruje akcję w audycie i zwraca e-mail do wysyłki linku."""
+    user = db.get(AppUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Użytkownik nie istnieje.")
+    log_access(db, actor=admin, action="PASSWORD_RESET", detail=f"{user.username} ({user.email})")
+    return {"email": user.email}
 
 
 # ---------- RODO: dziennik dostępu + prawo do bycia zapomnianym (NFR 8.2) ----------
@@ -164,6 +213,34 @@ def integrations_status(_: AppUser = Depends(require_roles(*ADMIN))):
             ok, latency = False, None
         out.append(IntegrationStatusOut(
             id=sid, name=name, url=url, status="OK" if ok else "DOWN", latency_ms=latency,
+        ))
+    return out
+
+
+class IntegrationErrorOut(BaseModel):
+    document_id: UUID
+    document_type: str
+    patient_name: str
+    doctor_name: str
+    issued_at: datetime
+
+
+@router.get("/integration-errors", response_model=list[IntegrationErrorOut])
+def integration_errors(_: AppUser = Depends(require_roles(*ADMIN)), db: Session = Depends(get_db)):
+    """Dokumenty, których nie udało się wysłać do systemu centralnego (P1/ZUS) —
+    status ERROR. Admin widzi nieudane wysyłki i może je ponowić."""
+    rows = db.scalars(
+        select(MedicalDocument).where(MedicalDocument.document_status == "ERROR")
+        .order_by(MedicalDocument.issued_at.desc()).limit(100)
+    )
+    out = []
+    for d in rows:
+        pat = db.get(Patient, d.patient_id) if d.patient_id else None
+        doc = db.get(AppUser, d.doctor_id) if d.doctor_id else None
+        out.append(IntegrationErrorOut(
+            document_id=d.document_id, document_type=d.document_type,
+            patient_name=f"{pat.first_name} {pat.last_name}" if pat else "—",
+            doctor_name=doc.username if doc else "—", issued_at=d.issued_at,
         ))
     return out
 
