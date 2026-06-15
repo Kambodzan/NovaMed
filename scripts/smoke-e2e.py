@@ -330,7 +330,10 @@ def main() -> None:
         check("SMS w outboksie mocka", False, str(e)[:80])
 
     print("== N. Raporty + admin ==")
-    month = datetime.now().strftime("%Y-%m")
+    # raportujemy miesiąc, w którym smoke FAKTYCZNIE umawia wizyty (at(3,10) = wizyta
+    # główna), nie bieżący wg zegara — sloty są BASE_DAYS w przód, więc bieżący
+    # miesiąc bywa pusty (przechodziło wcześniej tylko dzięki nazbieranym danym)
+    month = at(3, 10).strftime("%Y-%m")
     rep = api("GET", f"/clinics/{clinic_id}/reports?month={month}", reg)
     check("raport miesiąca", rep.status_code == 200 and rep.json()["total_booked"] >= 1, rep.text[:100])
     csv = api("GET", f"/clinics/{clinic_id}/reports/csv?month={month}", reg)
