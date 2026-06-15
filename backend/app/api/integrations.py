@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
 from app.core.db import get_db
+from app.domain.audit import log_access
 from app.domain.documents import DocumentStatus, DocumentType
 from app.domain.notify import notify
 from app.integrations.base import IntegrationError
@@ -24,7 +25,7 @@ class LabSyncOut(BaseModel):
 
 @router.post("/lab/sync", response_model=LabSyncOut)
 def lab_sync(
-    _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    user: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
     lab: LabClient = Depends(get_lab_client),
 ):
@@ -80,6 +81,8 @@ def lab_sync(
             who = f"{patient.first_name} {patient.last_name}" if patient else "pacjenta"
             notify(db, src.doctor_id, "Wynik badania do opisania",
                    f"Dotarł wynik ({test}) — {who}. Sprawdź w zakładce Dokumenty.")
+        log_access(db, actor=user, action="IMPORT_LAB_RESULT", patient_id=src.patient_id,
+                   detail=f"wynik z laboratorium ({test})")
         imported += 1
         lab.acknowledge(code)
     db.commit()

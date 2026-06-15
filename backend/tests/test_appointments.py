@@ -375,3 +375,20 @@ def test_reschedule_innego_lekarza_odrzucony(client, setup, factory):
     r = client.post(f"/appointments/{old}/reschedule", json={"new_appointment_id": new},
                     headers=auth_header(setup["patient_token"]))
     assert r.status_code == 409 and "lekarza" in r.json()["detail"].lower()
+
+
+def test_book_for_badanie_wymaga_skierowania(client, setup):
+    """Rejestracja umawia badanie NFZ: bez skierowania 409, z oświadczeniem zewn. 200."""
+    reg = auth_header(setup["reg_token"])
+    dt = (datetime.now() + timedelta(days=3)).replace(hour=8, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots",
+                       json={"datetimes": [dt.isoformat()], "service_name": "USG jamy brzusznej"},
+                       headers=reg).json()[0]
+    assert slot["referral_required"] is True
+    pid = str(setup["patient"].user_id)
+    sid = slot["appointment_id"]
+    # bez wskazania skierowania → 409
+    assert client.post(f"/appointments/{sid}/book-for", json={"patient_id": pid}, headers=reg).status_code == 409
+    # z oświadczeniem o skierowaniu zewnętrznym → 200
+    r = client.post(f"/appointments/{sid}/book-for", json={"patient_id": pid, "external_referral": True}, headers=reg)
+    assert r.status_code == 200 and r.json()["appointment_status"] == "CONFIRMED"

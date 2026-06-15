@@ -234,11 +234,13 @@ export function Umow() {
   const { asPatient, active, activeId } = useFamily()
   const { t } = useI18n()
 
-  // zmiana profilu (ja/podopieczny) w trakcie kreatora = powrót na start,
-  // żeby nie zarezerwować po cichu dla niewłaściwej osoby (płatność w toku zostaje)
+  // zmiana profilu (ja/podopieczny) w trakcie kreatora = ZAWSZE powrót na start,
+  // też w trakcie płatności — inaczej można dokończyć rezerwację dla złej osoby
+  // (ewentualna blokada TEMP_LOCK i tak zwolni się sama po 15 min)
   useEffect(() => {
-    setStep(s => (s > 1 && payPhase === 'idle' ? 1 : s))
-    if (payPhase === 'idle') { setSlot(null); setBooked(null); setSpec(null); setClinicFilter(null); setDoctorFilter(null) }
+    setStep(1)
+    setSlot(null); setBooked(null); setPayPhase('idle')
+    setSpec(null); setClinicFilter(null); setDoctorFilter(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 

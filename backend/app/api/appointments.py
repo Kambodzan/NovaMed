@@ -38,17 +38,18 @@ def visit_label(db: Session, a: Appointment) -> str:
     return f"{doctor_user.username}, {when}"
 
 
-def notify_earlier_watchers(db: Session, *, doctor_id: UUID, clinic_id: UUID, slot_dts: list[datetime]) -> None:
+def notify_earlier_watchers(db: Session, *, doctor_id: UUID, clinic_id: UUID, slot_dts: list[datetime]) -> set[UUID]:
     """Sloty stały się wolne → powiadom pacjentów z PÓŹNIEJSZĄ wizytą u tego lekarza,
     którzy zaznaczyli notify_earlier. Limit placówki (earlier_notice_min_hours)
     chroni przed powiadomieniami o terminach „za 2 godziny". Cała paczka slotów
-    (np. seria cykliczna ×12) = JEDNO powiadomienie per pacjent, nie 12."""
+    (np. seria cykliczna ×12) = JEDNO powiadomienie per pacjent, nie 12.
+    Zwraca zbiór powiadomionych pacjentów (do dedupu z listą oczekujących)."""
     clinic = db.get(Clinic, clinic_id)
     min_hours = clinic.earlier_notice_min_hours if clinic else 24
     cutoff = datetime.now() + timedelta(hours=min_hours)
     eligible = sorted(dt for dt in slot_dts if dt >= cutoff)
     if not eligible:
-        return
+        return set()
     doctor_user = db.get(AppUser, doctor_id)
     watchers = db.scalars(select(Appointment).where(
         Appointment.doctor_id == doctor_id,
@@ -73,16 +74,22 @@ def notify_earlier_watchers(db: Session, *, doctor_id: UUID, clinic_id: UUID, sl
             f"wcześniej niż Twoja wizyta ({w.appointment_datetime.strftime('%d.%m %H:%M')}). "
             "Jeśli Ci pasuje, wejdź w Moje wizyty → Zmień termin (do 24 h przed wizytą, terminy bezpłatne).",
         )
+    return seen
 
-def notify_waitlist(db: Session, specialization: str | None, *, freed: bool = False) -> None:
+
+def notify_waitlist(db: Session, specialization: str | None, *, freed: bool = False,
+                    exclude: set[UUID] | None = None) -> None:
     """Powiadom listę oczekujących danej specjalizacji o nowym/zwolnionym
     terminie i zdejmij ich z listy. Tytuł zaczyna się od „Nowe terminy" /
     „Wolny termin" — dzwonek robi z tego deep-link do „Umów wizytę" (UC-P3 A1)."""
     if not specialization:
         return
+    exclude = exclude or set()
     entries = db.scalars(select(WaitingListEntry).where(
         WaitingListEntry.specialization == specialization)).all()
     for entry in entries:
+        if entry.patient_id in exclude:  # już powiadomiony jako „wcześniejszy termin"
+            continue
         if freed:
             notify(db, entry.patient_id, "Wolny termin — koniec oczekiwania",
                    f"Zwolnił się termin: {specialization}. Zarezerwuj go w zakładce „Umów wizytę”.")
@@ -515,6 +522,7 @@ class BookForIn(BaseModel):
     patient_id: UUID
     reason: str | None = Field(default=None, max_length=500)
     external_referral: bool = False
+    referral_document_id: UUID | None = None  # e-skierowanie z NovaMed (badanie NFZ)
 
 
 @router.post("/appointments/{appointment_id}/book-for", response_model=AppointmentOut)
@@ -536,14 +544,22 @@ def book_for_patient(
     patient = db.get(Patient, body.patient_id)
     if patient is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
-    if a.referral_required and not body.external_referral:
+    if a.referral_required and not body.external_referral and body.referral_document_id is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Badanie „{a.service_name}” na NFZ wymaga skierowania — potwierdź, że pacjent je ma.",
+            detail=f"Badanie „{a.service_name}” na NFZ wymaga skierowania — wskaż e-skierowanie z NovaMed albo potwierdź skierowanie zewnętrzne.",
         )
 
     if a.referral_required:
-        a.external_referral = True
+        if body.referral_document_id is not None:
+            from app.models import MedicalDocument  # import lokalny — unika cyklu
+            ref = db.get(MedicalDocument, body.referral_document_id)
+            if ref is None or ref.patient_id != body.patient_id or ref.document_type != "REFERRAL":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Wskazane skierowanie nie istnieje lub nie należy do pacjenta.")
+            a.referral_document_id = body.referral_document_id
+        else:
+            a.external_referral = True
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]
     try:
@@ -728,11 +744,12 @@ def cancel_appointment(
             service_name=a.service_name,            # badanie: zachowaj rodzaj…
             referral_required=a.referral_required,  # …i wymóg skierowania
         ))
-        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+        notified = notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
         # zwolniony termin u lekarza → powiadom listę oczekujących tej specjalizacji
+        # (z pominięciem tych, którzy już dostali alert „wcześniejszy termin")
         if a.doctor_id is not None:
             doc = db.get(Doctor, a.doctor_id)
-            notify_waitlist(db, doc.specialization if doc else None, freed=True)
+            notify_waitlist(db, doc.specialization if doc else None, freed=True, exclude=notified)
     db.commit()
     return appointment_out(db, a)
 
@@ -800,10 +817,10 @@ def reschedule_appointment(
             service_name=old.service_name,
             referral_required=old.referral_required,
         ))
-        notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
+        notified = notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
         if old.doctor_id is not None:
             od = db.get(Doctor, old.doctor_id)
-            notify_waitlist(db, od.specialization if od else None, freed=True)
+            notify_waitlist(db, od.specialization if od else None, freed=True, exclude=notified)
     # płatność (jeśli była) wędruje na nowy termin — pacjent nie płaci drugi raz
     if old.price is not None:
         paid = db.scalar(select(Payment).where(

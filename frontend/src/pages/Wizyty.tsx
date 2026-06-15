@@ -93,7 +93,7 @@ export function Wizyty() {
         {actions && v.appointment_status === 'CONFIRMED' && (
           <div className="flex gap-2">
             {v.confirmation_requested && !v.patient_confirmed && (
-              <Button size="sm" disabled={confirmAttendance.isPending}
+              <Button size="sm" disabled={confirmAttendance.isPending && confirmAttendance.variables === v.appointment_id}
                 onClick={() => confirmAttendance.mutate(v.appointment_id)}>
                 <Check size={14} /> {t('Potwierdzam, że będę')}
               </Button>

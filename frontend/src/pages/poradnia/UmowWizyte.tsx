@@ -8,7 +8,7 @@ import { CalendarCheck, Check, MapPin, Phone, Search, UserPlus, Video, X } from 
 import { Badge, Button, Field, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
-import type { AppointmentOut } from '../../lib/types'
+import type { AppointmentOut, DocumentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
 import { Select } from '../../components/Select'
@@ -42,7 +42,7 @@ export function UmowWizyte() {
   }, [navState?.doctorId, navState?.day])
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [reason, setReason] = useState('')
-  const [hasReferral, setHasReferral] = useState(false)
+  const [referralChoice, setReferralChoice] = useState('')  // '' | 'external' | <document_id>
 
   const { data: patients } = useQuery({
     queryKey: ['clinic-patients', clinic?.clinic_id],
@@ -59,6 +59,15 @@ export function UmowWizyte() {
     queryFn: () => api<AppointmentOut[]>(`/slots?clinic_id=${clinic!.clinic_id}`),
     enabled: !!clinic,
   })
+  // e-skierowania pacjenta (do badania NFZ wymagającego skierowania)
+  const needsReferral = !!slot?.referral_required
+  const { data: patientDocs } = useQuery({
+    queryKey: ['patient-docs', picked?.patient_id],
+    queryFn: () => api<DocumentOut[]>(`/patients/${picked!.patient_id}/documents`),
+    enabled: !!picked && needsReferral,
+  })
+  const referrals = (patientDocs ?? []).filter(
+    d => d.document_type === 'REFERRAL' && !['REVOKED', 'REALIZED'].includes(d.document_status))
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -77,7 +86,7 @@ export function UmowWizyte() {
 
   const reset = () => {
     setPicked(null); setNewForm(NEW_PATIENT); setQ(''); setMode('existing')
-    setSlot(null); setReason(''); setHasReferral(false)
+    setSlot(null); setReason(''); setReferralChoice('')
   }
 
   const register = useMutation({
@@ -101,7 +110,11 @@ export function UmowWizyte() {
   const book = useMutation({
     mutationFn: () => api<AppointmentOut>(`/appointments/${slot!.appointment_id}/book-for`, {
       method: 'POST',
-      body: { patient_id: picked!.patient_id, reason: reason.trim() || undefined, external_referral: hasReferral },
+      body: {
+        patient_id: picked!.patient_id, reason: reason.trim() || undefined,
+        external_referral: needsReferral && referralChoice === 'external',
+        referral_document_id: needsReferral && referralChoice && referralChoice !== 'external' ? referralChoice : undefined,
+      },
     }),
     onSuccess: (a) => {
       setError(null)
@@ -114,7 +127,7 @@ export function UmowWizyte() {
 
   const newValid = newForm.first_name.trim() && newForm.last_name.trim()
     && /^\d{11}$/.test(newForm.pesel.trim()) && newForm.birth_date && newForm.phone_number.trim().length >= 7
-  const referralBlocked = !!slot?.referral_required && !hasReferral
+  const referralBlocked = needsReferral && !referralChoice
   const canBook = picked && slot && !referralBlocked
 
   return (
@@ -284,11 +297,17 @@ export function UmowWizyte() {
                 onChange={e => setReason(e.target.value)} />
             </Field>
           </div>
-          {slot?.referral_required && (
-            <label className="flex items-center gap-2 pb-2.5 text-sm font-bold text-gray-700">
-              <input type="checkbox" checked={hasReferral} onChange={e => setHasReferral(e.target.checked)} className="h-4 w-4" />
-              Pacjent ma skierowanie
-            </label>
+          {needsReferral && (
+            <div className="min-w-[14rem]">
+              <Field label="Skierowanie" hint="badanie NFZ wymaga skierowania">
+                <Select value={referralChoice} onChange={setReferralChoice}
+                  placeholder="Wybierz skierowanie…"
+                  options={[
+                    ...referrals.map(r => ({ value: r.document_id, label: `e-skierowanie${r.code ? ` ${r.code}` : ''}`, hint: r.details ?? undefined })),
+                    { value: 'external', label: 'Skierowanie zewnętrzne (papierowe)' },
+                  ]} />
+              </Field>
+            </div>
           )}
           <Button size="lg" disabled={!canBook || book.isPending} onClick={() => book.mutate()}>
             <CalendarCheck size={17} /> {book.isPending ? 'Umawianie…' : 'Umów wizytę'}
@@ -297,7 +316,7 @@ export function UmowWizyte() {
         <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-gray-400">
           <Phone size={12} />
           {!picked ? 'Wybierz pacjenta.' : !slot ? 'Wybierz wolny termin.'
-            : referralBlocked ? 'To badanie wymaga skierowania — zaznacz „Pacjent ma skierowanie".'
+            : referralBlocked ? 'To badanie wymaga skierowania — wskaż e-skierowanie z systemu albo zewnętrzne.'
             : `Wizyta zostanie potwierdzona od razu, pacjent dostanie SMS. ${slot.price ? `Opłata ${slot.price} zł — rozliczana na miejscu.` : ''}`}
         </p>
       </Tile>

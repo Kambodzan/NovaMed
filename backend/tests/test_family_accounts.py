@@ -144,21 +144,30 @@ def test_dokumentacja_podopiecznego_dla_opiekuna(client, setup):
     assert pdf.headers["content-type"] == "application/pdf"
 
 
-def test_pelnoletni_podopieczny_wygasa_dostep(client, setup):
-    """Po 18. urodzinach opiekun traci dostęp do działania w imieniu podopiecznego."""
-    gt = setup["guardian_token"]
-    adult = client.post("/family", json={
+def test_dodanie_pelnoletniego_odrzucone(client, setup):
+    """Osoby pełnoletniej nie można dodać jako podopiecznego (zakłada własne konto)."""
+    r = client.post("/family", json={
         "first_name": "Dorosły", "last_name": "Podopieczny",
-        "pesel": "44051401359", "birth_date": "1944-05-14",  # pełnoletni
-    }, headers=auth_header(gt))
-    assert adult.status_code == 201
-    aid = adult.json()["patient_id"]
-    assert adult.json()["is_adult"] is True
+        "pesel": "44051401359", "birth_date": "1944-05-14",
+    }, headers=auth_header(setup["guardian_token"]))
+    assert r.status_code == 409 and "pełnoletnia" in r.json()["detail"].lower()
 
-    # lista pokazuje go z flagą pełnoletności
+
+def test_pelnoletni_podopieczny_wygasa_dostep(client, setup, db_session):
+    """Podopieczny, który osiągnął pełnoletność (symulacja przez datę ur.):
+    opiekun traci dostęp do działania w jego imieniu, ale widzi go na liście."""
+    from uuid import UUID
+    from datetime import date
+    from app.models import Patient
+    gt = setup["guardian_token"]
+    # najpierw dziecko (data ur. dziś-10 lat), potem cofamy datę poniżej 18 → „dorósł"
+    aid = add_dependent(client, gt)
+    p = db_session.get(Patient, UUID(str(aid)))
+    p.birth_date = date(1990, 1, 1)
+    db_session.commit()
+
     deps = client.get("/family", headers=auth_header(gt)).json()
-    assert any(d["patient_id"] == aid and d["is_adult"] for d in deps)
-
-    # opiekun nie może działać w jego imieniu (as_patient → 403)
+    assert any(str(d["patient_id"]) == str(aid) and d["is_adult"] for d in deps)
+    # działanie w imieniu pełnoletniego → 403
     r = client.get(f"/appointments/my?as_patient={aid}", headers=auth_header(gt))
     assert r.status_code == 403 and "pełnoletni" in r.json()["detail"].lower()

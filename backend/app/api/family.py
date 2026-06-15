@@ -88,6 +88,11 @@ def add_dependent(
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
+    if is_adult(body.birth_date):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Osoba pełnoletnia powinna założyć własne konto — nie można jej dodać jako podopiecznego.",
+        )
     if db.scalar(select(Patient).where(Patient.pesel == body.pesel)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Pacjent z tym numerem PESEL już istnieje.")
     role = db.scalar(select(Role).where(Role.role_name == "pacjent"))
