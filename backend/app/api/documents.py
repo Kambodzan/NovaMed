@@ -751,6 +751,43 @@ def issued_documents(
     return [document_out(db, d) for d in rows]
 
 
+@router.get("/documents/lab-inbox", response_model=list[DocumentOut])
+def lab_inbox(
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Skrzynka wyników do opisania — wyniki badań zleconych przez lekarza,
+    które dotarły z laboratorium i czekają na zapoznanie (status READY)."""
+    rows = db.scalars(
+        select(MedicalDocument).where(
+            MedicalDocument.doctor_id == user.user_id,
+            MedicalDocument.document_type == DocumentType.LAB_RESULT.value,
+            MedicalDocument.document_status == DocumentStatus.READY.value,
+        ).order_by(MedicalDocument.issued_at.desc())
+    )
+    return [document_out(db, d) for d in rows]
+
+
+@router.post("/documents/{document_id}/acknowledge", response_model=DocumentOut)
+def acknowledge_result(
+    document_id: UUID,
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Lekarz zapoznał się z wynikiem badania (READY → odebrany) — znika ze
+    skrzynki „do opisania"."""
+    doc = db.get(MedicalDocument, document_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nie istnieje.")
+    if doc.doctor_id != user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest wynik tego lekarza.")
+    if doc.document_type != DocumentType.LAB_RESULT.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="To nie jest wynik badania.")
+    doc.document_status = DocumentStatus.RECEIVED_BY_DOCTOR.value
+    db.commit()
+    return document_out(db, doc)
+
+
 @router.get("/documents/{document_id}/pdf")
 def document_pdf(
     document_id: UUID,

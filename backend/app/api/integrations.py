@@ -11,7 +11,7 @@ from app.domain.documents import DocumentStatus, DocumentType
 from app.domain.notify import notify
 from app.integrations.base import IntegrationError
 from app.integrations.lab import LabClient, get_lab_client
-from app.models import AppUser, LabResult, MedicalDocument, Referral
+from app.models import AppUser, LabResult, MedicalDocument, Patient, Referral
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -68,8 +68,15 @@ def lab_sync(
         ))
         # skierowanie LAB zrealizowane — wynik dotarł
         src.document_status = DocumentStatus.REALIZED.value
+        test = r.get("test_type", "laboratoryjne")
         notify(db, src.patient_id, "Nowy wynik badania",
-               f"Wynik badania ({r.get('test_type', 'laboratoryjne')}) jest już dostępny w Twojej dokumentacji.")
+               f"Wynik badania ({test}) jest już dostępny w Twojej dokumentacji.")
+        # wynik trafia też do lekarza ZLECAJĄCEGO — „skrzynka wyników do opisania"
+        if src.doctor_id is not None:
+            patient = db.get(Patient, src.patient_id)
+            who = f"{patient.first_name} {patient.last_name}" if patient else "pacjenta"
+            notify(db, src.doctor_id, "Wynik badania do opisania",
+                   f"Dotarł wynik ({test}) — {who}. Sprawdź w zakładce Dokumenty.")
         imported += 1
         lab.acknowledge(code)
     db.commit()

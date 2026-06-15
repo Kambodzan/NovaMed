@@ -21,6 +21,7 @@ class DocumentStatus(str, Enum):
     ACTIVE = "ACTIVE"        # skierowania wewnętrzne (zabiegi pielęgniarskie)
     SENT = "SENT"            # e-ZLA przyjęte przez ZUS
     READY = "READY"          # wynik badania dostępny
+    RECEIVED_BY_DOCTOR = "RECEIVED_BY_DOCTOR"  # lekarz zapoznał się z wynikiem
     FINAL = "FINAL"          # notatka z wizyty
     REVOKED = "REVOKED"      # anulowany przez lekarza (storno) — także w P1/ZUS
 

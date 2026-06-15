@@ -174,6 +174,18 @@ def test_lab_zlecenie_i_synchronizacja(client, setup, integration_fakes):
     assert "Cholesterol" in types["LAB_RESULT"]["details"]
     assert types["REFERRAL"]["document_status"] == "REALIZED"
 
+    # wynik trafia do skrzynki „do opisania" lekarza ZLECAJĄCEGO + powiadomienie
+    dt = auth_header(setup["doctor_token"])
+    inbox = client.get("/documents/lab-inbox", headers=dt).json()
+    assert len(inbox) == 1 and inbox[0]["document_type"] == "LAB_RESULT"
+    res_id = inbox[0]["document_id"]
+    notifs = client.get("/notifications/my", headers=dt).json()
+    assert any("opisania" in n["notification_title"].lower() for n in notifs)
+
+    # oznaczenie jako odebrane → znika ze skrzynki
+    assert client.post(f"/documents/{res_id}/acknowledge", headers=dt).json()["document_status"] == "RECEIVED_BY_DOCTOR"
+    assert client.get("/documents/lab-inbox", headers=dt).json() == []
+
     # ponowna synchronizacja → dedup
     resp = client.post("/integrations/lab/sync", headers=auth_header(setup["reg_token"]))
     assert resp.json() == {"imported": 0, "skipped": 1}
