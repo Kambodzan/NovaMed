@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CalendarPlus, Check, ClipboardList, MapPin, Star, Video } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
-import type { DocumentOut } from '../lib/types'
+import type { ClinicalNote, DocumentOut } from '../lib/types'
 import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -295,9 +295,13 @@ function PodsumowanieWizyty({ visit, onClose }: {
     queryKey: ['my-documents', activeId],
     queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
   })
-  const visitDocs = (docs ?? []).filter(d => d.appointment_id === visit.appointment_id)
-  const notes = visitDocs.filter(d => d.document_type === 'NOTE')
-  const others = visitDocs.filter(d => d.document_type !== 'NOTE')
+  // nota z wizyty (encounter note) — podpisana treść + uzupełnienia
+  const { data: note } = useQuery({
+    queryKey: ['note', visit.appointment_id],
+    queryFn: () => api<ClinicalNote>(`/appointments/${visit.appointment_id}/note`),
+  })
+  const others = (docs ?? []).filter(d => d.appointment_id === visit.appointment_id)
+  const hasNote = note && note.status === 'SIGNED' && note.content
 
   const KIND: Record<string, string> = {
     PRESCRIPTION: 'E-recepta', REFERRAL: 'E-skierowanie',
@@ -322,13 +326,21 @@ function PodsumowanieWizyty({ visit, onClose }: {
 
           <div className="rounded-2xl bg-primary-soft/40 px-4 py-3">
             <p className="mb-1 text-xs font-extrabold tracking-wider text-primary/70 uppercase">{t('Notatki i zalecenia lekarza')}</p>
-            {notes.length === 0 ? (
+            {!hasNote ? (
               <p className="text-sm font-medium text-gray-500">{t('Lekarz nie zostawił notatki z tej wizyty.')}</p>
-            ) : notes.map(n => (
-              <p key={n.document_id} className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">
-                {n.details}
-              </p>
-            ))}
+            ) : (
+              <>
+                <p className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{note!.content}</p>
+                {note!.addenda.map((ad, i) => (
+                  <div key={i} className="mt-2 border-l-2 border-primary/40 pl-3">
+                    <p className="text-[11px] font-extrabold tracking-wider text-primary/70 uppercase">
+                      {t('Uzupełnienie')} · {formatDatePL(ad.created_at)}
+                    </p>
+                    <p className="text-sm font-medium whitespace-pre-wrap text-gray-800">{ad.content}</p>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           {others.length > 0 && (

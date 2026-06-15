@@ -1,13 +1,13 @@
 // Gabinet (UC-L1/L2): stanowisko prowadzenia wizyty — pacjent, notatka,
 // wystawianie dokumentów i pełna dokumentacja na jednym ekranie.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ClipboardPen, FolderOpen, Play, Printer, ShieldCheck, Square, User, Users, Video } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ClipboardPen, FileCheck2, FolderOpen, History, Lock, Play, Plus, Printer, ShieldCheck, Square, User, Users, Video } from 'lucide-react'
 import { Badge, Button, Field, Modal, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
-import type { AppointmentOut, DocumentOut, PatientInfo } from '../../lib/types'
+import type { AppointmentOut, ClinicalNote, DocumentOut, PatientInfo } from '../../lib/types'
 import { KIND_LABEL, WystawDokument, searchIcd10 } from '../../components/WystawDokument'
 import { DokumentyLista } from '../../components/DokumentyLista'
 import { Typeahead } from '../../components/Typeahead'
@@ -28,8 +28,29 @@ const composeNote = (n: typeof EMPTY_NOTE, rozpoznanie: string) => [
   n.zalecenia.trim() && `Zalecenia: ${n.zalecenia.trim()}`,
 ].filter(Boolean).join('\n\n')
 
+// odwrotność composeNote — wczytanie istniejącego szkicu z powrotem do pól SOAP
+function parseNote(content: string): { wywiad: string; badanie: string; rozpoznanie: string; zalecenia: string } {
+  const out = { wywiad: '', badanie: '', rozpoznanie: '', zalecenia: '' }
+  const labels: Array<[keyof typeof out, RegExp]> = [
+    ['wywiad', /^Wywiad:\s*/],
+    ['badanie', /^Badanie przedmiotowe:\s*/],
+    ['rozpoznanie', /^Rozpoznanie:\s*/],
+    ['zalecenia', /^Zalecenia:\s*/],
+  ]
+  for (const block of content.split('\n\n')) {
+    for (const [key, re] of labels) {
+      if (re.test(block)) { out[key] = block.replace(re, '').trim(); break }
+    }
+  }
+  return out
+}
+
+const NOTE_ACTION_LABEL: Record<string, string> = {
+  CREATED: 'Utworzono szkic', SAVED: 'Zapisano szkic', SIGNED: 'Podpisano', ADDENDUM: 'Uzupełnienie',
+}
+
 type DocKind = DocumentOut['document_type']
-const HIST_KINDS: DocKind[] = ['PRESCRIPTION', 'REFERRAL', 'LAB_RESULT', 'SICK_LEAVE', 'NOTE']
+const HIST_KINDS: DocKind[] = ['PRESCRIPTION', 'REFERRAL', 'LAB_RESULT', 'SICK_LEAVE']
 
 export function Gabinet() {
   const { id } = useParams()
@@ -37,17 +58,16 @@ export function Gabinet() {
   const queryClient = useQueryClient()
   const [note, setNote] = useState(EMPTY_NOTE)
   const [rozpoznanie, setRozpoznanie] = useState('')
+  const [addendum, setAddendum] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // potwierdzenia akcji bez powrotu: NO_SHOW i zakończenie z niezapisaną notatką
+  // potwierdzenia akcji bez powrotu: NO_SHOW i zakończenie z niezapisanym szkicem
   const [confirm, setConfirm] = useState<'NO_SHOW' | 'COMPLETE_UNSAVED' | null>(null)
   // historia dokumentów: domyślnie zwinięta, z filtrem rodzaju i limitem
   const [histOpen, setHistOpen] = useState(false)
   const [histFilter, setHistFilter] = useState<'ALL' | DocKind>('ALL')
   const [histLimit, setHistLimit] = useState(8)
-  const noteText = composeNote(note, rozpoznanie)
-  // samo rozpoznanie nie liczy się jako „niezapisana notatka" — żyje też w dokumentach
-  const unsavedNote = Object.values(note).some(v => v.trim())
+  const [revOpen, setRevOpen] = useState(false)  // „Historia zmian" (audyt)
 
   const { data: visit } = useQuery({
     queryKey: ['appointment', id],
@@ -65,6 +85,31 @@ export function Gabinet() {
     queryFn: () => api<DocumentOut[]>(`/patients/${patientId}/documents`),
     enabled: !!patientId,
   })
+  // nota z wizyty (encounter note) — szkic/podpis/uzupełnienia + audyt
+  const { data: clinicalNote } = useQuery({
+    queryKey: ['note', id],
+    queryFn: () => api<ClinicalNote>(`/appointments/${id}/note`),
+    enabled: !!id,
+  })
+  const noteStatus = clinicalNote?.status ?? 'EMPTY'
+  const signed = noteStatus === 'SIGNED'
+  const savedContent = clinicalNote?.content ?? ''
+  const composed = composeNote(note, rozpoznanie)
+  // niezapisany szkic = pola różnią się od zapisanej treści (i jest co zapisać)
+  const unsavedNote = !signed && composed.length >= 2 && composed !== savedContent
+
+  // wczytaj istniejący szkic do pól SOAP raz, gdy nota się załaduje
+  const hydratedRef = useRef(false)
+  useEffect(() => {
+    if (clinicalNote && !hydratedRef.current && clinicalNote.content) {
+      const p = parseNote(clinicalNote.content)
+      setNote({ wywiad: p.wywiad, badanie: p.badanie, zalecenia: p.zalecenia })
+      setRozpoznanie(p.rozpoznanie)
+      hydratedRef.current = true
+    }
+  }, [clinicalNote])
+
+  const invalidateNote = () => void queryClient.invalidateQueries({ queryKey: ['note', id] })
 
   const changeStatus = useMutation({
     mutationFn: (status: string) => api(`/appointments/${id}/status`, { method: 'POST', body: { new_status: status } }),
@@ -72,22 +117,32 @@ export function Gabinet() {
       setError(null)
       void queryClient.invalidateQueries({ queryKey: ['appointment', id] })
       void queryClient.invalidateQueries({ queryKey: ['doctor-day'] })
+      invalidateNote()  // zakończenie auto-podpisuje notę
       if (status === 'COMPLETED' || status === 'NO_SHOW') navigate('/')
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zmienić statusu.'),
   })
 
-  const saveNote = useMutation({
-    mutationFn: () => api(`/patients/${patientId}/notes`, {
-      method: 'POST', body: { appointment_id: id, content: composeNote(note, rozpoznanie) },
-    }),
+  const saveDraft = useMutation({
+    mutationFn: () => api<ClinicalNote>(`/appointments/${id}/note`, { method: 'PUT', body: { content: composed } }),
     onSuccess: () => {
-      setNote(EMPTY_NOTE)
       setNoteSaved(true)
       setTimeout(() => setNoteSaved(false), 2500)
-      void queryClient.invalidateQueries({ queryKey: ['patient-documents', patientId] })
+      invalidateNote()
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać notatki.'),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać szkicu.'),
+  })
+
+  const signNote = useMutation({
+    mutationFn: () => api<ClinicalNote>(`/appointments/${id}/note/sign`, { method: 'POST' }),
+    onSuccess: () => { setError(null); invalidateNote() },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się podpisać noty.'),
+  })
+
+  const addAddendum = useMutation({
+    mutationFn: () => api<ClinicalNote>(`/appointments/${id}/note/addenda`, { method: 'POST', body: { content: addendum.trim() } }),
+    onSuccess: () => { setAddendum(''); setError(null); invalidateNote() },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się dodać uzupełnienia.'),
   })
 
   if (!visit) {
@@ -110,8 +165,12 @@ export function Gabinet() {
     const w = window.open('', '_blank', 'width=780,height=920')
     if (!w) return
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    const notes = visitDocs.filter(d => d.document_type === 'NOTE')
-    const others = visitDocs.filter(d => d.document_type !== 'NOTE')
+    const others = visitDocs  // noty nie są już dokumentami — są w clinicalNote
+    const noteHtml = clinicalNote && clinicalNote.status === 'SIGNED' && clinicalNote.content
+      ? `<div class="sec"><h2>Przebieg wizyty i zalecenia</h2><pre>${esc(clinicalNote.content)}</pre>`
+        + clinicalNote.addenda.map(a => `<pre style="margin-top:8px"><strong>Uzupełnienie (${esc(a.author_name)}):</strong> ${esc(a.content)}</pre>`).join('')
+        + '</div>'
+      : ''
     w.document.write(`<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Podsumowanie wizyty — ${esc(visit.patient_name ?? '')}</title>
 <style>
   body{font-family:'Segoe UI',Arial,sans-serif;margin:42px;color:#111;font-size:14px;line-height:1.5}
@@ -127,7 +186,7 @@ export function Gabinet() {
 <p class="muted">${esc(visit.clinic_name)} · ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)} · ${esc(visit.doctor_name)}</p>
 <div class="sec"><h2>Pacjent</h2><p>${esc(`${patient.first_name} ${patient.last_name}`)} · PESEL ${patient.pesel}</p></div>
 ${visit.notes ? `<div class="sec"><h2>Zgłoszony powód wizyty</h2><pre>${esc(visit.notes)}</pre></div>` : ''}
-${notes.length ? `<div class="sec"><h2>Przebieg wizyty i zalecenia</h2>${notes.map(n => `<pre>${esc(n.details ?? '')}</pre>`).join('<hr>')}</div>` : ''}
+${noteHtml}
 ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d =>
       `<div class="doc"><strong>${KIND_LABEL[d.document_type]}</strong>${d.code ? ` · kod: <span class="code">${esc(d.code)}</span>` : ''}<br><span class="muted">${esc(d.details ?? '')}</span></div>`).join('')}</div>` : ''}
 <p class="muted" style="margin-top:26px">Wydruk z systemu NovaMed · ${new Date().toLocaleString('pl-PL')}</p>
@@ -215,65 +274,116 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             ) : <p className="text-sm font-medium text-gray-400">Wczytywanie…</p>}
           </Tile>
 
-          {/* narzędzia wizyty dopiero po rozpoczęciu — przed wizytą lekarz
-              przegląda kontekst, nie wystawia dokumentów */}
-          {inProgress ? (
-            <>
-              <Tile className="p-5" delay={100}>
-                <TileHeader title={<span className="inline-flex items-center gap-1.5"><ClipboardPen size={13} /> Notatka z wizyty</span>} />
-                <div className="space-y-3">
-                  {NOTE_SECTIONS.slice(0, 2).map(s => (
-                    <Field key={s.key} label={s.label}>
-                      <textarea
-                        className={cx(inputCls, s.tall ? 'h-20' : 'h-12', 'py-2')}
-                        value={note[s.key]}
-                        onChange={e => setNote(n => ({ ...n, [s.key]: e.target.value }))}
-                        placeholder={s.placeholder}
-                      />
-                    </Field>
-                  ))}
-                  <Field label="Rozpoznanie (ICD-10)" hint="trafia do notatki i automatycznie do recept/skierowań">
-                    <Typeahead
-                      id="icd10-gabinet" minLength={1}
-                      value={rozpoznanie}
-                      onChange={setRozpoznanie}
-                      search={searchIcd10}
-                      placeholder="np. B02 albo półpasiec"
-                    />
-                  </Field>
-                  {NOTE_SECTIONS.slice(2).map(s => (
-                    <Field key={s.key} label={s.label}>
-                      <textarea
-                        className={cx(inputCls, s.tall ? 'h-20' : 'h-12', 'py-2')}
-                        value={note[s.key]}
-                        onChange={e => setNote(n => ({ ...n, [s.key]: e.target.value }))}
-                        placeholder={s.placeholder}
-                      />
-                    </Field>
-                  ))}
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <Button size="sm" disabled={saveNote.isPending || noteText.length < 2} onClick={() => saveNote.mutate()}>
-                    {saveNote.isPending ? 'Zapisywanie…' : 'Zapisz notatkę'}
-                  </Button>
-                  {noteSaved && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700"><Check size={13} /> Zapisano — patrz „Z tej wizyty"</span>}
-                </div>
-              </Tile>
+          {/* nota z wizyty (encounter note): szkic edytowalny do podpisu, po podpisie
+              zablokowana — zmiany tylko przez uzupełnienia (jak w realnych EHR) */}
+          {signed ? (
+            <Tile className="p-5" delay={100}>
+              <TileHeader title={<span className="inline-flex items-center gap-1.5 text-emerald-700"><FileCheck2 size={13} /> Nota z wizyty — podpisana</span>} />
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-gray-400">
+                <Lock size={11} /> {clinicalNote?.signed_by_name}
+                {clinicalNote?.signed_at && ` · ${formatDatePL(clinicalNote.signed_at)}, ${formatTime(clinicalNote.signed_at)}`}
+              </p>
+              <p className="rounded-2xl bg-gray-50 px-4 py-3 text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{clinicalNote?.content}</p>
 
-              <Tile className="p-5" delay={140}>
-                <TileHeader title="Wystaw dokument" />
-                {patientId && <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} />}
-              </Tile>
-            </>
+              {(clinicalNote?.addenda.length ?? 0) > 0 && (
+                <div className="mt-3 space-y-2">
+                  {clinicalNote!.addenda.map((ad, i) => (
+                    <div key={i} className="rounded-xl border-l-2 border-primary/40 bg-primary-soft/30 px-3.5 py-2.5">
+                      <p className="text-[11px] font-extrabold tracking-wider text-primary/70 uppercase">
+                        Uzupełnienie · {ad.author_name} · {formatDatePL(ad.created_at)}, {formatTime(ad.created_at)}
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium whitespace-pre-wrap text-gray-800">{ad.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {visit.doctor_id && (
+                <div className="mt-3">
+                  <textarea
+                    className={cx(inputCls, 'h-16 py-2')} value={addendum}
+                    onChange={e => setAddendum(e.target.value)}
+                    placeholder="Dodaj uzupełnienie (np. wynik, który dotarł po wizycie)…"
+                  />
+                  <Button className="mt-2" size="sm" variant="secondary"
+                    disabled={addAddendum.isPending || addendum.trim().length < 2} onClick={() => addAddendum.mutate()}>
+                    <Plus size={14} /> {addAddendum.isPending ? 'Dodawanie…' : 'Dodaj uzupełnienie'}
+                  </Button>
+                </div>
+              )}
+
+              {(clinicalNote?.events.length ?? 0) > 0 && (
+                <div className="mt-3 border-t border-gray-100 pt-2">
+                  <button type="button" onClick={() => setRevOpen(o => !o)} aria-expanded={revOpen}
+                    className="flex w-full cursor-pointer items-center justify-between rounded-xl px-1 py-1.5 text-left hover:bg-gray-50">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+                      <History size={13} /> Historia zmian ({clinicalNote!.events.length})
+                    </span>
+                    <ChevronDown size={15} className={cx('text-gray-400 transition-transform', revOpen && 'rotate-180')} />
+                  </button>
+                  {revOpen && (
+                    <ul className="mt-1 space-y-1">
+                      {clinicalNote!.events.map((e, i) => (
+                        <li key={i} className="flex flex-wrap items-center justify-between gap-1 rounded-lg bg-gray-50 px-3 py-1.5 text-xs">
+                          <span className="font-bold text-gray-700">{NOTE_ACTION_LABEL[e.action] ?? e.action}</span>
+                          <span className="font-medium text-gray-400">{e.actor_name} · {formatDatePL(e.created_at)}, {formatTime(e.created_at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </Tile>
+          ) : inProgress ? (
+            <Tile className="p-5" delay={100}>
+              <TileHeader title={<span className="inline-flex items-center gap-1.5"><ClipboardPen size={13} /> Nota z wizyty <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 normal-case">szkic</span></span>} />
+              <div className="space-y-3">
+                {NOTE_SECTIONS.slice(0, 2).map(s => (
+                  <Field key={s.key} label={s.label}>
+                    <textarea className={cx(inputCls, s.tall ? 'h-20' : 'h-12', 'py-2')} value={note[s.key]}
+                      onChange={e => setNote(n => ({ ...n, [s.key]: e.target.value }))} placeholder={s.placeholder} />
+                  </Field>
+                ))}
+                <Field label="Rozpoznanie (ICD-10)" hint="trafia do noty i automatycznie do recept/skierowań">
+                  <Typeahead id="icd10-gabinet" minLength={1} value={rozpoznanie} onChange={setRozpoznanie}
+                    search={searchIcd10} placeholder="np. B02 albo półpasiec" />
+                </Field>
+                {NOTE_SECTIONS.slice(2).map(s => (
+                  <Field key={s.key} label={s.label}>
+                    <textarea className={cx(inputCls, s.tall ? 'h-20' : 'h-12', 'py-2')} value={note[s.key]}
+                      onChange={e => setNote(n => ({ ...n, [s.key]: e.target.value }))} placeholder={s.placeholder} />
+                  </Field>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button size="sm" disabled={saveDraft.isPending || composed.length < 2} onClick={() => saveDraft.mutate()}>
+                  {saveDraft.isPending ? 'Zapisywanie…' : 'Zapisz szkic'}
+                </Button>
+                <Button size="sm" variant="secondary" disabled={signNote.isPending || (composed.length < 2 && savedContent.length < 2)}
+                  onClick={() => unsavedNote ? saveDraft.mutate(undefined, { onSuccess: () => signNote.mutate() }) : signNote.mutate()}>
+                  <FileCheck2 size={14} /> Podpisz notę
+                </Button>
+                {noteSaved && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700"><Check size={13} /> Zapisano</span>}
+              </div>
+              <p className="mt-2 text-xs font-medium text-gray-400">Szkic edytowalny do podpisu. Zakończenie wizyty podpisuje notę automatycznie.</p>
+            </Tile>
           ) : confirmed ? (
             <Tile className="p-5" delay={100}>
               <p className="text-sm leading-relaxed font-medium text-gray-500">
-                Notatka i wystawianie dokumentów otworzą się po kliknięciu
+                Nota i wystawianie dokumentów otworzą się po kliknięciu
                 <span className="font-extrabold text-gray-900"> „Rozpocznij wizytę"</span> u góry.
                 Do tego czasu możesz przejrzeć dane pacjenta i dokumentację.
               </p>
             </Tile>
           ) : null}
+
+          {/* wystawianie dokumentów — przez cały czas trwania wizyty (też po podpisie noty) */}
+          {inProgress && patientId && (
+            <Tile className="p-5" delay={140}>
+              <TileHeader title="Wystaw dokument" />
+              <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} />
+            </Tile>
+          )}
         </div>
 
         {confirm === 'NO_SHOW' && (
@@ -297,22 +407,22 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
         {confirm === 'COMPLETE_UNSAVED' && (
           <Modal
             overline="Gabinet"
-            title="Niezapisana notatka"
+            title="Niezapisany szkic noty"
             onClose={() => setConfirm(null)}
             footer={<>
               <Button variant="ghost" onClick={() => { setConfirm(null); changeStatus.mutate('COMPLETED') }}>
-                Zakończ bez notatki
+                Zakończ bez zapisu
               </Button>
               <Button
-                disabled={saveNote.isPending}
-                onClick={() => saveNote.mutate(undefined, { onSuccess: () => { setConfirm(null); changeStatus.mutate('COMPLETED') } })}
+                disabled={saveDraft.isPending}
+                onClick={() => saveDraft.mutate(undefined, { onSuccess: () => { setConfirm(null); changeStatus.mutate('COMPLETED') } })}
               >
-                <Check size={14} /> Zapisz notatkę i zakończ
+                <Check size={14} /> Zapisz i zakończ
               </Button>
             </>}
           >
             <p className="text-sm leading-relaxed font-medium text-gray-600">
-              Masz wpisaną notatkę, która nie została zapisana w dokumentacji. Po zakończeniu wizyty wrócisz do widoku dnia.
+              Masz zmiany w szkicie noty, które nie zostały zapisane. Przy zakończeniu wizyty nota zostanie podpisana — zapisz, żeby nie utracić tych zmian.
             </p>
           </Modal>
         )}
@@ -320,11 +430,11 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
         {/* dokumentacja: efekty TEJ wizyty na wierzchu, historia zwinięta
             (za dużo informacji w trakcie pracy = szum) */}
         <Tile className="p-5" delay={120}>
-          {(inProgress || visitDocs.length > 0) && (
+          {(inProgress || visitDocs.length > 0 || signed) && (
             <div className="mb-5">
               <TileHeader
                 title={<span className="inline-flex items-center gap-1.5 text-primary"><ClipboardPen size={13} /> Z tej wizyty</span>}
-                action={visitDocs.length > 0 && (
+                action={(visitDocs.length > 0 || signed) && (
                   <Button size="sm" variant="ghost" onClick={printSummary}>
                     <Printer size={14} /> Drukuj podsumowanie
                   </Button>
@@ -334,7 +444,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 <DokumentyLista documents={visitDocs} />
               ) : (
                 <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-sm font-medium text-gray-400">
-                  Zapisane notatki i wystawione dokumenty pojawią się tutaj od razu.
+                  Wystawione dokumenty (recepty, skierowania, wyniki) pojawią się tutaj od razu.
                 </p>
               )}
             </div>

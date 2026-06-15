@@ -120,6 +120,22 @@ export interface DocumentOut {
   appointment_id: string | null
 }
 
+export interface NoteAddendum { author_name: string; content: string; created_at: string }
+export interface NoteEvent { actor_name: string; action: string; created_at: string }
+export interface ClinicalNote {
+  note_id: string | null
+  appointment_id: string
+  status: 'EMPTY' | 'DRAFT' | 'SIGNED'
+  content: string
+  author_name: string | null
+  created_at: string | null
+  updated_at: string | null
+  signed_at: string | null
+  signed_by_name: string | null
+  addenda: NoteAddendum[]
+  events: NoteEvent[]
+}
+
 export interface ReviewOut {
   review_id: string
   rating: number
