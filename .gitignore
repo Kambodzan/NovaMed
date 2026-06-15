@@ -35,3 +35,6 @@ backend/uploads/
 
 # Certyfikaty dev (generowane przez scripts/make-cert.py)
 certs/
+
+# Lokalne notatki/sekrety (konta testowe, dane Supabase, klucze Twilio itp.)
+external/
