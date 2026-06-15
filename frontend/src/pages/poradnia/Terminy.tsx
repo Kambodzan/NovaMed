@@ -12,7 +12,7 @@ interface Clinic {
   clinic_id: string; clinic_name: string; earlier_notice_min_hours: number; slot_interval_min: number
   confirmation_required: boolean; confirmation_hours: number
 }
-interface DoctorRow { doctor_id: string; name: string; specialization: string | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[] }
 
 export function Terminy() {
   const queryClient = useQueryClient()
@@ -164,7 +164,7 @@ export function Terminy() {
           {form.kind === 'visit' ? (
             <Field label="Lekarz">
               <Select value={doctorId} onChange={v => setForm(f => ({ ...f, doctor_id: v }))}
-                options={(doctors ?? []).map(d => ({ value: String(d.doctor_id), label: d.name, hint: d.specialization ?? undefined }))} />
+                options={(doctors ?? []).map(d => ({ value: String(d.doctor_id), label: d.name, hint: d.specializations.join(' · ') || undefined }))} />
             </Field>
           ) : (
             <Field label="Badanie" hint="bez ceny = NFZ (wymagane skierowanie); z ceną = prywatne, bez skierowania">

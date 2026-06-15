@@ -37,7 +37,7 @@ export function RezerwacjaPubliczna() {
       const key = kind === 'visit' ? `d${s.doctor_id}` : s.service_name!
       const cur = map.get(key) ?? {
         name: kind === 'visit' ? s.doctor_name : s.service_name!,
-        sub: kind === 'visit' ? s.specialization : null,
+        sub: kind === 'visit' ? (s.specializations.join(' · ') || null) : null,
         ref: s.referral_required, days: new Map<string, AppointmentOut[]>(),
       }
       cur.ref = cur.ref || s.referral_required

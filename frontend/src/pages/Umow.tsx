@@ -56,7 +56,7 @@ const shortLoc = (clinicName: string) => clinicName.split('—').pop()!.trim()
 interface DoctorCardData {
   id: string  // doctor_id (UUID) albo '' dla badań (pracownia)
   name: string
-  spec: string | null
+  specs: string[]
   referralRequired?: boolean
   clinics: string[]
   days: ReadonlyArray<readonly [string, AppointmentOut[]]>
@@ -115,7 +115,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
           </span>
           <span className="block truncate text-xs font-semibold text-gray-500">
             {[
-              d.spec,
+              d.specs.join(' · ') || null,
               hasNfz ? <span key="nfz" className="text-emerald-700">NFZ</span> : null,
               minPrice != null ? `${t('prywatnie od')} ${minPrice} zł` : null,
               multiClinic ? d.clinics.map(shortLoc).join(', ') : null,
@@ -271,11 +271,11 @@ export function Umow() {
 
   // karty lekarzy z mini-kalendarzem: dni → godziny (jak na portalach rezerwacyjnych)
   const doctorCards = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; spec: string | null; referralRequired: boolean; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
+    const map = new Map<string, { id: string; name: string; specs: string[]; referralRequired: boolean; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
       // tryb: wizyty lekarskie vs badania (pracownia)
       if (bookKind === 'visit' ? s.service_name != null : s.service_name == null) continue
-      if (spec && s.specialization !== spec) continue
+      if (spec && !s.specializations.includes(spec)) continue
       if (clinicFilter?.startsWith('city:') && cityOf(s.clinic_name) !== clinicFilter.slice(5)) continue
       if (clinicFilter?.startsWith('cli:') && s.clinic_name !== clinicFilter.slice(4)) continue
       const geo = parseGeo(clinicFilter)
@@ -290,7 +290,7 @@ export function Umow() {
         ?? {
           id: bookKind === 'visit' ? (s.doctor_id ?? '') : '',
           name: bookKind === 'visit' ? s.doctor_name : s.service_name!,
-          spec: bookKind === 'visit' ? s.specialization : null,
+          specs: bookKind === 'visit' ? s.specializations : [],
           referralRequired: s.referral_required,
           clinics: new Set<string>(), byDay: new Map<string, AppointmentOut[]>(),
         }
@@ -301,9 +301,9 @@ export function Umow() {
       map.set(key, cur)
     }
     return [...map.values()]
-      .filter(d => !q || fold(d.name).includes(q) || fold(d.spec ?? '').includes(q))
+      .filter(d => !q || fold(d.name).includes(q) || fold(d.specs.join(' ')).includes(q))
       .map(d => ({
-        id: d.id, name: d.name, spec: d.spec, referralRequired: d.referralRequired, clinics: [...d.clinics],
+        id: d.id, name: d.name, specs: d.specs, referralRequired: d.referralRequired, clinics: [...d.clinics],
         days: [...d.byDay.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([day, list]) => [day, list.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
@@ -320,7 +320,7 @@ export function Umow() {
 
     const specCounts = new Map<string, number>()
     for (const s of allSlots ?? []) {
-      if (s.specialization) specCounts.set(s.specialization, (specCounts.get(s.specialization) ?? 0) + 1)
+      for (const name of s.specializations) specCounts.set(name, (specCounts.get(name) ?? 0) + 1)
     }
     const matchedSpecs = [...specCounts.entries()]
       .filter(([name]) => !fq || fold(name).includes(fq))
@@ -332,19 +332,19 @@ export function Umow() {
         out.push({ key: `spec:${name}`, label: `${name} (${count})`, insert: name })
     }
 
-    const docs = new Map<string, { name: string; spec: string | null; earliest: string }>()
+    const docs = new Map<string, { name: string; specs: string[]; earliest: string }>()
     for (const s of allSlots ?? []) {
       if (s.doctor_id == null) continue  // sloty badań nie są lekarzami
-      if (fq && !fold(s.doctor_name).includes(fq) && !fold(s.specialization ?? '').includes(fq)) continue
+      if (fq && !fold(s.doctor_name).includes(fq) && !fold(s.specializations.join(' ')).includes(fq)) continue
       const cur = docs.get(s.doctor_id)
       if (!cur || s.appointment_datetime < cur.earliest)
-        docs.set(s.doctor_id, { name: s.doctor_name, spec: s.specialization, earliest: s.appointment_datetime })
+        docs.set(s.doctor_id, { name: s.doctor_name, specs: s.specializations, earliest: s.appointment_datetime })
     }
     const matchedDocs = [...docs.entries()].sort((a, b) => a[1].earliest.localeCompare(b[1].earliest)).slice(0, fq ? 6 : 4)
     if (matchedDocs.length) {
       out.push({ key: 'h:doc', label: t('Lekarze'), insert: '', header: true })
       for (const [id, d] of matchedDocs)
-        out.push({ key: `doc:${id}:${d.name}`, label: `${d.name} — ${d.spec ?? ''}`, insert: d.name })
+        out.push({ key: `doc:${id}:${d.name}`, label: `${d.name} — ${d.specs.join(', ')}`, insert: d.name })
     }
 
     const matchedCities = cityGroups.filter(([city]) => fq && fold(city).includes(fq))
@@ -370,7 +370,7 @@ export function Umow() {
   const popularSpecs = useMemo(() => {
     const counts = new Map<string, number>()
     for (const s of allSlots ?? []) {
-      if (s.specialization) counts.set(s.specialization, (counts.get(s.specialization) ?? 0) + 1)
+      for (const name of s.specializations) counts.set(name, (counts.get(name) ?? 0) + 1)
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
   }, [allSlots])
@@ -725,7 +725,7 @@ export function Umow() {
                 )}
               </p>
               <p className="text-sm font-semibold text-gray-500">
-                {slot.specialization} · {online
+                {slot.specializations.join(' · ')} · {online
                   ? t('teleporada')
                   : `${slot.clinic_name}${addressOf(slot.clinic_name) ? `, ${addressOf(slot.clinic_name)}` : ''}`}
               </p>

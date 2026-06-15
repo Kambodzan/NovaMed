@@ -18,7 +18,7 @@ from app.integrations.lab import get_lab_client
 from app.integrations.payments import get_payments_client
 from app.integrations.sms import set_sms_client
 from app.main import app
-from app.models import AppUser, Clinic, Doctor, Patient, Role, StaffClinic
+from app.models import AppUser, Clinic, Doctor, DoctorSpecialization, Patient, Role, StaffClinic
 
 
 class FakeEwus:
@@ -159,9 +159,13 @@ def factory(db_session):
             db_session.commit()
             return user, make_token(sub=str(uid), email=user.email)
 
-        def doctor(self, specialization: str = "Kardiolog") -> tuple[AppUser, str]:
+        def doctor(self, specialization: str | list[str] = "Kardiolog") -> tuple[AppUser, str]:
             user, token = self.user("lekarz")
-            db_session.add(Doctor(doctor_id=user.user_id, license_number="1234567", specialization=specialization))
+            db_session.add(Doctor(doctor_id=user.user_id, license_number="1234567"))
+            db_session.flush()
+            specs = [specialization] if isinstance(specialization, str) else specialization
+            for name in specs:
+                db_session.add(DoctorSpecialization(doctor_id=user.user_id, name=name))
             db_session.commit()
             return user, token
 

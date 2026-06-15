@@ -3,7 +3,8 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -55,10 +56,24 @@ class Doctor(Base):
 
     doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     license_number: Mapped[str] = mapped_column(String(50))
-    specialization: Mapped[str | None] = mapped_column(String(100))
     academic_title: Mapped[str | None] = mapped_column(String(100))
 
     user: Mapped["AppUser"] = relationship()
+    # lekarz może mieć wiele specjalizacji (np. internista + kardiolog)
+    specializations: Mapped[list["DoctorSpecialization"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="DoctorSpecialization.name")
+    specialization_names = association_proxy("specializations", "name")
+
+
+class DoctorSpecialization(Base):
+    """Pojedyncza specjalizacja lekarza (relacja 1:N do Doctor)."""
+
+    __tablename__ = "doctor_specialization"
+    __table_args__ = (UniqueConstraint("doctor_id", "name", name="uq_doctor_specialization"),)
+
+    doctor_specialization_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctor.doctor_id"))
+    name: Mapped[str] = mapped_column(String(100))
 
 
 class Nurse(Base):

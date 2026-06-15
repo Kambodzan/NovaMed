@@ -40,7 +40,7 @@ def test_personel_i_lekarze_placowki(client, factory):
     assert resp.status_code == 200
     doctors = resp.json()
     assert len(doctors) == 1
-    assert doctors[0]["specialization"] == "Endokrynolog"
+    assert "Endokrynolog" in doctors[0]["specializations"]
 
 
 def test_pacjenci_placowki_rbac(client, factory):

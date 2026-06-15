@@ -20,7 +20,7 @@ export interface AppointmentOut {
   doctor_name: string
   service_name: string | null
   referral_required: boolean
-  specialization: string | null
+  specializations: string[]
   clinic_id: string
   clinic_name: string
   patient_id: string | null

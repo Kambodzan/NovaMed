@@ -72,7 +72,7 @@ export function Wizyty() {
         <div className="min-w-0 flex-1">
           <p className="font-extrabold text-gray-900">{v.doctor_name}</p>
           <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-500">
-            {v.specialization}
+            {v.specializations.join(' · ')}
             {' · '}
             {v.appointment_type === 'ONLINE' ? <Video size={13} /> : <MapPin size={13} />}
             {v.appointment_type === 'ONLINE' ? t('teleporada') : v.clinic_name}

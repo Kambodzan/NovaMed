@@ -64,6 +64,29 @@ def test_wyszukiwanie_po_specjalizacji(client, setup, factory):
     assert resp.json() == []
 
 
+def test_lekarz_z_wieloma_specjalizacjami(client, factory):
+    """Lekarz z kilkoma specjalizacjami jest znajdowany pod KAŻDĄ z nich,
+    a slot wystawia pełną listę specjalizacji (UC-P3)."""
+    _, reg = factory.user("rejestracja")
+    doc_user, _ = factory.doctor(specialization=["Internista", "Kardiolog"])
+    _, patient = factory.patient()
+    clinic = factory.clinic()
+    factory.employ(clinic, doc_user.user_id)
+
+    from datetime import datetime, timedelta
+    dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
+    r = client.post(f"/clinics/{clinic.clinic_id}/slots",
+                    json={"doctor_id": str(doc_user.user_id), "datetimes": [dt.isoformat()]},
+                    headers=auth_header(reg))
+    assert r.status_code == 201
+    assert sorted(r.json()[0]["specializations"]) == ["Internista", "Kardiolog"]
+
+    h = auth_header(patient)
+    assert len(client.get("/slots?specialization=Internista", headers=h).json()) == 1
+    assert len(client.get("/slots?specialization=Kardiolog", headers=h).json()) == 1
+    assert client.get("/slots?specialization=Dermatolog", headers=h).json() == []
+
+
 def test_rezerwacja_i_podwojna_rezerwacja(client, setup, factory):
     slot_id = make_slot(client, setup)
     resp = client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))

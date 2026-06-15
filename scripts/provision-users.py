@@ -25,7 +25,8 @@ from sqlalchemy import select  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
-    Administrator, AppUser, Clinic, Doctor, Nurse, Patient, PatientClinic, Role, StaffClinic,
+    Administrator, AppUser, Clinic, Doctor, DoctorSpecialization, Nurse, Patient, PatientClinic,
+    Role, StaffClinic,
 )
 
 TEST_PASSWORD = "NovaMed.Test1"  # wspólne hasło kont testowych (tryb Supabase)
@@ -65,11 +66,11 @@ CLINICS = [
 USERS = [
     ("admin@novamed.dev", "Administrator Systemu", "administrator", {}),
     ("a.kowalczyk@novamed.dev", "dr Anna Kowalczyk", "lekarz",
-     {"specialization": "Kardiolog", "academic_title": "dr n. med.", "license": "1234567"}),
+     {"specializations": ["Kardiolog"], "academic_title": "dr n. med.", "license": "1234567"}),
     ("p.zielinski@novamed.dev", "dr Piotr Zieliński", "lekarz",
-     {"specialization": "Internista", "academic_title": "lek.", "license": "2345678"}),
+     {"specializations": ["Internista", "Kardiolog"], "academic_title": "lek.", "license": "2345678"}),
     ("m.sawicka@novamed.dev", "dr Magdalena Sawicka", "lekarz",
-     {"specialization": "Endokrynolog", "academic_title": "dr n. med.", "license": "3456789"}),
+     {"specializations": ["Endokrynolog", "Diabetolog"], "academic_title": "dr n. med.", "license": "3456789"}),
     ("k.lis@novamed.dev", "piel. Katarzyna Lis", "pielegniarka", {"license": "7654321"}),
     ("rejestracja@novamed.dev", "Barbara Krawczyk", "rejestracja", {}),
     ("janina.wisniewska@novamed.dev", "Janina Wiśniewska", "pacjent",
@@ -190,9 +191,21 @@ def main() -> None:
                 user.supabase_uid = uuid.UUID(uid)  # przejście dev -> Supabase
                 print(f"~ {email}: podmieniono uid na Supabase")
 
-            if role_name == "lekarz" and db.get(Doctor, user.user_id) is None:
-                db.add(Doctor(doctor_id=user.user_id, license_number=extra["license"],
-                              specialization=extra["specialization"], academic_title=extra["academic_title"]))
+            if role_name == "lekarz":
+                doc = db.get(Doctor, user.user_id)
+                if doc is None:
+                    doc = Doctor(doctor_id=user.user_id, license_number=extra["license"],
+                                 academic_title=extra["academic_title"])
+                    db.add(doc)
+                    db.flush()
+                # specjalizacje: deklaratywnie (dodaj brakujące, usuń nadmiarowe)
+                want = set(extra.get("specializations", []))
+                have = {s.name for s in doc.specializations}
+                for name in want - have:
+                    db.add(DoctorSpecialization(doctor_id=doc.doctor_id, name=name))
+                for s in list(doc.specializations):
+                    if s.name not in want:
+                        db.delete(s)
             elif role_name == "pielegniarka" and db.get(Nurse, user.user_id) is None:
                 db.add(Nurse(nurse_id=user.user_id, license_number=extra["license"]))
             elif role_name == "administrator" and db.get(Administrator, user.user_id) is None:

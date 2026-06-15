@@ -82,7 +82,7 @@ export function Start() {
               <DateChip month={monthShort(next.appointment_datetime)} day={dayNo(next.appointment_datetime)} time={formatTime(next.appointment_datetime)} />
               <div className="min-w-0 flex-1">
                 <p className="text-base font-extrabold text-gray-900 sm:text-lg">{next.doctor_name}</p>
-                <p className="text-sm font-semibold text-gray-500">{next.specialization}</p>
+                <p className="text-sm font-semibold text-gray-500">{next.specializations.join(' · ')}</p>
                 <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-gray-500">
                   {next.appointment_type === 'ONLINE'
                     ? <><Video size={14} /> {t('teleporada')}</>

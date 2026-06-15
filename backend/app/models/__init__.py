@@ -1,5 +1,5 @@
 # Import wszystkich modeli, żeby Base.metadata widziało pełny schemat (Alembic autogenerate).
-from app.models.user import Role, AppUser, Administrator, Doctor, Nurse, Patient
+from app.models.user import Role, AppUser, Administrator, Doctor, DoctorSpecialization, Nurse, Patient
 from app.models.clinic import Clinic, PatientClinic, StaffClinic
 from app.models.appointment import Appointment
 from app.models.document import MedicalDocument, Prescription, Referral, LabResult, SickLeave, Certificate
@@ -14,7 +14,7 @@ from app.models.clinical_note import ClinicalNote, NoteAddendum, NoteEvent
 from app.models.audit import AuditLog
 
 __all__ = [
-    "Role", "AppUser", "Administrator", "Doctor", "Nurse", "Patient",
+    "Role", "AppUser", "Administrator", "Doctor", "DoctorSpecialization", "Nurse", "Patient",
     "Clinic", "PatientClinic", "StaffClinic",
     "Appointment",
     "MedicalDocument", "Prescription", "Referral", "LabResult", "SickLeave", "Certificate",

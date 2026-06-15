@@ -14,7 +14,7 @@ import { DatePicker } from '../../components/DatePicker'
 import { Select } from '../../components/Select'
 
 interface PatientRow { patient_id: string; first_name: string; last_name: string; pesel: string; insurance_status: boolean }
-interface DoctorRow { doctor_id: string; name: string; specialization: string | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[] }
 interface PickedPatient { patient_id: string; name: string; pesel: string; isNew?: boolean }
 
 const NEW_PATIENT = { first_name: '', last_name: '', pesel: '', birth_date: '', phone_number: '', email: '' }
@@ -247,7 +247,7 @@ export function UmowWizyte() {
               ariaLabel="Lekarz" className="min-w-[13rem] flex-1"
               value={doctorFilter} onChange={setDoctorFilter}
               options={[{ value: '', label: 'Wszyscy lekarze' },
-                ...(doctors ?? []).map(d => ({ value: d.doctor_id, label: d.name, hint: d.specialization ?? undefined }))]}
+                ...(doctors ?? []).map(d => ({ value: d.doctor_id, label: d.name, hint: d.specializations.join(' · ') || undefined }))]}
             />
             <div className="w-40"><DatePicker value={dayFilter} placeholder="dowolny dzień" onChange={setDayFilter} /></div>
             {dayFilter && <button onClick={() => setDayFilter('')} className="cursor-pointer text-xs font-extrabold text-gray-400 hover:text-gray-700">wyczyść</button>}
@@ -273,7 +273,7 @@ export function UmowWizyte() {
                         </span>
                         <span className="block truncate text-xs font-medium text-gray-500">
                           {s.doctor_id ? s.doctor_name : s.service_name}
-                          {s.specialization ? ` · ${s.specialization}` : ''}
+                          {s.specializations.length ? ` · ${s.specializations.join(' · ')}` : ''}
                         </span>
                       </span>
                       <span className={cx('shrink-0 text-xs font-extrabold', s.price ? 'text-gray-900' : 'text-emerald-700')}>

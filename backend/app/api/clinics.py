@@ -51,7 +51,7 @@ class StaffAssignIn(BaseModel):
 class DoctorOut(BaseModel):
     doctor_id: UUID
     name: str
-    specialization: str | None
+    specializations: list[str] = []
     academic_title: str | None
 
 
@@ -160,7 +160,7 @@ def list_clinic_doctors(
     return [
         DoctorOut(
             doctor_id=d.doctor_id, name=u.username,
-            specialization=d.specialization, academic_title=d.academic_title,
+            specializations=list(d.specialization_names), academic_title=d.academic_title,
         )
         for d, u in rows
     ]

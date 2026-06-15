@@ -23,7 +23,8 @@ from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
 from app.integrations.payments import PaymentsClient, get_payments_client
 from app.models import (
-    Appointment, AppUser, Clinic, Doctor, Patient, Payment, Role, StaffClinic, WaitingListEntry,
+    Appointment, AppUser, Clinic, Doctor, DoctorSpecialization, Patient, Payment, Role,
+    StaffClinic, WaitingListEntry,
 )
 
 # role, które mogą umawiać w imieniu pacjenta (rejestracja/okienko/telefon)
@@ -78,25 +79,29 @@ def notify_earlier_watchers(db: Session, *, doctor_id: UUID, clinic_id: UUID, sl
     return seen
 
 
-def notify_waitlist(db: Session, specialization: str | None, *, freed: bool = False,
+def notify_waitlist(db: Session, specializations, *, freed: bool = False,
                     exclude: set[UUID] | None = None) -> None:
-    """Powiadom listę oczekujących danej specjalizacji o nowym/zwolnionym
-    terminie i zdejmij ich z listy. Tytuł zaczyna się od „Nowe terminy" /
-    „Wolny termin" — dzwonek robi z tego deep-link do „Umów wizytę" (UC-P3 A1)."""
-    if not specialization:
+    """Powiadom listę oczekujących na KTÓRĄKOLWIEK ze specjalizacji lekarza
+    o nowym/zwolnionym terminie i zdejmij ich z listy. Tytuł zaczyna się od
+    „Nowe terminy" / „Wolny termin" — dzwonek robi z tego deep-link do „Umów
+    wizytę" (UC-P3 A1). `specializations` może być stringiem albo listą."""
+    if isinstance(specializations, str):
+        specializations = [specializations]
+    specializations = [s for s in (specializations or []) if s]
+    if not specializations:
         return
     exclude = exclude or set()
     entries = db.scalars(select(WaitingListEntry).where(
-        WaitingListEntry.specialization == specialization)).all()
+        WaitingListEntry.specialization.in_(specializations))).all()
     for entry in entries:
         if entry.patient_id in exclude:  # już powiadomiony jako „wcześniejszy termin"
             continue
         if freed:
             notify(db, entry.patient_id, "Wolny termin — koniec oczekiwania",
-                   f"Zwolnił się termin: {specialization}. Zarezerwuj go w zakładce „Umów wizytę”.")
+                   f"Zwolnił się termin: {entry.specialization}. Zarezerwuj go w zakładce „Umów wizytę”.")
         else:
             notify(db, entry.patient_id, "Nowe terminy — koniec oczekiwania",
-                   f"Pojawiły się nowe terminy: {specialization}. Zarezerwuj wizytę w zakładce „Umów wizytę”.")
+                   f"Pojawiły się nowe terminy: {entry.specialization}. Zarezerwuj wizytę w zakładce „Umów wizytę”.")
         db.delete(entry)
 
 
@@ -122,7 +127,7 @@ class AppointmentOut(BaseModel):
     appointment_type: str
     doctor_id: UUID | None
     doctor_name: str
-    specialization: str | None
+    specializations: list[str] = []
     clinic_id: UUID
     clinic_name: str
     patient_id: UUID | None = None
@@ -197,7 +202,7 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         appointment_type=a.appointment_type,
         doctor_id=a.doctor_id,
         doctor_name=doctor_user.username if doctor_user else (a.service_name or "Pracownia diagnostyczna"),
-        specialization=doctor.specialization if doctor else None,
+        specializations=list(doctor.specialization_names) if doctor else [],
         clinic_id=a.clinic_id,
         clinic_name=clinic.clinic_name,
         patient_id=a.patient_id,
@@ -306,7 +311,7 @@ def create_slots(
     # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
     doctor = db.get(Doctor, body.doctor_id) if body.doctor_id else None
     if doctor:
-        notify_waitlist(db, doctor.specialization)
+        notify_waitlist(db, list(doctor.specialization_names))
 
     db.commit()
     return [appointment_out(db, a) for a in created]
@@ -350,7 +355,8 @@ def search_slots(
         .order_by(Appointment.appointment_datetime)
     )
     if specialization:
-        q = q.where(Doctor.specialization == specialization)
+        q = q.where(Appointment.doctor_id.in_(
+            select(DoctorSpecialization.doctor_id).where(DoctorSpecialization.name == specialization)))
     if doctor_id:
         q = q.where(Appointment.doctor_id == doctor_id)
     if clinic_id:
@@ -750,7 +756,7 @@ def cancel_appointment(
         # (z pominięciem tych, którzy już dostali alert „wcześniejszy termin")
         if a.doctor_id is not None:
             doc = db.get(Doctor, a.doctor_id)
-            notify_waitlist(db, doc.specialization if doc else None, freed=True, exclude=notified)
+            notify_waitlist(db, list(doc.specialization_names) if doc else None, freed=True, exclude=notified)
     db.commit()
     return appointment_out(db, a)
 
@@ -821,7 +827,7 @@ def reschedule_appointment(
         notified = notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
         if old.doctor_id is not None:
             od = db.get(Doctor, old.doctor_id)
-            notify_waitlist(db, od.specialization if od else None, freed=True, exclude=notified)
+            notify_waitlist(db, list(od.specialization_names) if od else None, freed=True, exclude=notified)
     # płatność (jeśli była) wędruje na nowy termin — pacjent nie płaci drugi raz
     if old.price is not None:
         paid = db.scalar(select(Payment).where(
@@ -957,8 +963,9 @@ def appointment_ics(
     end = start + timedelta(minutes=30)
     fmt = "%Y%m%dT%H%M%S"
     location = "Teleporada online (NovaMed)" if a.appointment_type == "ONLINE" else f"{clinic.clinic_name}, {clinic.address}"
+    spec = ", ".join(doctor.specialization_names) if doctor else ""
     summary = (f"Badanie: {a.service_name}" if a.doctor_id is None
-               else f"Wizyta: {doctor_user.username}" + (f" ({doctor.specialization})" if doctor.specialization else ""))
+               else f"Wizyta: {doctor_user.username}" + (f" ({spec})" if spec else ""))
 
     # TZID + VTIMEZONE: bez strefy import w innej strefie przesuwałby godzinę.
     # Alarm -PT24H spójny z przypomnieniem SMS (24 h przed wizytą).
