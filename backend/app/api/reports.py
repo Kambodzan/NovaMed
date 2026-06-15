@@ -63,8 +63,10 @@ def build_report(db: Session, clinic_id: UUID, month: str) -> ReportOut:
     no_show = sum(1 for a in rows if a.appointment_status == AppointmentStatus.NO_SHOW.value)
     online = sum(1 for a in rows if a.appointment_type == "ONLINE")
 
-    per_doctor: dict[int, DoctorLoadOut] = {}
+    per_doctor: dict[UUID, DoctorLoadOut] = {}
     for a in rows:
+        if a.doctor_id is None:
+            continue  # badania (pracownia) nie mają lekarza — poza obłożeniem lekarzy
         entry = per_doctor.get(a.doctor_id)
         if entry is None:
             doctor_user = db.get(AppUser, a.doctor_id)

@@ -29,10 +29,11 @@ ANON = next(
     "",
 )
 
-# sloty na siatce 15 min; unikalność między biegami przez jitter minuty i dnia
+# sloty na siatce 15 min; daleko w przyszłość (poza ~14-dniowe dane testowe)
+# i w minuty :15/:45 (dane testowe są na :00/:30) — unika kolizji z gęstym grafikiem
 RUN = int(time.time() // 60)
-MINUTE = (RUN % 4) * 15
-DAY_JITTER = RUN % 11
+MINUTE = (RUN % 2) * 30 + 15        # 15 albo 45
+BASE_DAYS = 40 + (RUN % 25)         # 40–64 dni w przód, różny zakres per bieg
 
 passed, failed = [], []
 
@@ -64,7 +65,7 @@ def api(method: str, path: str, token: str | None = None, **kw) -> httpx.Respons
 
 
 def at(days: int, hour: int) -> datetime:
-    return (datetime.now() + timedelta(days=days + DAY_JITTER)).replace(
+    return (datetime.now() + timedelta(days=BASE_DAYS + days)).replace(
         hour=hour, minute=MINUTE, second=0, microsecond=0)
 
 
