@@ -79,7 +79,12 @@ export function Kalendarz() {
   const visibleKeys = new Set(columns.map(c => c.key))
   const visible = (items ?? []).filter(a => visibleKeys.has(a.doctor_id ?? '__exam'))
   const times = useMemo(() => [...new Set(visible.map(a => hm(a.appointment_datetime)))].sort(), [visible])
-  const cell = (time: string, key: string) => visible.find(a => hm(a.appointment_datetime) === time && (a.doctor_id ?? '__exam') === key)
+  const cell = (time: string, key: string) => {
+    // gdyby na jeden slot przypadło kilka wpisów (np. wolny + zajęty po artefakcie
+    // danych) — pokazujemy ZAJĘTĄ wizytę, nie wolny slot (nie chowamy pacjenta)
+    const m = visible.filter(a => hm(a.appointment_datetime) === time && (a.doctor_id ?? '__exam') === key)
+    return m.find(a => a.appointment_status !== 'FREE') ?? m[0]
+  }
 
   const free = (items ?? []).filter(a => a.appointment_status === 'FREE').length
   const taken = (items ?? []).length - free

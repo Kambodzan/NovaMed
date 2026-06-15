@@ -78,7 +78,7 @@ export function PotwierdzWizyte() {
 
             {/* stany końcowe */}
             {cancelled ? (
-              <p className="mt-4 rounded-2xl bg-red-50 px-4 py-4 text-center text-sm font-bold text-red-700">Wizyta została odwołana. Termin wraca do puli.</p>
+              <p className="mt-4 rounded-2xl bg-red-50 px-4 py-4 text-center text-sm font-bold text-red-700">Wizyta została odwołana. Dziękujemy za informację.</p>
             ) : confirmed ? (
               <p className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-4 text-center text-sm font-bold text-emerald-700">
                 <Check size={16} /> Dziękujemy — obecność potwierdzona.
