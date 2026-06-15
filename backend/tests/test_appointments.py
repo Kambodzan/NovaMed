@@ -313,3 +313,20 @@ def test_grafik_dnia_placowki(client, setup):
     # pacjent i lekarz nie korzystają z grafiku placówki (to widok rejestracji)
     assert client.get(f"/clinics/{cid}/day?day={day}", headers=auth_header(setup["patient_token"])).status_code == 403
     assert client.get(f"/clinics/{cid}/day?day={day}", headers=auth_header(setup["doctor_token"])).status_code == 403
+
+
+def test_waitlist_powiadomienie_przy_odwolaniu(client, setup, factory):
+    """Odwołanie zwalnia termin → lista oczekujących tej specjalizacji dostaje
+    powiadomienie i schodzi z listy (UC-P3 A1)."""
+    b_user, b_token = factory.patient()
+    # slot istnieje WCZEŚNIEJ niż zapis B (tworzenie slotu też powiadamia listę)
+    slot = make_slot(client, setup, days_ahead=3, hour=8)
+    client.post(f"/appointments/{slot}/book", headers=auth_header(setup["patient_token"]))
+    # B zapisuje się na listę oczekujących do specjalizacji lekarza (Kardiolog)
+    assert client.post("/waiting-list", json={"specialization": "Kardiolog"},
+                       headers=auth_header(b_token)).status_code == 201
+    # A odwołuje → termin wraca do puli → B powiadomiony i zdjęty z listy
+    assert client.post(f"/appointments/{slot}/cancel", headers=auth_header(setup["patient_token"])).status_code == 200
+    notifs = client.get("/notifications/my", headers=auth_header(b_token)).json()
+    assert any("oczekiwania" in n["notification_title"].lower() for n in notifs)
+    assert client.get("/waiting-list/my", headers=auth_header(b_token)).json() == []

@@ -11,7 +11,7 @@ import type { NotificationOut } from '../lib/types'
 
 // dopasowanie po tytule — kolejność ma znaczenie (od najbardziej szczegółowych)
 const NOTIFICATION_LINKS: [RegExp, string][] = [
-  [/nowe terminy/i, '/umow'],
+  [/nowe terminy|wolny termin|oczekiwani/i, '/umow'],
   [/dokument|recept|skierowan|zwolnien|wynik/i, '/dokumentacja'],
   [/wizyt|termin|płatno|rezerwacj|przypomnien/i, '/wizyty'],
 ]

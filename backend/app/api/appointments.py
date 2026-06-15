@@ -74,6 +74,24 @@ def notify_earlier_watchers(db: Session, *, doctor_id: UUID, clinic_id: UUID, sl
             "Jeśli Ci pasuje, wejdź w Moje wizyty → Zmień termin (do 24 h przed wizytą, terminy bezpłatne).",
         )
 
+def notify_waitlist(db: Session, specialization: str | None, *, freed: bool = False) -> None:
+    """Powiadom listę oczekujących danej specjalizacji o nowym/zwolnionym
+    terminie i zdejmij ich z listy. Tytuł zaczyna się od „Nowe terminy" /
+    „Wolny termin" — dzwonek robi z tego deep-link do „Umów wizytę" (UC-P3 A1)."""
+    if not specialization:
+        return
+    entries = db.scalars(select(WaitingListEntry).where(
+        WaitingListEntry.specialization == specialization)).all()
+    for entry in entries:
+        if freed:
+            notify(db, entry.patient_id, "Wolny termin — koniec oczekiwania",
+                   f"Zwolnił się termin: {specialization}. Zarezerwuj go w zakładce „Umów wizytę”.")
+        else:
+            notify(db, entry.patient_id, "Nowe terminy — koniec oczekiwania",
+                   f"Pojawiły się nowe terminy: {specialization}. Zarezerwuj wizytę w zakładce „Umów wizytę”.")
+        db.delete(entry)
+
+
 router = APIRouter(tags=["appointments"])
 
 SLOT_MANAGERS = ("lekarz", "rejestracja", "kierownik", "administrator")
@@ -279,17 +297,8 @@ def create_slots(
 
     # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
     doctor = db.get(Doctor, body.doctor_id) if body.doctor_id else None
-    if doctor and doctor.specialization:
-        entries = db.scalars(select(WaitingListEntry).where(
-            WaitingListEntry.specialization == doctor.specialization,
-        )).all()
-        for entry in entries:
-            notify(
-                db, entry.patient_id,
-                "Nowe terminy — koniec oczekiwania",
-                f"Pojawiły się nowe terminy: {doctor.specialization}. Zarezerwuj wizytę w zakładce „Umów wizytę”.",
-            )
-            db.delete(entry)
+    if doctor:
+        notify_waitlist(db, doctor.specialization)
 
     db.commit()
     return [appointment_out(db, a) for a in created]
@@ -690,6 +699,10 @@ def cancel_appointment(
             price=a.price,
         ))
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+        # zwolniony termin u lekarza → powiadom listę oczekujących tej specjalizacji
+        if a.doctor_id is not None:
+            doc = db.get(Doctor, a.doctor_id)
+            notify_waitlist(db, doc.specialization if doc else None, freed=True)
     db.commit()
     return appointment_out(db, a)
 
@@ -749,6 +762,9 @@ def reschedule_appointment(
             price=old.price,
         ))
         notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
+        if old.doctor_id is not None:
+            od = db.get(Doctor, old.doctor_id)
+            notify_waitlist(db, od.specialization if od else None, freed=True)
     # płatność (jeśli była) wędruje na nowy termin — pacjent nie płaci drugi raz
     if old.price is not None:
         paid = db.scalar(select(Payment).where(
