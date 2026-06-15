@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
+from app.domain.tenancy import assert_staff_can_access_patient
 from app.core.db import get_db
 from app.domain.audit import log_access
 from app.domain.documents import DocumentStatus, DocumentType, ReferralType
@@ -571,6 +572,7 @@ def patient_info(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, user, patient_id)
     log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id)
     return patient_info_out(db, p)
 
@@ -592,6 +594,7 @@ def update_patient_contact(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, actor, patient_id)
     log_access(db, actor=actor, action="EDIT_CONTACT", patient_id=patient_id,
                detail="dane kontaktowe (telefon/imie/nazwisko)")
     user = db.get(AppUser, patient_id)
@@ -625,6 +628,7 @@ def update_patient_clinical(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, user, patient_id)
     fields = body.model_dump(exclude_unset=True)
     for key, value in fields.items():
         setattr(p, key, (value.strip() or None) if isinstance(value, str) else value)
@@ -645,6 +649,7 @@ def verify_insurance(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, user, patient_id)
     try:
         p.insurance_status = ewus.verify(pesel=p.pesel)
     except IntegrationError as exc:
@@ -689,6 +694,7 @@ def patient_history(
 
     if db.get(Patient, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, user, patient_id)
     log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id, detail="historia wizyt")
 
     visits = db.scalars(
@@ -739,6 +745,7 @@ def patient_documents(
     if user.role.role_name != "pacjent" and user.role.role_name not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
     if user.role.role_name != "pacjent":
+        assert_staff_can_access_patient(db, user, patient_id)
         log_access(db, actor=user, action="VIEW_DOCUMENTS", patient_id=patient_id)
     rows = db.scalars(
         select(MedicalDocument)
@@ -832,6 +839,7 @@ def document_pdf(
     elif role not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
     if role != "pacjent":
+        assert_staff_can_access_patient(db, user, doc.patient_id)
         log_access(db, actor=user, action="DOWNLOAD_PDF", patient_id=doc.patient_id,
                    detail=DOC_LABELS.get(doc.document_type, doc.document_type))
 

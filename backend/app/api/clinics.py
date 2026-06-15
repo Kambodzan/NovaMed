@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.audit import log_access
+from app.domain.tenancy import assert_staff_in_clinic
 from app.models import AppUser, Clinic, Doctor, Patient, PatientClinic, StaffClinic
 
 router = APIRouter(prefix="/clinics", tags=["clinics"])
@@ -193,6 +194,7 @@ def list_clinic_patients(
     db: Session = Depends(get_db),
 ):
     get_clinic_or_404(clinic_id, db)
+    assert_staff_in_clinic(db, user, clinic_id)
     log_access(db, actor=user, action="VIEW_PATIENT_LIST", detail=f"placowka {clinic_id}")
     rows = db.scalars(
         select(Patient)

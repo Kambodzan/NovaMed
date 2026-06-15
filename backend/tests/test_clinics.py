@@ -44,9 +44,10 @@ def test_personel_i_lekarze_placowki(client, factory):
 
 
 def test_pacjenci_placowki_rbac(client, factory):
-    _, reg_token = factory.user("rejestracja")
+    reg_user, reg_token = factory.user("rejestracja")
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
+    factory.employ(clinic, reg_user.user_id)
 
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/patients",

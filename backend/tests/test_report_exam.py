@@ -7,11 +7,12 @@ from tests.conftest import auth_header
 
 
 def test_raport_z_badaniem_nie_wywala(client, factory, db_session):
-    _, reg = factory.user("rejestracja")
+    reg_user, reg = factory.user("rejestracja")
     doctor_user, _ = factory.doctor()
     patient_user, _ = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
+    factory.employ(clinic, reg_user.user_id)
 
     when = datetime.now().replace(day=15, hour=10, minute=0, second=0, microsecond=0)
     # wizyta lekarska + badanie (pracownia, bez lekarza)
@@ -37,8 +38,9 @@ def test_raport_z_badaniem_nie_wywala(client, factory, db_session):
 
 def test_raport_zakres_dat(client, factory):
     """Raport poradni przyjmuje dowolny zakres dat (from/to), nie tylko miesiąc."""
-    _, reg = factory.user("rejestracja")
+    reg_user, reg = factory.user("rejestracja")
     clinic = factory.clinic()
+    factory.employ(clinic, reg_user.user_id)
     cid = clinic.clinic_id
     r = client.get(f"/clinics/{cid}/reports?from=2026-06-01&to=2026-06-30", headers=auth_header(reg))
     assert r.status_code == 200, r.text

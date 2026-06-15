@@ -13,6 +13,7 @@ from app.api.family import allowed_patient_ids
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.audit import log_access
+from app.domain.tenancy import assert_staff_can_access_patient
 from app.models import Appointment, AppUser, ClinicalNote, NoteAddendum, NoteEvent
 
 router = APIRouter(tags=["notes"])
@@ -118,6 +119,7 @@ def get_note(
         # pacjent nie widzi szkicu; brak noty = pusty placeholder
         return NoteOut(appointment_id=appointment_id, status="EMPTY", content="")
     if role != "pacjent":
+        assert_staff_can_access_patient(db, user, a.patient_id)
         log_access(db, actor=user, action="VIEW_NOTE", patient_id=a.patient_id)
     return note_out(db, note, with_events=is_doctor or role in ("kierownik", "administrator"))
 
@@ -181,6 +183,7 @@ def add_addendum(
     if note is None or note.status != "SIGNED":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="Uzupełnienie można dodać dopiero do podpisanej noty.")
+    assert_staff_can_access_patient(db, user, appt.patient_id)
     log_access(db, actor=user, action="ADD_ADDENDUM", patient_id=appt.patient_id,
                detail="uzupelnienie do podpisanej noty")
     db.add(NoteAddendum(note_id=note.note_id, author_id=user.user_id, content=body.content))

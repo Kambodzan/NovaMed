@@ -12,12 +12,14 @@ from tests.test_documents import FakeP1
 def nursing_setup(client, factory):
     """Wizyta + skierowanie NURSING + pielęgniarka."""
     app.dependency_overrides[get_p1_client] = lambda: FakeP1()
-    _, reg_token = factory.user("rejestracja")
+    reg_user, reg_token = factory.user("rejestracja")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
-    _, nurse_token = factory.user("pielegniarka")
+    nurse_user, nurse_token = factory.user("pielegniarka")
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
+    factory.employ(clinic, reg_user.user_id)
+    factory.employ(clinic, nurse_user.user_id)
 
     dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(

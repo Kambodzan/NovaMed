@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
+from app.domain.tenancy import assert_staff_can_access_patient, assert_staff_in_clinic
 from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import (
@@ -894,12 +895,13 @@ def doctor_day(
 def clinic_day(
     clinic_id: UUID,
     day: str = Query(description="Data w formacie YYYY-MM-DD"),
-    _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    user: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
     """Grafik dnia placówki dla rejestracji (UC-PP2): WSZYSTKIE terminy danego
     dnia — wolne i zajęte, wszyscy lekarze + badania — żeby ocenić obłożenie
     i znaleźć lukę, a nie tylko płaską listę wolnych slotów."""
+    assert_staff_in_clinic(db, user, clinic_id)
     try:
         start = datetime.fromisoformat(day)
     except ValueError as exc:
@@ -920,12 +922,13 @@ def clinic_day(
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
 def patient_appointments(
     patient_id: UUID,
-    _: AppUser = Depends(require_roles("lekarz", "pielegniarka", "rejestracja", "kierownik", "administrator")),
+    user: AppUser = Depends(require_roles("lekarz", "pielegniarka", "rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
     """UC-L1/UC-N1: historia wizyt pacjenta (kartoteka dla personelu)."""
     if db.get(Patient, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, user, patient_id)
     rows = db.scalars(
         select(Appointment)
         .where(Appointment.patient_id == patient_id)
@@ -1012,8 +1015,10 @@ def appointment_detail(
     a = get_appointment_or_404(appointment_id, db)
     role = user.role.role_name
     is_participant = user.user_id in (a.patient_id, a.doctor_id)
-    if not is_participant and role not in ("rejestracja", "kierownik", "administrator", "pielegniarka"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do tej wizyty.")
+    if not is_participant:
+        if role not in ("rejestracja", "kierownik", "administrator", "pielegniarka"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do tej wizyty.")
+        assert_staff_in_clinic(db, user, a.clinic_id)  # personel tylko ze swojej placówki
     return appointment_out(db, a)
 
 

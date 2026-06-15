@@ -9,13 +9,15 @@ from tests.conftest import auth_header
 
 @pytest.fixture()
 def setup(client, factory):
-    _, reg_token = factory.user("rejestracja")
+    reg_user, reg_token = factory.user("rejestracja")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
+    factory.employ(clinic, reg_user.user_id)
     return {"clinic": clinic, "doctor": doctor_user, "doctor_token": doctor_token,
-            "patient": patient_user, "patient_token": patient_token, "reg_token": reg_token}
+            "patient": patient_user, "patient_token": patient_token, "reg_token": reg_token,
+            "factory": factory}
 
 
 def booked_visit(client, s, days_ahead=1) -> str:
@@ -101,8 +103,9 @@ def test_uzupelnienie_od_innego_lekarza(client, setup, factory):
     dt = auth_header(s["doctor_token"])
     client.put(f"/appointments/{aid}/note", json={"content": "Rozpoznanie: I10"}, headers=dt)
     client.post(f"/appointments/{aid}/note/sign", headers=dt)
-    # inny lekarz (konsultujący) dodaje uzupełnienie — EHR pozwala
+    # inny lekarz (konsultujący) z TEJ SAMEJ placówki dodaje uzupełnienie — EHR pozwala
     other_user, other_token = factory.doctor()
+    factory.employ(s["clinic"], other_user.user_id)
     r = client.post(f"/appointments/{aid}/note/addenda",
                     json={"content": "Konsultacja: bez przeciwwskazań."}, headers=auth_header(other_token))
     assert r.status_code == 200

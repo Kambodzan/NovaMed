@@ -13,6 +13,7 @@ from app.core.auth import require_roles
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus
 from app.domain.pdf import render_report_pdf
+from app.domain.tenancy import assert_staff_in_clinic
 from app.models import Appointment, AppUser, Clinic
 
 router = APIRouter(tags=["reports"])
@@ -73,11 +74,14 @@ def _csv_safe(value: str) -> str:
 
 
 def build_report(db: Session, clinic_id: UUID, month: str | None = None,
-                 date_from: str | None = None, date_to: str | None = None) -> ReportOut:
+                 date_from: str | None = None, date_to: str | None = None,
+                 user: AppUser | None = None) -> ReportOut:
     """UC-PP4: statystyki okresu. „Wizyta" = termin z przypisanym pacjentem
     (wolne sloty nie wchodzą do statystyk)."""
     if db.get(Clinic, clinic_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placówka nie istnieje.")
+    if user is not None:  # raport tylko dla placówek personelu (kierownik/rejestracja); admin bez ograniczeń
+        assert_staff_in_clinic(db, user, clinic_id)
     start, end, label = resolve_period(month, date_from, date_to)
     rows = db.scalars(select(Appointment).where(
         Appointment.clinic_id == clinic_id,
@@ -121,10 +125,10 @@ def clinic_report(
     month: str | None = Query(default=None, description="Miesiąc YYYY-MM (albo from/to)"),
     date_from: str | None = Query(default=None, alias="from", description="Początek zakresu YYYY-MM-DD"),
     date_to: str | None = Query(default=None, alias="to", description="Koniec zakresu (włącznie) YYYY-MM-DD"),
-    _: AppUser = Depends(require_roles(*REPORT_ROLES)),
+    user: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
-    return build_report(db, clinic_id, month, date_from, date_to)
+    return build_report(db, clinic_id, month, date_from, date_to, user=user)
 
 
 @router.get("/clinics/{clinic_id}/reports/csv", response_class=PlainTextResponse)
@@ -133,11 +137,11 @@ def clinic_report_csv(
     month: str | None = Query(default=None),
     date_from: str | None = Query(default=None, alias="from"),
     date_to: str | None = Query(default=None, alias="to"),
-    _: AppUser = Depends(require_roles(*REPORT_ROLES)),
+    user: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
     """Eksport raportu do CSV (UC-PP4)."""
-    report = build_report(db, clinic_id, month, date_from, date_to)
+    report = build_report(db, clinic_id, month, date_from, date_to, user=user)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Raport placówki", f"miesiąc {report.month}"])
@@ -164,11 +168,11 @@ def clinic_report_pdf(
     month: str | None = Query(default=None),
     date_from: str | None = Query(default=None, alias="from"),
     date_to: str | None = Query(default=None, alias="to"),
-    _: AppUser = Depends(require_roles(*REPORT_ROLES)),
+    user: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
     """Eksport raportu poradni do PDF (UC-PP4)."""
-    report = build_report(db, clinic_id, month, date_from, date_to)
+    report = build_report(db, clinic_id, month, date_from, date_to, user=user)
     clinic = db.get(Clinic, clinic_id)
     pdf = render_report_pdf(
         clinic_name=clinic.clinic_name, month=report.month,

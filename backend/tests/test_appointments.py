@@ -8,11 +8,12 @@ from tests.conftest import auth_header
 @pytest.fixture()
 def setup(client, factory):
     """Klinika + zatrudniony lekarz + rejestracja + pacjent."""
-    _, reg_token = factory.user("rejestracja")
+    reg_user, reg_token = factory.user("rejestracja")
     doctor_user, doctor_token = factory.doctor(specialization="Kardiolog")
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
+    factory.employ(clinic, reg_user.user_id)
     return {
         "clinic": clinic,
         "doctor": doctor_user, "doctor_token": doctor_token,
