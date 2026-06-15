@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CalendarPlus, Check, ClipboardList, MapPin, Star, Video } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import type { ClinicalNote, DocumentOut } from '../lib/types'
-import { Button, DateChip, EmptyState, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
+import { Button, DateChip, EmptyState, Loading, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
@@ -140,7 +140,7 @@ export function Wizyty() {
 
       <section className="space-y-3">
         <Overline>{t('Nadchodzące · bezpłatne odwołanie do 24 h przed terminem')}</Overline>
-        {upcoming.length === 0 ? (
+        {visits === undefined ? <Loading /> : upcoming.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={28} strokeWidth={1.5} />}
             title={t('Brak nadchodzących wizyt')}

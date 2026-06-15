@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Download } from 'lucide-react'
-import { Button, EmptyState, PageHeader, Tile, TileHeader, Overline, cx, inputCls } from '../../ui'
+import { Button, EmptyState, Loading, PageHeader, Tile, TileHeader, Overline, cx, inputCls } from '../../ui'
 import { api, apiText } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import type { ReportOut } from '../../lib/types'
@@ -61,7 +61,7 @@ export function Raporty() {
         />
       </div>
 
-      {report && report.total_booked > 0 ? (
+      {report === undefined ? <Loading label="Liczenie statystyk…" /> : report.total_booked > 0 ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Wizyty w miesiącu" value={String(report.total_booked)} hint="terminy z pacjentem" />

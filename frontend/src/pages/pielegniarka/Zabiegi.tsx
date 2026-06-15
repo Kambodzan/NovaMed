@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ClipboardList } from 'lucide-react'
-import { Button, EmptyState, Field, Modal, Overline, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
+import { Button, EmptyState, Field, Loading, Modal, Overline, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { ProcedureOut } from '../../lib/types'
@@ -62,7 +62,7 @@ export function Zabiegi() {
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       <Tile className="p-3 sm:p-4" delay={60}>
-        {(procedures ?? []).length === 0 ? (
+        {procedures === undefined ? <Loading /> : procedures.length === 0 ? (
           <EmptyState
             icon={<ClipboardList size={28} strokeWidth={1.5} />}
             title="Brak zabiegów tego dnia"

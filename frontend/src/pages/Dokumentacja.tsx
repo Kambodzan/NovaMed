@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileText, FlaskConical, FolderOpen, Stamp } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
-import { EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
+import { EmptyState, Loading, Overline, StatusBadge, Tile, cx } from '../ui'
 import { api } from '../lib/api'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
@@ -49,7 +49,7 @@ export function Dokumentacja() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {docs === undefined ? <Loading /> : filtered.length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={28} strokeWidth={1.5} />}
           title={t('Brak dokumentów')}

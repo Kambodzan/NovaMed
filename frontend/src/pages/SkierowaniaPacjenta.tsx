@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarPlus, FileSignature } from 'lucide-react'
-import { Button, EmptyState, Overline, StatusBadge, Tile } from '../ui'
+import { Button, EmptyState, Loading, Overline, StatusBadge, Tile } from '../ui'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { api } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -27,7 +27,7 @@ export function SkierowaniaPacjenta() {
     <div className="mx-auto max-w-3xl space-y-5">
       <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Skierowania')}</h1>
 
-      {skierowania.length === 0 ? (
+      {docs === undefined ? <Loading /> : skierowania.length === 0 ? (
         <EmptyState
           icon={<FileSignature size={28} strokeWidth={1.5} />}
           title={t('Brak skierowań')}

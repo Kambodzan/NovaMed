@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Search, Users } from 'lucide-react'
-import { Badge, EmptyState, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { Badge, EmptyState, Loading, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 
@@ -47,7 +47,7 @@ export function StaffPacjenci() {
       </div>
 
       <Tile className="p-3 sm:p-4" delay={60}>
-        {filtered.length === 0 ? (
+        {patients === undefined ? <Loading /> : filtered.length === 0 ? (
           <EmptyState
             icon={<Users size={28} strokeWidth={1.5} />}
             title={q ? 'Brak wyników' : 'Brak pacjentów przypisanych do placówki'}

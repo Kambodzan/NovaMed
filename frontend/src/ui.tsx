@@ -197,6 +197,17 @@ export function Stat({ label, value, hint, delay }: { label: string; value: stri
   )
 }
 
+// stan ładowania listy/widoku — odróżnia „wczytuję" od „pusto"
+// (zapobiega miganiu EmptyState zanim dane z useQuery dojdą)
+export function Loading({ label = 'Wczytywanie…' }: { label?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-gray-400">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-primary" />
+      {label}
+    </div>
+  )
+}
+
 export function EmptyState({ icon, title, hint }: { icon: ReactNode; title: string; hint: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-gray-50 px-6 py-12 text-center">

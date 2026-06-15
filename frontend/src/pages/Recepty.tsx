@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Pill } from 'lucide-react'
-import { EmptyState, Overline, StatusBadge, Tile } from '../ui'
+import { EmptyState, Loading, Overline, StatusBadge, Tile } from '../ui'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { api } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -25,7 +25,7 @@ export function Recepty() {
     <div className="mx-auto max-w-3xl space-y-5">
       <h1 className="fade-up text-[28px] font-extrabold tracking-tight text-gray-900">{t('Recepty')}</h1>
 
-      {recepty.length === 0 ? (
+      {docs === undefined ? <Loading /> : recepty.length === 0 ? (
         <EmptyState
           icon={<Pill size={28} strokeWidth={1.5} />}
           title={t('Brak recept')}

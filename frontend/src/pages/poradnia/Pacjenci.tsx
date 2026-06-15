@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Search, ShieldCheck, Users } from 'lucide-react'
-import { Badge, Button, EmptyState, Field, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { Badge, Button, EmptyState, Field, Loading, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 
@@ -66,7 +66,7 @@ export function PacjenciPlacowki() {
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       <Tile className="overflow-hidden p-0" delay={60}>
-        {filtered.length === 0 ? (
+        {patients === undefined ? <Loading /> : filtered.length === 0 ? (
           <EmptyState
             icon={<Users size={28} strokeWidth={1.5} />}
             title={q ? 'Brak wyników' : 'Brak pacjentów przypisanych do placówki'}
