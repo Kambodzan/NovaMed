@@ -957,6 +957,46 @@ def clinic_day(
     return [appointment_out(db, a) for a in rows]
 
 
+class RemindOut(BaseModel):
+    sent: int
+
+
+@router.post("/clinics/{clinic_id}/remind-unconfirmed", response_model=RemindOut)
+def remind_unconfirmed(
+    clinic_id: UUID,
+    day: str = Query(description="Data w formacie YYYY-MM-DD"),
+    user: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Zbiorcze przypomnienie SMS/in-app o potwierdzenie obecności dla wszystkich
+    niepotwierdzonych wizyt danego dnia (Pulpit rejestracji)."""
+    assert_staff_in_clinic(db, user, clinic_id)
+    try:
+        start = datetime.fromisoformat(day)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nieprawidłowa data.") from exc
+    rows = db.scalars(
+        select(Appointment).where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.appointment_status == AppointmentStatus.CONFIRMED.value,
+            Appointment.patient_id.is_not(None),
+            Appointment.patient_confirmed.is_(False),
+            Appointment.appointment_datetime >= start,
+            Appointment.appointment_datetime < start + timedelta(days=1),
+        )
+    ).all()
+    sent = 0
+    for a in rows:
+        who = db.get(AppUser, a.doctor_id).username if a.doctor_id else a.service_name
+        notify(db, a.patient_id, "Przypomnienie: potwierdź wizytę",
+               f"Wizyta: {who}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}. "
+               "Potwierdź obecność w zakładce Moje wizyty albo odwołaj, by zwolnić termin innym.")
+        a.confirmation_requested = True
+        sent += 1
+    db.commit()
+    return RemindOut(sent=sent)
+
+
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
 def patient_appointments(
     patient_id: UUID,

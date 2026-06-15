@@ -217,6 +217,20 @@ def test_szczegoly_wizyty_i_historia_pacjenta(client, setup, factory):
     ).status_code == 403
 
 
+def test_batch_przypomnienia_niepotwierdzonych(client, setup):
+    """Pulpit: zbiorcze przypomnienie do niepotwierdzonych wizyt dnia."""
+    reg = auth_header(setup["reg_token"])
+    cid = setup["clinic"].clinic_id
+    dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
+    slot = make_slot(client, setup, days_ahead=2, hour=10)
+    client.post(f"/appointments/{slot}/book", headers=auth_header(setup["patient_token"]))
+    day = dt.strftime("%Y-%m-%d")
+    r = client.post(f"/clinics/{cid}/remind-unconfirmed?day={day}", headers=reg)
+    assert r.status_code == 200 and r.json()["sent"] == 1
+    # nikt poza personelem placówki
+    assert client.post(f"/clinics/{cid}/remind-unconfirmed?day={day}", headers=auth_header(setup["patient_token"])).status_code == 403
+
+
 def test_aktywne_wizyty_lekarza_niezaleznie_od_daty(client, setup):
     """Pasek „wizyta w toku": GET /appointments/active zwraca otwarte wizyty
     lekarza (IN_PROGRESS/PAUSED) bez względu na dzień terminu."""

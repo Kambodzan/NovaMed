@@ -57,7 +57,9 @@ export function UmowWizyte() {
   const [query, setQuery] = useState('')
   const [dayFilter, setDayFilter] = useState('')
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
-  const navState = useLocation().state as { doctorId?: string | null; day?: string } | null
+  // wejście z Kalendarza: { slot } = konkretny wybrany termin; { doctorId, day } = preselekcja filtra
+  const navState = useLocation().state as { slot?: AppointmentOut; doctorId?: string | null; day?: string } | null
+  useEffect(() => { if (navState?.slot) setSlot(navState.slot) }, [navState?.slot])
   useEffect(() => { if (navState?.day) setDayFilter(navState.day) }, [navState?.day])
 
   // krok 3

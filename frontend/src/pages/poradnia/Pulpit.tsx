@@ -1,10 +1,11 @@
 // Pulpit rejestracji — przegląd dnia placówki + szybkie akcje. Liczy się z
 // grafiku dnia (/clinics/{id}/day), żeby od wejścia widać było obłożenie.
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, CalendarCheck, CalendarDays, ChevronRight, Clock, FlaskConical, Users, Video } from 'lucide-react'
-import { Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
-import { api } from '../../lib/api'
+import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, ChevronRight, Clock, FlaskConical, Users, Video } from 'lucide-react'
+import { Button, Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
+import { api, ApiError } from '../../lib/api'
+import { pushToast } from '../../lib/toast'
 import { formatTime } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
@@ -31,9 +32,19 @@ const ACTIONS = [
 ]
 
 export function Pulpit() {
+  const queryClient = useQueryClient()
   const { clinics, clinic, setClinicId } = useClinicSelection()
   const navigate = useNavigate()
   const today = todayIso()
+
+  const remind = useMutation({
+    mutationFn: () => api<{ sent: number }>(`/clinics/${clinic!.clinic_id}/remind-unconfirmed?day=${today}`, { method: 'POST' }),
+    onSuccess: (r) => {
+      pushToast(r.sent ? `Wysłano przypomnienie do ${r.sent} pacjentów.` : 'Brak wizyt do przypomnienia.', 'success')
+      void queryClient.invalidateQueries({ queryKey: ['clinic-day'] })
+    },
+    onError: (e) => pushToast(e instanceof ApiError ? e.message : 'Nie udało się wysłać przypomnień.', 'error'),
+  })
 
   const { data: day } = useQuery({
     queryKey: ['clinic-day', clinic?.clinic_id, today],
@@ -127,13 +138,17 @@ export function Pulpit() {
 
             {/* wymaga uwagi — niepotwierdzone */}
             <Tile className="p-5" delay={90}>
-              <TileHeader title="Wymaga uwagi" />
+              <TileHeader title="Wymaga uwagi" action={unconfirmed.length > 0 && (
+                <Button size="sm" variant="secondary" disabled={remind.isPending} onClick={() => remind.mutate()}>
+                  <BellRing size={13} /> {remind.isPending ? 'Wysyłanie…' : `Przypomnij (${unconfirmed.length})`}
+                </Button>
+              )} />
               {unconfirmed.length === 0 ? (
                 <p className="rounded-2xl bg-emerald-50 px-4 py-6 text-center text-sm font-bold text-emerald-700">Wszystkie dzisiejsze wizyty potwierdzone 👌</p>
               ) : (
                 <>
                   <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-amber-800">
-                    <AlertTriangle size={14} className="text-amber-600" /> {unconfirmed.length} wizyt bez potwierdzenia obecności
+                    <AlertTriangle size={14} className="text-amber-600" /> {unconfirmed.length} wizyt bez potwierdzenia obecności — SMS na ich numery
                   </p>
                   <ul className="space-y-1.5">
                     {unconfirmed.slice(0, 6).map(a => (

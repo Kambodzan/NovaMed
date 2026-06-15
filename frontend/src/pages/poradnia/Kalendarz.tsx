@@ -16,7 +16,9 @@ import { DatePicker } from '../../components/DatePicker'
 import { Select } from '../../components/Select'
 
 const DAY_KEY = 'novamed-kalendarz-day'
-const todayIso = () => new Date().toISOString().slice(0, 10)
+// data LOKALNA (toISOString daje UTC → strzałki ‹›/„Dziś" skakały o ±dzień)
+const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const todayIso = () => isoLocal(new Date())
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
@@ -28,7 +30,7 @@ export function Kalendarz() {
   const { clinics, clinic, setClinicId } = useClinicSelection()
   const [day, setDayState] = useState(() => sessionStorage.getItem(DAY_KEY) ?? todayIso())
   const setDay = (d: string) => { sessionStorage.setItem(DAY_KEY, d); setDayState(d) }
-  const shiftDay = (n: number) => { const d = new Date(day + 'T00:00:00'); d.setDate(d.getDate() + n); setDay(d.toISOString().slice(0, 10)) }
+  const shiftDay = (n: number) => { const d = new Date(day + 'T00:00:00'); d.setDate(d.getDate() + n); setDay(isoLocal(d)) }
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<AppointmentOut | null>(null)
   const [modal, setModal] = useState<'add' | 'settings' | null>(null)
@@ -39,19 +41,40 @@ export function Kalendarz() {
     queryFn: () => api<AppointmentOut[]>(`/clinics/${clinic!.clinic_id}/day?day=${day}`),
     enabled: !!clinic,
   })
+  // WSZYSCY lekarze placówki — żeby w pusty dzień też dało się znaleźć lekarza
+  const { data: doctors } = useQuery({
+    queryKey: ['clinic-doctors', clinic?.clinic_id],
+    queryFn: () => api<DoctorRow[]>(`/clinics/${clinic!.clinic_id}/doctors`),
+    enabled: !!clinic,
+  })
+  // wszystkie wolne terminy placówki — do „najbliższy wolny" per lekarz
+  const { data: allFree } = useQuery({
+    queryKey: ['clinic-slots', clinic?.clinic_id],
+    queryFn: () => api<AppointmentOut[]>(`/slots?clinic_id=${clinic!.clinic_id}`),
+    enabled: !!clinic,
+  })
 
-  // kolumny = lekarze obecni tego dnia (+ Pracownia dla badań), zawężane wyszukiwarką
-  const columns = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; specs: string[] }>()
-    for (const a of items ?? []) {
-      const key = a.doctor_id ?? '__exam'
-      if (!map.has(key)) map.set(key, { key, label: a.doctor_id ? a.doctor_name : 'Pracownia', specs: a.specializations })
+  // najbliższy wolny termin per lekarz (+ Pracownia '__exam')
+  const nextFree = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of allFree ?? []) {
+      const k = s.doctor_id ?? '__exam'
+      const cur = m.get(k)
+      if (!cur || s.appointment_datetime < cur) m.set(k, s.appointment_datetime)
     }
-    let cols = [...map.values()]
+    return m
+  }, [allFree])
+
+  // kolumny = WSZYSCY lekarze placówki (+ Pracownia, jeśli są badania), zawężane wyszukiwarką
+  const columns = useMemo(() => {
+    const cols: { key: string; label: string; specs: string[] }[] =
+      (doctors ?? []).map(d => ({ key: d.doctor_id, label: d.name, specs: d.specializations }))
+    const hasExam = [...(items ?? []), ...(allFree ?? [])].some(a => a.doctor_id == null)
+    if (hasExam) cols.push({ key: '__exam', label: 'Pracownia', specs: [] })
     const needle = fold(q.trim())
-    if (needle) cols = cols.filter(c => fold(`${c.label} ${c.specs.join(' ')}`).includes(needle))
-    return cols.sort((a, b) => (a.key === '__exam' ? 1 : 0) - (b.key === '__exam' ? 1 : 0) || a.label.localeCompare(b.label))
-  }, [items, q])
+    const out = needle ? cols.filter(c => fold(`${c.label} ${c.specs.join(' ')}`).includes(needle)) : cols
+    return out.sort((a, b) => (a.key === '__exam' ? 1 : 0) - (b.key === '__exam' ? 1 : 0) || a.label.localeCompare(b.label))
+  }, [doctors, items, allFree, q])
 
   const visibleKeys = new Set(columns.map(c => c.key))
   const visible = (items ?? []).filter(a => visibleKeys.has(a.doctor_id ?? '__exam'))
@@ -112,24 +135,39 @@ export function Kalendarz() {
         </div>
       )}
 
-      {items === undefined ? <Loading /> : (items.length === 0 || columns.length === 0) ? (
+      {items === undefined ? <Loading /> : columns.length === 0 ? (
         <Tile className="p-5">
           <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />}
-            title={items.length === 0 ? 'Brak terminów tego dnia' : 'Brak lekarzy dla filtra'}
-            hint={items.length === 0 ? 'Wybierz inny dzień albo dodaj terminy (przycisk u góry).' : 'Zmień frazę wyszukiwania.'} />
+            title={q ? 'Brak lekarzy dla filtra' : 'Brak lekarzy w placówce'}
+            hint={q ? 'Zmień frazę wyszukiwania.' : 'Przypisz lekarzy do placówki w Panelu Admina.'} />
         </Tile>
       ) : (
         <Tile className="overflow-x-auto p-0">
+          {times.length === 0 && (
+            <p className="border-b border-gray-100 bg-amber-50/60 px-4 py-2.5 text-sm font-semibold text-amber-800">
+              Brak terminów w tym dniu — „najbliższy wolny" przy każdym lekarzu (klik = przejdź do tego dnia).
+            </p>
+          )}
           <div className="min-w-fit">
-            {/* nagłówek z lekarzami */}
+            {/* nagłówek z lekarzami + najbliższy wolny termin */}
             <div className="sticky top-0 z-10 flex border-b border-gray-100 bg-surface/95 backdrop-blur">
               <div className="w-16 shrink-0" />
-              {columns.map(c => (
-                <div key={c.key} className="w-44 shrink-0 px-3 py-3">
-                  <p className="truncate text-sm font-extrabold text-gray-900">{c.label}</p>
-                  {c.specs.length > 0 && <p className="truncate text-[11px] font-semibold text-gray-400">{c.specs.join(' · ')}</p>}
-                </div>
-              ))}
+              {columns.map(c => {
+                const nf = nextFree.get(c.key)
+                return (
+                  <div key={c.key} className="w-44 shrink-0 px-3 py-2.5">
+                    <p className="truncate text-sm font-extrabold text-gray-900">{c.label}</p>
+                    {c.specs.length > 0 && <p className="truncate text-[11px] font-semibold text-gray-400">{c.specs.join(' · ')}</p>}
+                    {!nf ? (
+                      <p className="text-[10px] font-bold text-gray-300">brak wolnych terminów</p>
+                    ) : nf.slice(0, 10) !== day ? (
+                      <button onClick={() => setDay(nf.slice(0, 10))} className="cursor-pointer text-[10px] font-extrabold text-primary hover:underline">
+                        najbliższy: {new Date(nf).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}
+                      </button>
+                    ) : <p className="text-[10px] font-bold text-emerald-600">wolne dziś</p>}
+                  </div>
+                )
+              })}
             </div>
             {/* wiersze godzin */}
             {times.map(t => (
@@ -181,7 +219,7 @@ export function Kalendarz() {
                 onClick={async () => { if (await confirm({ title: 'Usunąć wolny termin?', tone: 'danger', confirmLabel: 'Usuń' })) removeSlot.mutate(detail.appointment_id) }}>
                 Usuń termin
               </Button>
-              <Button onClick={() => navigate('/umow', { state: { doctorId: detail.doctor_id, day } })}>Umów pacjenta</Button>
+              <Button onClick={() => navigate('/umow', { state: { slot: detail } })}>Umów pacjenta</Button>
             </>
           ) : (
             <>
