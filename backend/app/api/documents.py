@@ -63,11 +63,6 @@ class LabResultIn(BaseModel):
     test_description: str = Field(min_length=2)
 
 
-class NoteIn(BaseModel):
-    appointment_id: UUID
-    content: str = Field(min_length=2)
-
-
 class DocumentOut(BaseModel):
     document_id: UUID
     document_type: str
@@ -341,22 +336,6 @@ def add_lab_result(
     db.add(LabResult(document_id=doc.document_id, test_type=body.test_type,
                      test_description=body.test_description))
     notify_new_document(db, doc)
-    db.commit()
-    return document_out(db, doc)
-
-
-@router.post("/patients/{patient_id}/notes", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
-def add_note(
-    patient_id: UUID,
-    body: NoteIn,
-    user: AppUser = Depends(require_roles("lekarz")),
-    db: Session = Depends(get_db),
-):
-    """UC-L1: notatka z wizyty (rozpoznanie, zalecenia)."""
-    validate_visit(db, user, patient_id, body.appointment_id)
-    doc = new_document(user.user_id, patient_id, body.appointment_id,
-                       DocumentType.NOTE, DocumentStatus.FINAL, body.content)
-    db.add(doc)
     db.commit()
     return document_out(db, doc)
 

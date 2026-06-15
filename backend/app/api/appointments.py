@@ -768,5 +768,9 @@ def change_status(
             detail="Wizytę oznaczoną jako nieodbytą można podjąć tylko w dniu wizyty.",
         )
     a.appointment_status = body.new_status.value
+    # zakończenie wizyty auto-podpisuje szkic noty (nic nie zostaje niepodpisane)
+    if body.new_status == AppointmentStatus.COMPLETED:
+        from app.api.notes import autosign_note  # import lokalny — unika cyklu
+        autosign_note(db, a.appointment_id)
     db.commit()
     return appointment_out(db, a)

@@ -243,13 +243,16 @@ def main() -> None:
                     "date_from": datetime.now().date().isoformat(),
                     "date_to": (datetime.now() + timedelta(days=4)).date().isoformat()})
     check("e-ZLA przez ZUS", zla.status_code == 201 and zla.json()["document_status"] == "SENT", zla.text[:120])
-    note = api("POST", f"/patients/{jan_id}/notes", kow,
-               json={"appointment_id": visit_id, "content": "RR 142/90. Zalecona kontrola za 4 tygodnie."})
-    check("notatka z wizyty", note.status_code == 201)
+    note = api("PUT", f"/appointments/{visit_id}/note", kow,
+               json={"content": "Wywiad: kontrola NT.\n\nRozpoznanie: I10\n\nZalecenia: kontrola za 4 tygodnie."})
+    check("nota z wizyty (szkic)", note.status_code == 200 and note.json()["status"] == "DRAFT")
     pdf = api("GET", f"/documents/{rx.json()['document_id']}/pdf", kow)
     check("PDF dokumentu", pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf")
     r = api("POST", f"/appointments/{visit_id}/status", kow, json={"new_status": "COMPLETED"})
     check("zakończenie wizyty", r.status_code == 200)
+    signed = api("GET", f"/appointments/{visit_id}/note", kow)
+    check("nota auto-podpisana po zakończeniu", signed.status_code == 200 and signed.json()["status"] == "SIGNED",
+          signed.text[:120])
 
     print("== I. Opinia po wizycie ==")
     r = api("POST", "/reviews", jan, json={"appointment_id": visit_id, "doctor_rating": 5,

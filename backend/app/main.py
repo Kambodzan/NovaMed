@@ -15,6 +15,7 @@ from app.api.dictionaries import router as dictionaries_router
 from app.api.documents import router as documents_router
 from app.api.family import router as family_router
 from app.api.integrations import router as integrations_router
+from app.api.notes import router as notes_router
 from app.api.notifications import router as notifications_router
 from app.api.procedures import router as procedures_router
 from app.api.public import router as public_router
@@ -78,6 +79,7 @@ app.include_router(procedures_router)
 app.include_router(reports_router)
 app.include_router(integrations_router)
 app.include_router(notifications_router)
+app.include_router(notes_router)
 app.include_router(reviews_router)
 app.include_router(waitlist_router)
 app.include_router(admin_router)

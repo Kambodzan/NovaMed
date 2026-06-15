@@ -160,7 +160,7 @@ def test_ezla(client, visit, fakes):
     assert doc["code"].startswith("ZLA-")
 
 
-def test_wynik_badania_i_notatka(client, visit, fakes):
+def test_wynik_badania(client, visit, fakes):
     resp = client.post(
         f"/patients/{visit['patient'].user_id}/lab-results",
         json={"appointment_id": visit["appointment_id"], "test_type": "USG jamy brzusznej", "test_description": "Bez odchyleń."},
@@ -169,16 +169,8 @@ def test_wynik_badania_i_notatka(client, visit, fakes):
     assert resp.status_code == 201
     assert resp.json()["document_status"] == "READY"
 
-    resp = client.post(
-        f"/patients/{visit['patient'].user_id}/notes",
-        json={"appointment_id": visit["appointment_id"], "content": "RR 138/88, kontynuacja leczenia, kontrola za 6 tyg."},
-        headers=auth_header(visit["doctor_token"]),
-    )
-    assert resp.status_code == 201
-    assert resp.json()["document_status"] == "FINAL"
-
     resp = client.get(f"/patients/{visit['patient'].user_id}/documents", headers=auth_header(visit["doctor_token"]))
-    assert len(resp.json()) == 2
+    assert len(resp.json()) == 1
 
 
 def test_rbac_dokumentow(client, visit, fakes, factory):

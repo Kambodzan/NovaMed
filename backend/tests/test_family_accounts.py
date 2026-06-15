@@ -125,16 +125,16 @@ def test_dokumentacja_podopiecznego_dla_opiekuna(client, setup):
     client.post(f"/appointments/{slot['appointment_id']}/book?as_patient={dep_id}",
                 headers=auth_header(setup["guardian_token"]))
 
-    # lekarz wystawia notatkę podopiecznemu w kontekście wizyty
+    # lekarz wystawia dokument podopiecznemu w kontekście wizyty
     client.post(f"/appointments/{slot['appointment_id']}/status", json={"new_status": "IN_PROGRESS"},
                 headers=auth_header(setup["doctor_token"]))
-    note = client.post(
-        f"/patients/{dep_id}/notes",
-        json={"appointment_id": slot["appointment_id"], "content": "Kontrola po infekcji — bez zmian osłuchowych."},
+    doc = client.post(
+        f"/patients/{dep_id}/lab-results",
+        json={"appointment_id": slot["appointment_id"], "test_type": "Morfologia", "test_description": "Bez odchyleń."},
         headers=auth_header(setup["doctor_token"]),
     )
-    assert note.status_code == 201
-    doc_id = note.json()["document_id"]
+    assert doc.status_code == 201
+    doc_id = doc.json()["document_id"]
 
     docs = client.get(f"/documents/my?as_patient={dep_id}", headers=auth_header(setup["guardian_token"])).json()
     assert [d["document_id"] for d in docs] == [doc_id]
