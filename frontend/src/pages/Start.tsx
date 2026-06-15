@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  CalendarPlus, ChevronRight, FileText, FlaskConical, FolderOpen, MapPin, Pill, Video, CalendarDays,
+  CalendarPlus, ChevronRight, FileText, FlaskConical, FolderOpen, MapPin, Pill, Stamp, Video, CalendarDays,
 } from 'lucide-react'
 import { Button, DateChip, EmptyState, Tile, TileHeader, StatusBadge } from '../ui'
 import { api } from '../lib/api'
@@ -11,7 +11,7 @@ import { useI18n } from '../lib/i18n'
 import { formatDatePL, formatTime, dayNo, monthShort, isFuture } from '../lib/format'
 import type { AppointmentOut, DocumentOut } from '../lib/types'
 
-const docIcon = { PRESCRIPTION: Pill, LAB_RESULT: FlaskConical, REFERRAL: FileText, SICK_LEAVE: FileText, NOTE: FileText }
+const docIcon = { PRESCRIPTION: Pill, LAB_RESULT: FlaskConical, REFERRAL: FileText, SICK_LEAVE: FileText, NOTE: FileText, CERTIFICATE: Stamp }
 
 export function Start() {
   const { me } = useAuth()

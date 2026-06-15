@@ -2,7 +2,7 @@
 from app.models.user import Role, AppUser, Administrator, Doctor, Nurse, Patient
 from app.models.clinic import Clinic, PatientClinic, StaffClinic
 from app.models.appointment import Appointment
-from app.models.document import MedicalDocument, Prescription, Referral, LabResult, SickLeave
+from app.models.document import MedicalDocument, Prescription, Referral, LabResult, SickLeave, Certificate
 from app.models.nursing import NursingProcedure
 from app.models.payment import Payment
 from app.models.review import Review
@@ -16,7 +16,7 @@ __all__ = [
     "Role", "AppUser", "Administrator", "Doctor", "Nurse", "Patient",
     "Clinic", "PatientClinic", "StaffClinic",
     "Appointment",
-    "MedicalDocument", "Prescription", "Referral", "LabResult", "SickLeave",
+    "MedicalDocument", "Prescription", "Referral", "LabResult", "SickLeave", "Certificate",
     "NursingProcedure", "Payment", "Review", "Notification", "WaitingListEntry",
     "DocumentShare", "Icd10Entry", "MedicationEntry",
     "ClinicalNote", "NoteAddendum", "NoteEvent",

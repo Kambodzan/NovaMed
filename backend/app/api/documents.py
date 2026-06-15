@@ -20,7 +20,7 @@ from app.integrations.lab import LabClient, get_lab_client
 from app.integrations.p1 import P1Client, get_p1_client
 from app.integrations.zus import ZusClient, get_zus_client
 from app.models import (
-    Appointment, AppUser, Doctor, LabResult, MedicalDocument, Patient,
+    Appointment, AppUser, Certificate, Doctor, LabResult, MedicalDocument, Patient,
     Prescription, Referral, SickLeave,
 )
 
@@ -61,6 +61,13 @@ class LabResultIn(BaseModel):
     appointment_id: UUID
     test_type: str = Field(min_length=2, max_length=100)
     test_description: str = Field(min_length=2)
+
+
+class CertificateIn(BaseModel):
+    appointment_id: UUID
+    purpose: str = Field(min_length=2, max_length=200, description="Cel/przeznaczenie (np. do pracodawcy)")
+    content: str = Field(min_length=2, description="Treść zaświadczenia — opis stanu zdrowia")
+    valid_until: date | None = None
 
 
 class DocumentOut(BaseModel):
@@ -112,6 +119,12 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         child = db.scalar(select(LabResult).where(LabResult.document_id == doc.document_id))
         if child:
             details = f"{child.test_type}: {child.test_description or ''}"
+    elif doc.document_type == DocumentType.CERTIFICATE.value:
+        child = db.scalar(select(Certificate).where(Certificate.document_id == doc.document_id))
+        if child:
+            code = child.certificate_code
+            vu = f"\n\nWażne do: {child.valid_until.isoformat()}" if child.valid_until else ""
+            details = f"Przeznaczenie: {child.purpose}\n\n{child.content}{vu}"
     return DocumentOut(
         document_id=doc.document_id,
         document_type=doc.document_type,
@@ -165,6 +178,7 @@ DOC_LABELS = {
     DocumentType.SICK_LEAVE.value: "e-zwolnienie (e-ZLA)",
     DocumentType.LAB_RESULT.value: "wynik badania",
     DocumentType.NOTE.value: "notatka z wizyty",
+    DocumentType.CERTIFICATE.value: "zaświadczenie lekarskie",
 }
 
 
@@ -336,6 +350,29 @@ def add_lab_result(
     db.add(LabResult(document_id=doc.document_id, test_type=body.test_type,
                      test_description=body.test_description))
     notify_new_document(db, doc)
+    db.commit()
+    return document_out(db, doc)
+
+
+@router.post("/patients/{patient_id}/certificates", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
+def issue_certificate(
+    patient_id: UUID,
+    body: CertificateIn,
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Zaświadczenie lekarskie o stanie zdrowia — dokument lokalny (nie P1/ZUS),
+    z celem/przeznaczeniem i datą ważności; drukowany i wydawany pacjentowi."""
+    validate_visit(db, user, patient_id, body.appointment_id)
+    doc = new_document(user.user_id, patient_id, body.appointment_id,
+                       DocumentType.CERTIFICATE, DocumentStatus.FINAL)
+    db.add(doc)
+    db.flush()
+    code = f"ZAS-{secrets.token_hex(3).upper()}"
+    db.add(Certificate(document_id=doc.document_id, certificate_code=code,
+                       purpose=body.purpose.strip(), content=body.content.strip(),
+                       valid_until=body.valid_until))
+    notify_new_document(db, doc, code)
     db.commit()
     return document_out(db, doc)
 

@@ -194,3 +194,23 @@ def test_rbac_dokumentow(client, visit, fakes, factory):
     other_patient, other_patient_token = factory.patient()
     resp = client.get(f"/patients/{visit['patient'].user_id}/documents", headers=auth_header(other_patient_token))
     assert resp.status_code == 403
+
+
+def test_zaswiadczenie_lekarskie(client, visit, fakes):
+    resp = client.post(
+        f"/patients/{visit['patient'].user_id}/certificates",
+        json={"appointment_id": visit["appointment_id"], "purpose": "do klubu sportowego",
+              "content": "Pacjent zdolny do uprawiania sportu. Brak przeciwwskazań.",
+              "valid_until": "2027-01-01"},
+        headers=auth_header(visit["doctor_token"]),
+    )
+    assert resp.status_code == 201, resp.text
+    doc = resp.json()
+    assert doc["document_type"] == "CERTIFICATE"
+    assert doc["code"].startswith("ZAS-")
+    assert "klubu sportowego" in doc["details"] and "Ważne do" in doc["details"]
+    # widoczne w dokumentacji + PDF działa
+    docs = client.get(f"/patients/{visit['patient'].user_id}/documents", headers=auth_header(visit["doctor_token"])).json()
+    assert any(d["document_type"] == "CERTIFICATE" for d in docs)
+    pdf = client.get(f"/documents/{doc['document_id']}/pdf", headers=auth_header(visit["doctor_token"]))
+    assert pdf.status_code == 200 and pdf.content[:5] == b"%PDF-"

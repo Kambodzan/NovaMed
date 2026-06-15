@@ -27,15 +27,20 @@ const searchMedications = (q: string) =>
       insert: [r.name, r.strength].filter(Boolean).join(' '),
     })))
 
-type DocKind = 'PRESCRIPTION' | 'REFERRAL' | 'SICK_LEAVE' | 'LAB_RESULT' | 'NOTE'
+type DocKind = 'PRESCRIPTION' | 'REFERRAL' | 'SICK_LEAVE' | 'LAB_RESULT' | 'CERTIFICATE' | 'NOTE'
 
 export const KIND_LABEL: Record<DocKind, string> = {
   PRESCRIPTION: 'E-recepta',
   REFERRAL: 'E-skierowanie',
   SICK_LEAVE: 'E-ZLA (zwolnienie)',
   LAB_RESULT: 'Wynik badania',
+  CERTIFICATE: 'Zaświadczenie',
   NOTE: 'Notatka z wizyty',
 }
+
+// typowe cele zaświadczenia (podpowiedzi) — pole jest swobodne
+const CERT_PURPOSES = ['do pracodawcy', 'do szkoły / przedszkola', 'do klubu sportowego',
+  'do sanatorium', 'na uczelnię', 'inne (wpisz)']
 
 export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10 }: {
   patientId: string
@@ -62,6 +67,8 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
     test_type: '',
     test_description: '',
     content: '',
+    purpose: CERT_PURPOSES[0],
+    valid_until: '',
   })
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [key]: e.target.value }))
@@ -92,10 +99,12 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
           return api<DocumentOut>(`/patients/${patientId}/lab-results`, {
             method: 'POST', body: { ...base, test_type: form.test_type, test_description: form.test_description },
           })
-        case 'NOTE':
-          return api<DocumentOut>(`/patients/${patientId}/notes`, {
-            method: 'POST', body: { ...base, content: form.content },
+        case 'CERTIFICATE':
+          return api<DocumentOut>(`/patients/${patientId}/certificates`, {
+            method: 'POST', body: { ...base, purpose: form.purpose, content: form.content, valid_until: form.valid_until || null },
           })
+        default:
+          throw new Error('Nieobsługiwany rodzaj dokumentu')  // NOTE — ukryte, nie wystawiamy tędy
       }
     },
     onSuccess: (doc) => { setResult(doc); setError(null); refresh() },
@@ -248,11 +257,30 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
         </>
       )}
 
-      {kind === 'NOTE' && (
-        <Field label="Treść notatki">
-          <textarea className={cx(inputCls, 'h-24 py-2.5')} required minLength={2} value={form.content} onChange={set('content')}
-            placeholder="Rozpoznanie, zalecenia, kontrola…" />
-        </Field>
+      {kind === 'CERTIFICATE' && (
+        <>
+          <Field label="Przeznaczenie (cel)" hint="komu/do czego — od tego zależy treść">
+            <select
+              className={inputCls}
+              value={CERT_PURPOSES.includes(form.purpose) ? form.purpose : 'inne (wpisz)'}
+              onChange={e => setForm(f => ({ ...f, purpose: e.target.value === 'inne (wpisz)' ? '' : e.target.value }))}
+            >
+              {CERT_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {!CERT_PURPOSES.includes(form.purpose) && (
+              <input className={cx(inputCls, 'mt-2')} required minLength={2} value={form.purpose}
+                onChange={set('purpose')} placeholder="Wpisz cel zaświadczenia (np. do ZUS)" />
+            )}
+          </Field>
+          <Field label="Treść zaświadczenia" hint="opis stanu zdrowia / orzeczenie">
+            <textarea className={cx(inputCls, 'h-24 py-2.5')} required minLength={2} value={form.content} onChange={set('content')}
+              placeholder="np. Pacjent zdolny do uprawiania sportu wyczynowego. Brak przeciwwskazań zdrowotnych." />
+          </Field>
+          <Field label="Ważne do (opcjonalnie)">
+            <DatePicker value={form.valid_until} min={new Date().toISOString().slice(0, 10)}
+              onChange={v => setForm(f => ({ ...f, valid_until: v }))} />
+          </Field>
+        </>
       )}
 
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, FlaskConical, FolderOpen } from 'lucide-react'
+import { FileText, FlaskConical, FolderOpen, Stamp } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { EmptyState, Overline, StatusBadge, Tile, cx } from '../ui'
 import { api } from '../lib/api'
@@ -13,7 +13,7 @@ import type { DocumentOut } from '../lib/types'
 const docMeta: Record<string, { icon: typeof FileText; label: string }> = {
   LAB_RESULT: { icon: FlaskConical, label: 'Wynik badania' },
   SICK_LEAVE: { icon: FileText, label: 'E-ZLA' },
-  NOTE: { icon: FileText, label: 'Notatka z wizyty' },
+  CERTIFICATE: { icon: Stamp, label: 'Zaświadczenie' },
 }
 
 export function Dokumentacja() {

@@ -1,7 +1,7 @@
 // Lista dokumentów pacjenta (widok personelu) — klik w wiersz otwiera podgląd
 // (pobranie PDF w środku podglądu).
 import { useState } from 'react'
-import { FileSignature, FileText, FlaskConical, Pill } from 'lucide-react'
+import { FileSignature, FileText, FlaskConical, Pill, Stamp } from 'lucide-react'
 import { PodgladDokumentu } from './PodgladDokumentu'
 import { EmptyState, StatusBadge } from '../ui'
 import { formatDatePL } from '../lib/format'
@@ -10,7 +10,7 @@ import { KIND_LABEL } from './WystawDokument'
 
 const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
   PRESCRIPTION: Pill, REFERRAL: FileSignature, LAB_RESULT: FlaskConical,
-  SICK_LEAVE: FileText, NOTE: FileText,
+  SICK_LEAVE: FileText, NOTE: FileText, CERTIFICATE: Stamp,
 }
 
 export function DokumentyLista({ documents, emptyHint, byline = 'doctor' }: {

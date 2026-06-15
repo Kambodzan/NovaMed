@@ -9,6 +9,7 @@ class DocumentType(str, Enum):
     LAB_RESULT = "LAB_RESULT"
     SICK_LEAVE = "SICK_LEAVE"
     NOTE = "NOTE"
+    CERTIFICATE = "CERTIFICATE"   # zaświadczenie lekarskie (lokalne, nie P1/ZUS)
 
 
 class DocumentStatus(str, Enum):

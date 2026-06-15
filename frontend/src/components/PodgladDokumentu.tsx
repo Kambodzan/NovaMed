@@ -14,6 +14,7 @@ const KIND: Record<string, string> = {
   LAB_RESULT: 'Wynik badania',
   SICK_LEAVE: 'E-ZLA (zwolnienie)',
   NOTE: 'Notatka z wizyty',
+  CERTIFICATE: 'Zaświadczenie',
 }
 
 export function PodgladDokumentu({ doc, onClose }: {

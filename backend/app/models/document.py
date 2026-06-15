@@ -78,4 +78,18 @@ class SickLeave(Base):
     end_date: Mapped[date] = mapped_column(Date)
     sent_to_zus: Mapped[bool] = mapped_column(Boolean, default=False)
 
+
+class Certificate(Base):
+    """Zaświadczenie lekarskie o stanie zdrowia — dokument lokalny (nie P1/ZUS):
+    cel/przeznaczenie, treść (opis stanu zdrowia), data ważności."""
+
+    __tablename__ = "certificate"
+
+    certificate_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
+    certificate_code: Mapped[str] = mapped_column(String(50))
+    purpose: Mapped[str] = mapped_column(String(200))   # np. „do pracodawcy", „do klubu sportowego"
+    content: Mapped[str] = mapped_column(Text)          # treść zaświadczenia
+    valid_until: Mapped[date | None] = mapped_column(Date)
+
     document = relationship("MedicalDocument")

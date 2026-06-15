@@ -50,7 +50,7 @@ const NOTE_ACTION_LABEL: Record<string, string> = {
 }
 
 type DocKind = DocumentOut['document_type']
-const HIST_KINDS: DocKind[] = ['PRESCRIPTION', 'REFERRAL', 'LAB_RESULT', 'SICK_LEAVE']
+const HIST_KINDS: DocKind[] = ['PRESCRIPTION', 'REFERRAL', 'LAB_RESULT', 'SICK_LEAVE', 'CERTIFICATE']
 
 export function Gabinet() {
   const { id } = useParams()

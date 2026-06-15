@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import jsQR from 'jsqr'
-import { Camera, FileSignature, FileText, FlaskConical, KeyRound, Pill, X } from 'lucide-react'
+import { Camera, FileSignature, FileText, FlaskConical, KeyRound, Pill, Stamp, X } from 'lucide-react'
 import { Button, Overline, PageHeader, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { formatDatePL, formatTime } from '../lib/format'
@@ -11,7 +11,7 @@ import type { DocumentOut, SharedDocsOut } from '../lib/types'
 
 const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
   PRESCRIPTION: Pill, REFERRAL: FileSignature, LAB_RESULT: FlaskConical,
-  SICK_LEAVE: FileText, NOTE: FileText,
+  SICK_LEAVE: FileText, NOTE: FileText, CERTIFICATE: Stamp,
 }
 
 export function KodOdPacjenta() {

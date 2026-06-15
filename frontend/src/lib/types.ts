@@ -116,7 +116,7 @@ export interface BookOut {
 
 export interface DocumentOut {
   document_id: string
-  document_type: 'PRESCRIPTION' | 'REFERRAL' | 'LAB_RESULT' | 'SICK_LEAVE' | 'NOTE'
+  document_type: 'PRESCRIPTION' | 'REFERRAL' | 'LAB_RESULT' | 'SICK_LEAVE' | 'NOTE' | 'CERTIFICATE'
   document_status: string
   issued_at: string
   patient_id: string

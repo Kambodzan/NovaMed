@@ -306,6 +306,7 @@ function PodsumowanieWizyty({ visit, onClose }: {
   const KIND: Record<string, string> = {
     PRESCRIPTION: 'E-recepta', REFERRAL: 'E-skierowanie',
     LAB_RESULT: 'Wynik badania', SICK_LEAVE: 'E-ZLA (zwolnienie)',
+    CERTIFICATE: 'Zaświadczenie',
   }
 
   return (
