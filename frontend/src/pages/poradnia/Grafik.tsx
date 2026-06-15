@@ -27,14 +27,15 @@ export function Grafik() {
     enabled: !!clinic,
   })
 
-  // grupowanie po lekarzu; badania (bez lekarza) w osobnej grupie „Pracownia"
+  // grupowanie po lekarzu (po ID, nie nazwisku — imienniki się nie zlewają);
+  // badania (bez lekarza) w osobnej grupie „Pracownia"
   const groups = useMemo(() => {
-    const map = new Map<string, AppointmentOut[]>()
+    const map = new Map<string, { label: string; list: AppointmentOut[] }>()
     for (const a of items ?? []) {
-      const key = a.doctor_id ? a.doctor_name : 'Pracownia (badania)'
-      const list = map.get(key) ?? []
-      list.push(a)
-      map.set(key, list)
+      const key = a.doctor_id ?? '__exam'
+      const g = map.get(key) ?? { label: a.doctor_id ? a.doctor_name : 'Pracownia (badania)', list: [] }
+      g.list.push(a)
+      map.set(key, g)
     }
     return [...map.entries()]
   }, [items])
@@ -68,12 +69,12 @@ export function Grafik() {
         </Tile>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {groups.map(([doctor, list], gi) => {
+          {groups.map(([key, { label, list }], gi) => {
             const gfree = list.filter(a => a.appointment_status === 'FREE').length
             return (
-              <Tile key={doctor} className="p-5" delay={60 + gi * 30}>
+              <Tile key={key} className="p-5" delay={60 + gi * 30}>
                 <TileHeader
-                  title={<span className="inline-flex items-center gap-1.5"><Stethoscope size={13} /> {doctor}</span>}
+                  title={<span className="inline-flex items-center gap-1.5"><Stethoscope size={13} /> {label}</span>}
                   action={<span className="text-xs font-bold text-gray-400">{list.length - gfree}/{list.length} zajęte</span>}
                 />
                 <ul className="space-y-1.5">
@@ -101,7 +102,7 @@ export function Grafik() {
                             <span className="flex-1 text-sm font-medium text-gray-400">
                               wolny termin · {a.price ? `${a.price} zł` : 'NFZ'}
                             </span>
-                            <button onClick={() => navigate('/')}
+                            <button onClick={() => navigate('/', { state: { doctorId: a.doctor_id, day } })}
                               className="cursor-pointer rounded-full px-3 py-1 text-xs font-extrabold text-primary hover:bg-primary-soft">
                               Umów
                             </button>

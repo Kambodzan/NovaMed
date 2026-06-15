@@ -100,10 +100,10 @@ export function Raporty() {
                 <div className="w-36"><DatePicker value={to} min={from || undefined} onChange={setTo} /></div>
               </div>
             )}
-            <Button variant="secondary" size="sm" onClick={() => void downloadPdf()}>
+            <Button variant="secondary" size="sm" disabled={!periodReady} onClick={() => void downloadPdf()}>
               <FileText size={14} /> PDF
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => void downloadCsv()}>
+            <Button variant="secondary" size="sm" disabled={!periodReady} onClick={() => void downloadCsv()}>
               <Download size={14} /> CSV
             </Button>
           </>}

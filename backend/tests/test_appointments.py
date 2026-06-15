@@ -342,3 +342,36 @@ def test_dostawka_walk_in(client, setup):
     # pacjent nie tworzy dostawki
     assert client.post("/appointments/walk-in", json={"patient_id": pid},
                        headers=auth_header(setup["patient_token"])).status_code == 403
+
+
+def test_odwolanie_badania_zachowuje_rodzaj_i_skierowanie(client, setup):
+    """Re-pooling po odwołaniu badania zachowuje service_name i referral_required
+    (inaczej powstaje osierocony, bookowalny bez skierowania slot)."""
+    reg = auth_header(setup["reg_token"])
+    dt = (datetime.now() + timedelta(days=3)).replace(hour=8, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots",
+                       json={"datetimes": [dt.isoformat()], "service_name": "RTG klatki piersiowej"},
+                       headers=reg).json()[0]
+    assert slot["service_name"] == "RTG klatki piersiowej" and slot["referral_required"] is True
+    client.post(f"/appointments/{slot['appointment_id']}/book", json={"external_referral": True},
+                headers=auth_header(setup["patient_token"]))
+    client.post(f"/appointments/{slot['appointment_id']}/cancel", headers=auth_header(setup["patient_token"]))
+
+    freed = next(s for s in client.get(f"/slots?clinic_id={setup['clinic'].clinic_id}", headers=reg).json()
+                 if s["service_name"] == "RTG klatki piersiowej")
+    assert freed["referral_required"] is True and freed["appointment_status"] == "FREE"
+
+
+def test_reschedule_innego_lekarza_odrzucony(client, setup, factory):
+    """Nie wolno przełożyć wizyty na slot innego lekarza (płatność wędrowałaby gdzie indziej)."""
+    doc2, _ = factory.doctor()
+    factory.employ(setup["clinic"], doc2.user_id)
+    old = make_slot(client, setup, days_ahead=3, hour=9)
+    client.post(f"/appointments/{old}/book", headers=auth_header(setup["patient_token"]))
+    dt = (datetime.now() + timedelta(days=4)).replace(hour=10, minute=0, second=0, microsecond=0)
+    new = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots",
+                      json={"doctor_id": str(doc2.user_id), "datetimes": [dt.isoformat()]},
+                      headers=auth_header(setup["reg_token"])).json()[0]["appointment_id"]
+    r = client.post(f"/appointments/{old}/reschedule", json={"new_appointment_id": new},
+                    headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 409 and "lekarza" in r.json()["detail"].lower()

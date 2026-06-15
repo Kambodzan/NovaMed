@@ -27,7 +27,8 @@ export function Start() {
   })
 
   const next = visits
-    ?.filter(v => v.appointment_status === 'CONFIRMED' && isFuture(v.appointment_datetime))
+    ?.filter(v => v.appointment_status === 'IN_PROGRESS'
+      || (v.appointment_status === 'CONFIRMED' && isFuture(v.appointment_datetime)))
     .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))[0]
 
   // „Do zrobienia": akcje wymagające reakcji pacjenta, zebrane w jednym miejscu

@@ -725,6 +725,8 @@ def cancel_appointment(
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=a.appointment_type,
             price=a.price,
+            service_name=a.service_name,            # badanie: zachowaj rodzaj…
+            referral_required=a.referral_required,  # …i wymóg skierowania
         ))
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
         # zwolniony termin u lekarza → powiadom listę oczekujących tej specjalizacji
@@ -762,6 +764,13 @@ def reschedule_appointment(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wybrany nowy termin nie jest już dostępny.")
     if new.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nowy termin już minął — wybierz inny.")
+    # przełożenie tylko na ten sam rodzaj (ten sam lekarz / to samo badanie) — bez
+    # przenoszenia wizyty u kardiologa na slot innego lekarza czy na badanie
+    if new.doctor_id != old.doctor_id or new.service_name != old.service_name:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nowy termin musi dotyczyć tego samego lekarza/badania co obecna wizyta.",
+        )
     # ta sama cena = przeniesienie bez dopłaty/zwrotu; różnica kwoty wymaga osobnego rozliczenia
     if (new.price or 0) != (old.price or 0):
         raise HTTPException(
@@ -788,6 +797,8 @@ def reschedule_appointment(
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=old.appointment_type,
             price=old.price,
+            service_name=old.service_name,
+            referral_required=old.referral_required,
         ))
         notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
         if old.doctor_id is not None:

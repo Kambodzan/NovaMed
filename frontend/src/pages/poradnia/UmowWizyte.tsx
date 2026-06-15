@@ -1,7 +1,8 @@
 // Rejestracja umawia pacjenta dzwoniącego na recepcję (UC-PP1):
 // 1) wybór pacjenta — istniejący (po nazwisku/PESEL) albo nowy dzwoniący,
 // 2) wybór wolnego terminu (filtr lekarza), 3) rezerwacja → CONFIRMED + SMS.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarCheck, Check, MapPin, Phone, Search, UserPlus, Video, X } from 'lucide-react'
 import { Badge, Button, Field, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
@@ -33,6 +34,12 @@ export function UmowWizyte() {
   // krok 2: termin
   const [doctorFilter, setDoctorFilter] = useState('')
   const [dayFilter, setDayFilter] = useState('')
+  // wejście z „Grafiku dnia" (klik „Umów" przy wolnym slocie) — preselekcja
+  const navState = useLocation().state as { doctorId?: string | null; day?: string } | null
+  useEffect(() => {
+    if (navState?.doctorId) setDoctorFilter(navState.doctorId)
+    if (navState?.day) setDayFilter(navState.day)
+  }, [navState?.doctorId, navState?.day])
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [reason, setReason] = useState('')
   const [hasReferral, setHasReferral] = useState(false)

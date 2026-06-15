@@ -47,11 +47,13 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     setActiveIdState(id)
   }
 
+  // doklejaj as_patient tylko dla AKTYWNEGO, ważnego kontekstu (active === null
+  // dla pełnoletniego/nieznanego) — spójnie z bannerem „Działasz w imieniu"
   const asPatient = (path: string) =>
-    activeId ? `${path}${path.includes('?') ? '&' : '?'}as_patient=${activeId}` : path
+    active ? `${path}${path.includes('?') ? '&' : '?'}as_patient=${active.patient_id}` : path
 
   return (
-    <Ctx.Provider value={{ dependents, activeId, setActiveId, active, asPatient }}>
+    <Ctx.Provider value={{ dependents, activeId: active?.patient_id ?? null, setActiveId, active, asPatient }}>
       {children}
     </Ctx.Provider>
   )

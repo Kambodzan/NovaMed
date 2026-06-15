@@ -114,7 +114,9 @@ export function Select({
     if (e.key === 'ArrowDown') { e.preventDefault(); move(1) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1) }
     else if (e.key === 'Enter') { e.preventDefault(); if (filtered[hi]) choose(filtered[hi]) }
-    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); btnRef.current?.focus() }
+    // stopPropagation — Esc zamyka tylko listę, nie rodzicielski Modal (popover
+    // jest portalem, ale zdarzenia Reacta bąbelkują drzewem komponentów)
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); btnRef.current?.focus() }
     else if (e.key === 'Tab') setOpen(false)
   }
 

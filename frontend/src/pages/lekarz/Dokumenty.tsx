@@ -30,6 +30,7 @@ export function LekarzDokumenty() {
   const cancelDoc = async (doc: DocumentOut, reason: string) => {
     await api(`/documents/${doc.document_id}/cancel`, { method: 'POST', body: { reason: reason || undefined } })
     void queryClient.invalidateQueries({ queryKey: ['issued-documents'] })
+    void queryClient.invalidateQueries({ queryKey: ['lab-inbox'] })  // storno wyniku znika też ze skrzynki
   }
 
   const acknowledge = useMutation({

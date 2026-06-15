@@ -65,7 +65,8 @@ export function LekarzDzien() {
     return () => clearInterval(t)
   }, [])
 
-  const booked = (visits ?? []).filter(v => v.patient_id !== null)
+  // odwołane wizyty nie liczą się jako „pacjenci dnia" ani do mianownika statystyk
+  const booked = (visits ?? []).filter(v => v.patient_id !== null && v.appointment_status !== 'CANCELLED')
   const done = booked.filter(v => v.appointment_status === 'COMPLETED').length
   const isToday = day === todayIso()
   const now = new Date()
