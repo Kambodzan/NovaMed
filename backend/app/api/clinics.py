@@ -65,6 +65,7 @@ class PatientOut(BaseModel):
     last_name: str
     pesel: str
     insurance_status: bool
+    phone_number: str | None = None
 
 
 def get_clinic_or_404(clinic_id: UUID, db: Session) -> Clinic:
@@ -196,16 +197,17 @@ def list_clinic_patients(
     get_clinic_or_404(clinic_id, db)
     assert_staff_in_clinic(db, user, clinic_id)
     log_access(db, actor=user, action="VIEW_PATIENT_LIST", detail=f"placowka {clinic_id}")
-    rows = db.scalars(
-        select(Patient)
+    rows = db.execute(
+        select(Patient, AppUser.phone_number)
         .join(PatientClinic, PatientClinic.patient_id == Patient.patient_id)
+        .join(AppUser, AppUser.user_id == Patient.patient_id)
         .where(PatientClinic.clinic_id == clinic_id)
         .order_by(Patient.last_name)
-    )
+    ).all()
     return [
         PatientOut(
             patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
-            pesel=p.pesel, insurance_status=p.insurance_status,
+            pesel=p.pesel, insurance_status=p.insurance_status, phone_number=phone,
         )
-        for p in rows
+        for p, phone in rows
     ]

@@ -12,7 +12,10 @@ interface PatientRow {
   last_name: string
   pesel: string
   insurance_status: boolean
+  phone_number: string | null
 }
+
+const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
 export function PacjenciPlacowki() {
   const queryClient = useQueryClient()
@@ -43,8 +46,9 @@ export function PacjenciPlacowki() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać danych.'),
   })
 
+  const needle = fold(q.trim())
   const filtered = (patients ?? []).filter(p =>
-    `${p.first_name} ${p.last_name}${p.pesel}`.toLowerCase().includes(q.toLowerCase()))
+    !needle || fold(`${p.first_name} ${p.last_name} ${p.pesel} ${p.phone_number ?? ''}`).includes(needle))
 
   return (
     <div className="space-y-6">
@@ -57,7 +61,7 @@ export function PacjenciPlacowki() {
               <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
               <div className="relative">
                 <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
-                <input className={cx(inputCls, 'w-64 pl-10')} placeholder="Nazwisko lub PESEL…" value={q} onChange={e => setQ(e.target.value)} />
+                <input className={cx(inputCls, 'w-72 pl-10')} autoFocus placeholder="Nazwisko, PESEL lub telefon…" value={q} onChange={e => setQ(e.target.value)} />
               </div>
             </div>
           }
@@ -77,7 +81,7 @@ export function PacjenciPlacowki() {
           <table className="w-full text-sm [font-variant-numeric:tabular-nums]">
             <thead>
               <tr>
-                {['Pacjent', 'PESEL', 'Status eWUŚ', ''].map((h, i) => (
+                {['Pacjent', 'PESEL', 'Telefon', 'Status eWUŚ', ''].map((h, i) => (
                   <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase">{h}</th>
                 ))}
               </tr>
@@ -87,6 +91,7 @@ export function PacjenciPlacowki() {
                 <tr key={p.patient_id} className="hover:bg-gray-50">
                   <td className="border-t border-gray-100 px-4 py-3.5 font-extrabold text-gray-900">{p.first_name} {p.last_name}</td>
                   <td className="border-t border-gray-100 px-4 py-3.5 font-medium text-gray-500">{p.pesel}</td>
+                  <td className="border-t border-gray-100 px-4 py-3.5 font-medium text-gray-500">{p.phone_number ?? <span className="text-gray-300">—</span>}</td>
                   <td className="border-t border-gray-100 px-4 py-3.5">
                     {p.insurance_status
                       ? <Badge tone="success">ubezpieczony</Badge>
@@ -97,7 +102,7 @@ export function PacjenciPlacowki() {
                       <Link to={`/pacjent/${p.patient_id}`} className="inline-flex h-8 items-center gap-1 rounded-full px-4 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-900">
                         <FolderOpen size={13} /> Kartoteka
                       </Link>
-                      <Button size="sm" variant="ghost" onClick={() => { setEditFor(p); setEditPhone('') }}>
+                      <Button size="sm" variant="ghost" onClick={() => { setEditFor(p); setEditPhone(p.phone_number ?? '') }}>
                         <Pencil size={13} /> Kontakt
                       </Button>
                       <Button size="sm" variant="secondary" disabled={verify.isPending}
