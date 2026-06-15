@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Download } from 'lucide-react'
+import { BarChart3, Download, FileText } from 'lucide-react'
 import { Button, EmptyState, Loading, PageHeader, Tile, TileHeader, Overline, cx, inputCls } from '../../ui'
-import { api, apiText } from '../../lib/api'
+import { API_URL, api, apiText, getAuthToken } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import type { ReportOut } from '../../lib/types'
 
@@ -32,15 +32,34 @@ export function Raporty() {
     enabled: !!clinic,
   })
 
+  const [error, setError] = useState<string | null>(null)
+
   const downloadCsv = async () => {
     if (!clinic) return
-    const text = await apiText(`/clinics/${clinic.clinic_id}/reports/csv?month=${month}`)
-    const blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `raport-${month}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    try {
+      const text = await apiText(`/clinics/${clinic.clinic_id}/reports/csv?month=${month}`)
+      const blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `raport-${month}.csv`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch { setError('Nie udało się pobrać CSV.') }
+  }
+
+  const downloadPdf = async () => {
+    if (!clinic) return
+    try {
+      const resp = await fetch(`${API_URL}/clinics/${clinic.clinic_id}/reports/pdf?month=${month}`,
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } })
+      if (!resp.ok) throw new Error()
+      const blob = new Blob([await resp.blob()], { type: 'application/pdf' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `raport-${month}.pdf`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch { setError('Nie udało się pobrać PDF.') }
   }
 
   const maxBooked = Math.max(1, ...(report?.per_doctor.map(d => d.booked) ?? [1]))
@@ -54,12 +73,17 @@ export function Raporty() {
           action={<>
             <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
             <input type="month" className={cx(inputCls, 'w-44')} value={month} onChange={e => setMonth(e.target.value)} />
+            <Button variant="secondary" size="sm" onClick={() => void downloadPdf()}>
+              <FileText size={14} /> PDF
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => void downloadCsv()}>
               <Download size={14} /> CSV
             </Button>
           </>}
         />
       </div>
+
+      {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       {report === undefined ? <Loading label="Liczenie statystyk…" /> : report.total_booked > 0 ? (
         <>

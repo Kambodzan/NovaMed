@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
@@ -12,6 +12,8 @@ from app.domain.appointments import AppointmentStatus
 from app.models import Appointment, AppUser, Doctor, Review
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
+
+REVIEW_EDIT_DAYS = 14   # UC-P8 A2: opinię można edytować w określonym czasie
 
 
 class ReviewIn(BaseModel):
@@ -67,36 +69,65 @@ def create_review(
             detail="Wizyta nie jest zakończona — brak możliwości wystawienia opinii (UC-P8 A1).",
         )
 
-    created: list[Review] = []
+    def upsert(target_filter, rating, comment, **new_kwargs) -> Review:
+        # UPSERT z oknem edycji: ponowne wystawienie = edycja opinii (UC-P8 A2)
+        existing = db.scalar(select(Review).where(
+            Review.appointment_id == a.appointment_id, target_filter))
+        if existing:
+            if (datetime.now() - existing.created_at) > timedelta(days=REVIEW_EDIT_DAYS):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail=f"Minął czas na edycję opinii ({REVIEW_EDIT_DAYS} dni od wystawienia).")
+            existing.rating, existing.comment = rating, comment
+            return existing
+        new = Review(user_id=user.user_id, appointment_id=a.appointment_id,
+                     rating=rating, comment=comment, **new_kwargs)
+        db.add(new)
+        return new
+
+    result: list[Review] = []
     if body.doctor_rating is not None:
-        dup = db.scalar(select(Review).where(
-            Review.appointment_id == a.appointment_id, Review.doctor_id.is_not(None),
-        ))
-        if dup:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Opinia o lekarzu dla tej wizyty już istnieje.")
-        created.append(Review(
-            user_id=user.user_id, appointment_id=a.appointment_id,
-            doctor_id=a.doctor_id, rating=body.doctor_rating, comment=body.doctor_comment,
-        ))
+        result.append(upsert(Review.doctor_id.is_not(None), body.doctor_rating, body.doctor_comment,
+                             doctor_id=a.doctor_id))
     if body.clinic_rating is not None:
-        dup = db.scalar(select(Review).where(
-            Review.appointment_id == a.appointment_id, Review.clinic_id.is_not(None),
-        ))
-        if dup:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Opinia o placówce dla tej wizyty już istnieje.")
-        created.append(Review(
-            user_id=user.user_id, appointment_id=a.appointment_id,
-            clinic_id=a.clinic_id, rating=body.clinic_rating, comment=body.clinic_comment,
-        ))
-    db.add_all(created)
+        result.append(upsert(Review.clinic_id.is_not(None), body.clinic_rating, body.clinic_comment,
+                             clinic_id=a.clinic_id))
     db.commit()
     return [
-        ReviewOut(
-            review_id=r.review_id, rating=r.rating, comment=r.comment,
-            created_at=r.created_at, target="doctor" if r.doctor_id else "clinic",
-        )
-        for r in created
+        ReviewOut(review_id=r.review_id, rating=r.rating, comment=r.comment,
+                  created_at=r.created_at, target="doctor" if r.doctor_id else "clinic")
+        for r in result
     ]
+
+
+class MyReviewOut(BaseModel):
+    doctor_rating: int | None = None
+    doctor_comment: str | None = None
+    clinic_rating: int | None = None
+    editable: bool = True   # czy w oknie edycji
+
+
+@router.get("/mine/{appointment_id}", response_model=MyReviewOut)
+def my_review(
+    appointment_id: UUID,
+    user: AppUser = Depends(require_roles("pacjent")),
+    db: Session = Depends(get_db),
+):
+    """Opinia pacjenta dla wizyty (do podglądu/edycji)."""
+    from app.api.family import allowed_patient_ids
+
+    a = db.get(Appointment, appointment_id)
+    if a is None or a.patient_id not in allowed_patient_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
+    rows = db.scalars(select(Review).where(Review.appointment_id == appointment_id)).all()
+    out = MyReviewOut()
+    for r in rows:
+        if r.doctor_id:
+            out.doctor_rating, out.doctor_comment = r.rating, r.comment
+        else:
+            out.clinic_rating = r.rating
+        if (datetime.now() - r.created_at) > timedelta(days=REVIEW_EDIT_DAYS):
+            out.editable = False
+    return out
 
 
 @router.get("/doctor/{doctor_id}", response_model=DoctorReviewsOut)

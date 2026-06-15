@@ -3,7 +3,7 @@ import csv
 import io
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_roles
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus
+from app.domain.pdf import render_report_pdf
 from app.models import Appointment, AppUser, Clinic
 
 router = APIRouter(tags=["reports"])
@@ -123,4 +124,27 @@ def clinic_report_csv(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="raport-{report.month}.csv"'},
+    )
+
+
+@router.get("/clinics/{clinic_id}/reports/pdf")
+def clinic_report_pdf(
+    clinic_id: UUID,
+    month: str = Query(description="Miesiąc w formacie YYYY-MM"),
+    _: AppUser = Depends(require_roles(*REPORT_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Eksport raportu poradni do PDF (UC-PP4)."""
+    report = build_report(db, clinic_id, month)
+    clinic = db.get(Clinic, clinic_id)
+    pdf = render_report_pdf(
+        clinic_name=clinic.clinic_name, month=report.month,
+        total_booked=report.total_booked, completed=report.completed,
+        cancelled=report.cancelled, no_show=report.no_show,
+        online_share_pct=report.online_share_pct,
+        per_doctor=[(d.doctor_name, d.booked, d.completed) for d in report.per_doctor],
+    )
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="raport-{report.month}.pdf"'},
     )

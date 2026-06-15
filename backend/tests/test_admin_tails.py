@@ -50,10 +50,12 @@ def test_opinia_po_zakonczonej_wizycie(client, setup):
     assert resp.json()["average"] == 5.0
     assert resp.json()["count"] == 1
 
-    # duplikat → 409 (UC-P8 A2)
+    # ponowne wystawienie = edycja opinii w oknie czasowym (UC-P8 A2), nie duplikat
     resp = client.post("/reviews", json={"appointment_id": aid, "doctor_rating": 1},
                        headers=auth_header(setup["patient_token"]))
-    assert resp.status_code == 409
+    assert resp.status_code == 201
+    resp = client.get(f"/reviews/doctor/{setup['doctor'].user_id}", headers=auth_header(setup["patient_token"]))
+    assert resp.json()["count"] == 1 and resp.json()["average"] == 1.0  # zaktualizowana, nie zdublowana
 
     # flaga reviewed w moich wizytach
     mine = client.get("/appointments/my", headers=auth_header(setup["patient_token"])).json()
@@ -166,3 +168,31 @@ def test_admin_nie_blokuje_siebie_i_stats(client, setup, factory):
     stats = resp.json()
     assert stats["database"] == "OK"
     assert stats["users_by_role"]["pacjent"] >= 1
+
+
+def test_edycja_opinii_upsert(client, setup):
+    s = setup
+    # zakoncz wizyte, ktora ma lekarza i pacjenta
+    from datetime import datetime, timedelta
+    dt = (datetime.now() + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{s['clinic'].clinic_id}/slots",
+                       json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
+                       headers=auth_header(s["reg_token"])).json()[0]
+    aid = slot["appointment_id"]
+    client.post(f"/appointments/{aid}/book", headers=auth_header(s["patient_token"]))
+    for st in ("IN_PROGRESS", "COMPLETED"):
+        client.post(f"/appointments/{aid}/status", json={"new_status": st}, headers=auth_header(s["doctor_token"]))
+
+    # pierwsza opinia
+    r = client.post("/reviews", json={"appointment_id": aid, "doctor_rating": 3, "doctor_comment": "ok"},
+                    headers=auth_header(s["patient_token"]))
+    assert r.status_code == 201
+    # ponowne wystawienie = edycja (nie 409)
+    r = client.post("/reviews", json={"appointment_id": aid, "doctor_rating": 5, "doctor_comment": "super"},
+                    headers=auth_header(s["patient_token"]))
+    assert r.status_code == 201
+    mine = client.get(f"/reviews/mine/{aid}", headers=auth_header(s["patient_token"])).json()
+    assert mine["doctor_rating"] == 5 and mine["doctor_comment"] == "super" and mine["editable"] is True
+    # srednia lekarza liczy 1 opinie (nie zdublowana)
+    rev = client.get(f"/reviews/doctor/{s['doctor'].user_id}", headers=auth_header(s["patient_token"])).json()
+    assert rev["count"] == 1 and rev["average"] == 5.0

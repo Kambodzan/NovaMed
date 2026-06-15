@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CalendarPlus, Check, ClipboardList, MapPin, Star, Video } from 'lucide-react'
@@ -121,9 +121,9 @@ export function Wizyty() {
             <ClipboardList size={14} /> {t('Podsumowanie')}
           </Button>
         )}
-        {!actions && v.appointment_status === 'COMPLETED' && !v.reviewed && (
+        {!actions && v.appointment_status === 'COMPLETED' && v.doctor_id && (
           <Button size="sm" variant="ghost" onClick={() => setReviewFor(v)}>
-            <Star size={14} /> {t('Oceń')}
+            <Star size={14} /> {v.reviewed ? t('Edytuj opinię') : t('Oceń')}
           </Button>
         )}
       </div>
@@ -231,6 +231,23 @@ function ReviewModal({ visit, onClose, onDone }: {
   const [clinicRating, setClinicRating] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
+  // edycja istniejącej opinii (UC-P8 A2) — pobierz i wypełnij pola
+  const hydrated = useRef(false)
+  const { data: mine } = useQuery({
+    queryKey: ['my-review', visit.appointment_id],
+    queryFn: () => api<{ doctor_rating: number | null; doctor_comment: string | null; clinic_rating: number | null; editable: boolean }>(`/reviews/mine/${visit.appointment_id}`),
+    enabled: !!visit.reviewed,
+  })
+  useEffect(() => {
+    if (mine && !hydrated.current) {
+      setDoctorRating(mine.doctor_rating ?? 0)
+      setDoctorComment(mine.doctor_comment ?? '')
+      setClinicRating(mine.clinic_rating ?? 0)
+      hydrated.current = true
+    }
+  }, [mine])
+  const locked = mine?.editable === false
+
   const submit = useMutation({
     mutationFn: () => api('/reviews', {
       method: 'POST',
@@ -252,12 +269,17 @@ function ReviewModal({ visit, onClose, onDone }: {
       onClose={onClose}
       footer={<>
         <Button variant="secondary" onClick={onClose}>{t('Anuluj')}</Button>
-        <Button disabled={submit.isPending || (doctorRating === 0 && clinicRating === 0)} onClick={() => submit.mutate()}>
-          <Check size={14} /> {submit.isPending ? t('Zapisywanie…') : t('Wyślij opinię')}
+        <Button disabled={submit.isPending || locked || (doctorRating === 0 && clinicRating === 0)} onClick={() => submit.mutate()}>
+          <Check size={14} /> {submit.isPending ? t('Zapisywanie…') : visit.reviewed ? t('Zapisz zmiany') : t('Wyślij opinię')}
         </Button>
       </>}
     >
       <div className="space-y-4 pb-2">
+        {locked && (
+          <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-bold text-amber-700">
+            {t('Minął czas na edycję tej opinii (14 dni).')}
+          </p>
+        )}
         <div className={cx('rounded-2xl p-4', doctorRating ? 'bg-primary-soft' : 'bg-gray-50')}>
           <p className="mb-2 text-sm font-extrabold text-gray-900">{t('Oceń lekarza')}</p>
           <Stars value={doctorRating} onChange={setDoctorRating} />
