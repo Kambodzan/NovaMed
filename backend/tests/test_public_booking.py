@@ -80,3 +80,32 @@ def test_gosc_pesel_aktywnego_pacjenta(client, setup, factory, db_session):
     slot = make_slot(client, setup, hour=14)
     deny = client.post("/public/book", json={**GUEST, "appointment_id": slot["appointment_id"]})
     assert deny.status_code == 409 and "zaloguj" in deny.json()["detail"]
+
+
+def test_przejecie_po_pesel_gosc_z_recepcji(client, setup, db_session):
+    """Gość założony telefonicznie przez rejestrację (bez e-maila) zakłada potem
+    konto z INNYM e-mailem — wpięcie do istniejącej kartoteki po PESEL (UC-PP1)."""
+    reg = auth_header(setup["reg_token"])
+    slot = make_slot(client, setup, hour=12)
+
+    # rejestracja: nowy dzwoniący BEZ e-maila → placeholder, nie zmatchuje się mailem
+    r = client.post("/patients/register", headers=reg, json={
+        "first_name": "Ewa", "last_name": "Telefoniczna", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "603999888",
+    })
+    assert r.status_code == 201 and r.json()["existing"] is False
+    pid = r.json()["patient_id"]
+    assert client.post(f"/appointments/{slot['appointment_id']}/book-for", headers=reg,
+                       json={"patient_id": pid}).status_code == 200
+
+    # pacjent zakłada konto z INNYM e-mailem, ten sam PESEL → przejęcie po PESEL
+    token = make_token(email="ewa.prywatna@example.com")
+    rp = client.post("/auth/register-profile", headers=auth_header(token), json={
+        "first_name": "Ewa", "last_name": "Telefoniczna", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "603999888",
+    })
+    assert rp.status_code == 201, rp.text
+    assert str(rp.json()["user_id"]) == str(pid)  # TEN SAM rekord, nie duplikat
+
+    mine = client.get("/appointments/my", headers=auth_header(token)).json()
+    assert any(v["appointment_id"] == slot["appointment_id"] for v in mine)

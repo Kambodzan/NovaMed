@@ -91,14 +91,29 @@ def register_profile(
     if db.scalar(select(AppUser).where(AppUser.supabase_uid == supabase_uid)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Profil już istnieje.")
 
-    # PRZEJĘCIE konta gościa (publiczna rezerwacja bez konta, M8.6): ten sam
-    # e-mail + nieaktywne konto → podpinamy supabase_uid, historia wizyt zostaje
-    guest = db.scalar(select(AppUser).where(AppUser.email == email.lower(), AppUser.active_account.is_(False)))
+    # PRZEJĘCIE konta gościa: pacjent założony bez konta — rezerwacja publiczna
+    # (M8.6) albo przez rejestrację telefonicznie/w okienku (UC-PP1). Dopasowanie
+    # najpierw po e-mailu, a gdy się nie zgadza (gość z recepcji bywa bez maila,
+    # ma placeholder) — po PESEL-u, który rejestracja zawsze zbiera. Dzięki temu
+    # „skoro już u nas jesteś, wpinamy Cię do istniejącej kartoteki": historia
+    # wizyt/dokumentów zostaje, bez duplikatu pacjenta.
+    guest = db.scalar(select(AppUser).where(
+        AppUser.email == email.lower(), AppUser.active_account.is_(False)))
+    if guest is None:
+        gp = db.scalar(
+            select(Patient).join(AppUser, AppUser.user_id == Patient.patient_id).where(
+                Patient.pesel == body.pesel,
+                AppUser.active_account.is_(False),
+                Patient.guardian_id.is_(None),  # podopiecznych nie przejmujemy tym trybem
+            ))
+        if gp is not None:
+            guest = db.get(AppUser, gp.patient_id)
     if guest and db.get(Patient, guest.user_id) is not None:
         patient = db.get(Patient, guest.user_id)
         if patient.guardian_id is None:  # podopiecznych nie przejmujemy tym trybem
             guest.supabase_uid = supabase_uid
             guest.active_account = True
+            guest.email = email.lower()  # placeholder gościa z recepcji → realny e-mail z konta
             guest.phone_number = body.phone_number or guest.phone_number
             patient.first_name, patient.last_name = body.first_name, body.last_name
             patient.pesel, patient.birth_date = body.pesel, body.birth_date
