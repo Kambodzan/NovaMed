@@ -9,6 +9,9 @@ class Settings(BaseSettings):
 
     app_name: str = "NovaMed API"
     database_url: str = "***REMOVED***"
+    # bazowy URL frontendu — do linków w SMS (np. potwierdzenie wizyty z linka).
+    # Na razie sztywno na adres LAN; w produkcji domena z env.
+    public_base_url: str = "https://192.168.111.201:5174"
 
     # Tryb deweloperski: login bez hasła (/auth/dev-token), fallback HS256 i luźny
     # CORS dla LAN. W PRODUKCJI ustaw DEV_MODE=false — wtedy akceptowane są

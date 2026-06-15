@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
+from app.domain.confirm import confirm_link, ensure_confirm_token
 from app.domain.tenancy import assert_staff_can_access_patient, assert_staff_in_clinic
 from app.core.config import settings
 from app.core.db import get_db
@@ -988,9 +989,10 @@ def remind_unconfirmed(
     sent = 0
     for a in rows:
         who = db.get(AppUser, a.doctor_id).username if a.doctor_id else a.service_name
+        link = confirm_link(ensure_confirm_token(a))
         notify(db, a.patient_id, "Przypomnienie: potwierdź wizytę",
                f"Wizyta: {who}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}. "
-               "Potwierdź obecność w zakładce Moje wizyty albo odwołaj, by zwolnić termin innym.")
+               f"Potwierdź lub odwołaj jednym kliknięciem: {link}")
         a.confirmation_requested = True
         sent += 1
     db.commit()

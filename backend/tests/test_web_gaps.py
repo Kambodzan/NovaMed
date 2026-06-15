@@ -47,6 +47,40 @@ def test_reminder_mode_3_pozycyjny(client, setup, db_session):
     assert send_due_reminders(db_session) == 1  # CONFIRM (≠NONE) → wysyła
 
 
+def test_potwierdzenie_wizyty_z_linka(client, setup, db_session):
+    """Potwierdzenie/odwołanie wizyty z linka SMS (token, bez logowania)."""
+    import uuid
+    from app.domain.confirm import ensure_confirm_token
+    from app.models import Appointment
+    s = setup
+
+    def booked(hour):
+        dt = (datetime.now() + timedelta(days=2)).replace(hour=hour, minute=0, second=0, microsecond=0)
+        slot = client.post(f"/clinics/{s['clinic'].clinic_id}/slots",
+                           json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},
+                           headers=auth_header(s["reg_token"])).json()[0]
+        client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(s["patient_token"]))
+        a = db_session.get(Appointment, uuid.UUID(slot["appointment_id"]))
+        tok = ensure_confirm_token(a)
+        db_session.commit()
+        return slot["appointment_id"], tok
+
+    _, token = booked(9)
+    # publiczny podgląd bez logowania
+    v = client.get(f"/public/visit/{token}")
+    assert v.status_code == 200 and v.json()["confirmed"] is False and v.json()["patient_name"]
+    # potwierdzenie
+    r = client.post(f"/public/visit/{token}/confirm")
+    assert r.status_code == 200 and r.json()["confirmed"] is True
+    # zły token → 404
+    assert client.get("/public/visit/nieistniejacy").status_code == 404
+
+    # odwołanie z linka — inna wizyta
+    _, token2 = booked(11)
+    rc = client.post(f"/public/visit/{token2}/cancel")
+    assert rc.status_code == 200 and rc.json()["status"] == "CANCELLED"
+
+
 def test_wynik_z_papieru_bez_wizyty(client, setup):
     """UC-PP3: rejestracja przyjmuje wynik „z papieru" luzem — bez wizyty/lekarza
     — i ląduje on w dokumentacji pacjenta (z wartościami parametrów)."""

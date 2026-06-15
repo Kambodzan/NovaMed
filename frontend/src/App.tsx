@@ -15,6 +15,7 @@ import { SkierowaniaPacjenta } from './pages/SkierowaniaPacjenta'
 import { Rodzina } from './pages/Rodzina'
 import { Profil } from './pages/Profil'
 import { RezerwacjaPubliczna } from './pages/RezerwacjaPubliczna'
+import { PotwierdzWizyte } from './pages/PotwierdzWizyte'
 import { ResetHasla } from './pages/ResetHasla'
 import { FamilyProvider } from './lib/family'
 import { I18nProvider } from './lib/i18n'
@@ -132,6 +133,7 @@ export default function App() {
       <Route path="/rejestracja" element={<Rejestracja />} />
       {/* publiczna strona rezerwacji (M8.6) — bez logowania */}
       <Route path="/rezerwacja" element={<RezerwacjaPubliczna />} />
+      <Route path="/potwierdz/:token" element={<PotwierdzWizyte />} />
       <Route path="/reset-hasla" element={<ResetHasla />} />
 
       {!token && <Route path="*" element={<Navigate to="/login" replace />} />}

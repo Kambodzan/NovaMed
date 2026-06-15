@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.domain.appointments import AppointmentStatus
 from app.domain.notify import notify
+from app.domain.confirm import confirm_link, ensure_confirm_token
 from app.models import Appointment, AppUser, Clinic, Payment
 
 
@@ -63,11 +64,12 @@ def send_confirmation_requests(db: Session) -> int:
         if a.appointment_datetime > now + timedelta(hours=clinic.confirmation_hours):
             continue
         who = (db.get(AppUser, a.doctor_id).username if a.doctor_id else a.service_name)
+        link = confirm_link(ensure_confirm_token(a))
         notify(
             db, a.patient_id,
             "Potwierdź swoją wizytę",
             f"Wizyta: {who}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')} ({clinic.clinic_name}). "
-            "Potwierdź obecność w Moich wizytach — albo odwołaj, by zwolnić termin innym.",
+            f"Potwierdź lub odwołaj jednym kliknięciem: {link}",
         )
         a.confirmation_requested = True
         sent += 1

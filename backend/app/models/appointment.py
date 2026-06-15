@@ -51,6 +51,8 @@ class Appointment(Base):
     # i czy pacjent potwierdził, że będzie
     confirmation_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     patient_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # token do potwierdzenia/odwołania wizyty z linka SMS (bez logowania)
+    confirmation_token: Mapped[str | None] = mapped_column(String(43), unique=True)
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")
