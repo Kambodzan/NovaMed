@@ -46,6 +46,11 @@ export function AdminUzytkownicy() {
             </tr>
           </thead>
           <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={4} className="border-t border-gray-100 px-4 py-8 text-center text-sm font-medium text-gray-400">
+                {users === undefined ? 'Wczytywanie…' : 'Brak użytkowników spełniających kryteria.'}
+              </td></tr>
+            )}
             {filtered.map(u => (
               <tr key={u.user_id} className="hover:bg-gray-50">
                 <td className="border-t border-gray-100 px-4 py-3.5">

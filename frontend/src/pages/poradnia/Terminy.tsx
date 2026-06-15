@@ -207,7 +207,7 @@ export function Terminy() {
             </select>
           </Field>
           <div className="flex items-end">
-            <Button disabled={addSlot.isPending || !doctorId} type="submit"><Plus size={15} /> Dodaj</Button>
+            <Button disabled={addSlot.isPending || (form.kind === 'visit' && !doctorId)} type="submit"><Plus size={15} /> Dodaj</Button>
           </div>
         </form>
         {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}

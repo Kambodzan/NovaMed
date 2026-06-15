@@ -99,7 +99,10 @@ export function Zabiegi() {
                     <Button size="sm" onClick={() => { setCompleteFor(p); setError(null) }}>
                       <Check size={14} /> Odnotuj wykonanie
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => cancel.mutate(p.procedure_id)}>Odwołaj</Button>
+                    <Button size="sm" variant="ghost" disabled={cancel.isPending}
+                      onClick={() => { if (window.confirm(`Odwołać zabieg „${p.procedure_type}" dla ${p.patient_name}?`)) cancel.mutate(p.procedure_id) }}>
+                      Odwołaj
+                    </Button>
                   </div>
                 )}
               </li>

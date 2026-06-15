@@ -56,9 +56,13 @@ export function Udostepnij() {
   }, [lastCode])
 
   const copy = async (code: string) => {
-    await navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setError(t('Nie udało się skopiować — przepisz kod ręcznie.'))
+    }
   }
 
   return (

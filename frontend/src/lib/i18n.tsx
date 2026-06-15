@@ -166,6 +166,7 @@ const EN: Record<string, string> = {
   'Obecność potwierdzona': 'Attendance confirmed',
   'Uzupełnienie': 'Addendum',
   'Zaświadczenie': 'Medical certificate',
+  'Nie udało się skopiować — przepisz kod ręcznie.': 'Could not copy — type the code manually.',
   'Zgłoszony powód wizyty': 'Reported reason for the visit',
   'Notatki i zalecenia lekarza': "Doctor's notes and recommendations",
   'Lekarz nie zostawił notatki z tej wizyty.': 'The doctor left no notes for this visit.',

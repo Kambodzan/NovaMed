@@ -67,7 +67,7 @@ export function StaffPacjenci() {
                   </div>
                   {p.insurance_status
                     ? <Badge tone="success">ubezpieczony</Badge>
-                    : <Badge tone="warn">eWUŚ: brak</Badge>}
+                    : <Badge tone="warn">brak potwierdzenia</Badge>}
                   <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
                 </Link>
               </li>
