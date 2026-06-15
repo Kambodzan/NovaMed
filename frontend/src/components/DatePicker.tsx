@@ -103,6 +103,7 @@ export function DatePicker({ value, onChange, min, max, required, placeholder, c
         type="button" ref={btnRef}
         aria-haspopup="dialog" aria-expanded={open}
         onClick={() => open ? setOpen(false) : show()}
+        onKeyDown={e => { if (open && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false) } }}
         className={cx(inputCls, 'flex cursor-pointer items-center justify-between gap-2 text-left', !selected && 'text-gray-400')}
       >
         <span className="truncate">{display}</span>

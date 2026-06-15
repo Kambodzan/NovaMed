@@ -305,8 +305,10 @@ const EN: Record<string, string> = {
     'Dependents do not log in on their own — all notifications about their visits and documents go to you.',
   'ur.': 'born',
   'Odepnij': 'Unlink',
-  'Odpiąć podopiecznego? Profil i dokumentacja zostają w placówce — znika tylko dostęp z Twojego konta.':
-    'Unlink this dependent? The profile and medical records stay with the clinic — only access from your account is removed.',
+  'Potwierdź': 'Confirm',
+  'Odpiąć podopiecznego?': 'Unlink this dependent?',
+  'Profil i dokumentacja zostają w placówce — znika tylko dostęp z Twojego konta.':
+    'The profile and medical records stay with the clinic — only access from your account is removed.',
   'Nieprawidłowy PESEL (suma kontrolna).': 'Invalid PESEL number (checksum).',
 }
 

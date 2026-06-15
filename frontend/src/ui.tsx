@@ -2,7 +2,7 @@
 // Białe kafle 20px na gray-50, pigułkowe przyciski, soft chipy statusów.
 // ZASADA RESTRAINT: max 1 akcja primary + 1 secondary na kafel.
 
-import type { ReactNode, ButtonHTMLAttributes } from 'react'
+import { useEffect, useRef, type ReactNode, type ButtonHTMLAttributes } from 'react'
 import { useI18n } from './lib/i18n'
 
 export const cx = (...parts: Array<string | false | undefined>) =>
@@ -223,11 +223,37 @@ export function EmptyState({ icon, title, hint }: { icon: ReactNode; title: stri
 export function Modal({ title, overline, children, onClose, footer, wide }: {
   title: string; overline?: string; children: ReactNode; onClose: () => void; footer?: ReactNode; wide?: boolean
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // dostępność dialogu (APG): fokus wchodzi do okna na otwarciu i wraca na
+  // wyzwalacz po zamknięciu. Klawiaturę (Esc/Tab) obsługuje onKeyDown NA oknie,
+  // nie na document — dzięki temu portalowane popovery (DatePicker/Select w body,
+  // poza oknem) nie zamykają okna swoim Escape.
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null
+    const first = ref.current?.querySelector<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )
+    ;(first ?? ref.current)?.focus()
+    return () => prev?.focus?.()
+  }, [])
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+    if (e.key !== 'Tab' || !ref.current) return
+    const f = Array.from(ref.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )).filter(el => el.offsetParent !== null)
+    if (f.length === 0) { e.preventDefault(); return }
+    const i = f.indexOf(document.activeElement as HTMLElement)
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus() }
+    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus() }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4 backdrop-blur-[2px]" onClick={onClose}>
       <div
-        role="dialog" aria-modal="true" aria-label={title}
-        className={cx('w-full rounded-[24px] bg-surface shadow-[0_24px_64px_-16px_rgba(16,24,40,0.3)]',
+        ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onKeyDown={onKeyDown}
+        className={cx('w-full rounded-[24px] bg-surface shadow-[0_24px_64px_-16px_rgba(16,24,40,0.3)] outline-none',
           wide ? 'max-w-3xl' : 'max-w-lg')}
         onClick={e => e.stopPropagation()}
       >

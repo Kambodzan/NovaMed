@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Users } from 'lucide-react'
 import { Button, EmptyState, Field, PageHeader, Tile, TileHeader, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
+import { confirm } from '../lib/confirm'
 import { useFamily } from '../lib/family'
 import { useI18n } from '../lib/i18n'
 import { peselValid } from '../lib/pesel'
@@ -71,7 +72,11 @@ export function Rodzina() {
                   <Button size="sm" onClick={() => setActiveId(d.patient_id)}>{t('Przełącz na ten profil')}</Button>
                 )}
                 <Button size="sm" variant="ghost" disabled={unlink.isPending}
-                  onClick={() => { if (window.confirm(t('Odpiąć podopiecznego? Profil i dokumentacja zostają w placówce — znika tylko dostęp z Twojego konta.'))) unlink.mutate(d.patient_id) }}>
+                  onClick={() => void confirm({
+                    title: t('Odpiąć podopiecznego?'),
+                    message: t('Profil i dokumentacja zostają w placówce — znika tylko dostęp z Twojego konta.'),
+                    tone: 'danger', confirmLabel: t('Odepnij'), cancelLabel: t('Anuluj'),
+                  }).then(ok => ok && unlink.mutate(d.patient_id))}>
                   {t('Odepnij')}
                 </Button>
               </li>

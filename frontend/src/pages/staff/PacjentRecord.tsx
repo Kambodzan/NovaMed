@@ -9,6 +9,7 @@ import { Badge, Button, DateChip, EmptyState, Modal, PageHeader, StatusBadge, Ti
 import { api, ApiError } from '../../lib/api'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../../lib/format'
 import { useAuth } from '../../lib/auth'
+import { confirm } from '../../lib/confirm'
 import type { AppointmentOut, DocumentOut, HistoryEntry, PatientInfo } from '../../lib/types'
 import { DokumentyLista } from '../../components/DokumentyLista'
 
@@ -101,7 +102,11 @@ export function PacjentRecord() {
                   <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setActionErr(null) }}>Przełóż</Button>
                 )}
                 <Button size="sm" variant="ghost" disabled={cancel.isPending}
-                  onClick={() => { if (window.confirm(`Odwołać wizytę ${formatDatePL(v.appointment_datetime)} ${formatTime(v.appointment_datetime)}?`)) cancel.mutate(v.appointment_id) }}>
+                  onClick={() => void confirm({
+                    title: 'Odwołać wizytę?',
+                    message: `Wizyta ${formatDatePL(v.appointment_datetime)}, ${formatTime(v.appointment_datetime)} zostanie odwołana, a termin wróci do puli.`,
+                    tone: 'danger', confirmLabel: 'Odwołaj',
+                  }).then(ok => ok && cancel.mutate(v.appointment_id))}>
                   Odwołaj
                 </Button>
               </li>

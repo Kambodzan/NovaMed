@@ -6,6 +6,7 @@ import { ClipboardPen, Mic, MicOff, Paperclip, PhoneOff, Send, Video as VideoIco
 import { Button, Overline, Tile, cx, inputCls } from '../ui'
 import { API_URL, WS_URL, api, getAuthToken } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { confirm } from '../lib/confirm'
 
 interface ChatMessage {
   kind: 'chat' | 'file' | 'system'
@@ -227,9 +228,14 @@ export function Telewizyta() {
   }
 
   const endVisit = async () => {
-    if (peerPresent && !window.confirm(isDoctor
-      ? 'Rozmowa wciąż trwa. Zakończyć wizytę?'
-      : 'Rozmowa wciąż trwa. Opuścić wizytę?')) return
+    if (peerPresent) {
+      const ok = await confirm({
+        title: isDoctor ? 'Zakończyć wizytę?' : 'Opuścić wizytę?',
+        message: 'Rozmowa wciąż trwa.',
+        tone: 'danger', confirmLabel: isDoctor ? 'Zakończ' : 'Opuść',
+      })
+      if (!ok) return
+    }
     intentionalCloseRef.current = true
     hangUp() // kamera/mikrofon gasną natychmiast, jeszcze przed nawigacją
     wsRef.current?.close()

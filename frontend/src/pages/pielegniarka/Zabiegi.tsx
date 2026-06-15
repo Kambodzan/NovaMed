@@ -7,6 +7,7 @@ import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { ProcedureOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
+import { confirm } from '../../lib/confirm'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
@@ -118,7 +119,11 @@ export function Zabiegi() {
                     </Button>
                     <Button size="sm" variant="secondary" onClick={() => openReschedule(p)}>Przełóż</Button>
                     <Button size="sm" variant="ghost" disabled={cancel.isPending}
-                      onClick={() => { if (window.confirm(`Odwołać zabieg „${p.procedure_type}" dla ${p.patient_name}?`)) cancel.mutate(p.procedure_id) }}>
+                      onClick={() => void confirm({
+                        title: 'Odwołać zabieg?',
+                        message: `Zabieg „${p.procedure_type}" dla ${p.patient_name} zostanie odwołany, a skierowanie wróci do kolejki.`,
+                        tone: 'danger', confirmLabel: 'Odwołaj',
+                      }).then(ok => ok && cancel.mutate(p.procedure_id))}>
                       Odwołaj
                     </Button>
                   </div>

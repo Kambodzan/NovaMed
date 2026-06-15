@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Lock, LockOpen, UserX } from 'lucide-react'
 import { Badge, Button, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
+import { confirm } from '../../lib/confirm'
 import type { AdminUser } from '../../lib/types'
 
 export function AdminUzytkownicy() {
@@ -73,19 +74,22 @@ export function AdminUzytkownicy() {
                     {u.role === 'pacjent' && (
                       <Button size="sm" variant="ghost" disabled={anonymize.isPending}
                         title="RODO: prawo do bycia zapomnianym"
-                        onClick={() => {
-                          if (window.confirm(`Zanonimizować dane pacjenta ${u.username}? Dane osobowe (imię, nazwisko, PESEL, kontakt) zostaną trwale usunięte. Wizyty i dokumenty zostaną zachowane bez danych osobowych. Tej operacji NIE można cofnąć.`)) {
-                            anonymize.mutate(u.user_id)
-                          }
-                        }}>
+                        onClick={() => void confirm({
+                          title: `Zanonimizować dane pacjenta ${u.username}?`,
+                          message: 'Dane osobowe (imię, nazwisko, PESEL, kontakt) zostaną trwale usunięte. Wizyty i dokumenty zostaną zachowane bez danych osobowych. Tej operacji NIE można cofnąć.',
+                          tone: 'danger', confirmLabel: 'Anonimizuj',
+                        }).then(ok => ok && anonymize.mutate(u.user_id))}>
                         <UserX size={14} /> Anonimizuj
                       </Button>
                     )}
                     <Button size="sm" variant={u.active_account ? 'ghost' : 'secondary'} disabled={toggle.isPending}
                       onClick={() => {
-                        if (!u.active_account || window.confirm(`Zablokować konto ${u.username}? Użytkownik straci dostęp do systemu do czasu odblokowania.`)) {
-                          toggle.mutate(u.user_id)
-                        }
+                        if (!u.active_account) { toggle.mutate(u.user_id); return }
+                        void confirm({
+                          title: `Zablokować konto ${u.username}?`,
+                          message: 'Użytkownik straci dostęp do systemu do czasu odblokowania.',
+                          tone: 'danger', confirmLabel: 'Zablokuj',
+                        }).then(ok => ok && toggle.mutate(u.user_id))
                       }}>
                       {u.active_account ? <><Lock size={14} /> Zablokuj</> : <><LockOpen size={14} /> Odblokuj</>}
                     </Button>

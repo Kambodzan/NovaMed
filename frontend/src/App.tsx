@@ -30,6 +30,7 @@ import { PacjentRecord } from './pages/staff/PacjentRecord'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
 import { Toaster } from './components/Toaster'
+import { ConfirmHost } from './components/ConfirmHost'
 import { Terminy } from './pages/poradnia/Terminy'
 import { UmowWizyte } from './pages/poradnia/UmowWizyte'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
@@ -194,6 +195,7 @@ export default function App() {
       )}
     </Routes>
     <Toaster />
+    <ConfirmHost />
     </>
   )
 }
