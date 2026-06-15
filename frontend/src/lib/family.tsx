@@ -10,6 +10,7 @@ export interface Dependent {
   last_name: string
   pesel: string
   birth_date: string
+  is_adult?: boolean
 }
 
 interface FamilyCtx {
@@ -37,7 +38,8 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     staleTime: 60_000,
   })
   const dependents = data ?? []
-  const active = dependents.find(d => d.patient_id === activeId) ?? null
+  // pełnoletni podopieczny nie może być kontekstem działania (dostęp opiekuna wygasł)
+  const active = dependents.find(d => d.patient_id === activeId && !d.is_adult) ?? null
 
   const setActiveId = (id: string | null) => {
     if (id) sessionStorage.setItem(STORAGE_KEY, id)

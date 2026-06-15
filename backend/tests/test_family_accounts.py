@@ -142,3 +142,23 @@ def test_dokumentacja_podopiecznego_dla_opiekuna(client, setup):
     pdf = client.get(f"/documents/{doc_id}/pdf", headers=auth_header(setup["guardian_token"]))
     assert pdf.status_code == 200
     assert pdf.headers["content-type"] == "application/pdf"
+
+
+def test_pelnoletni_podopieczny_wygasa_dostep(client, setup):
+    """Po 18. urodzinach opiekun traci dostęp do działania w imieniu podopiecznego."""
+    gt = setup["guardian_token"]
+    adult = client.post("/family", json={
+        "first_name": "Dorosły", "last_name": "Podopieczny",
+        "pesel": "44051401359", "birth_date": "1944-05-14",  # pełnoletni
+    }, headers=auth_header(gt))
+    assert adult.status_code == 201
+    aid = adult.json()["patient_id"]
+    assert adult.json()["is_adult"] is True
+
+    # lista pokazuje go z flagą pełnoletności
+    deps = client.get("/family", headers=auth_header(gt)).json()
+    assert any(d["patient_id"] == aid and d["is_adult"] for d in deps)
+
+    # opiekun nie może działać w jego imieniu (as_patient → 403)
+    r = client.get(f"/appointments/my?as_patient={aid}", headers=auth_header(gt))
+    assert r.status_code == 403 and "pełnoletni" in r.json()["detail"].lower()

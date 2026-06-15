@@ -176,3 +176,21 @@ def test_przelozenie_zabiegu(client, nursing_setup):
                 json={"notes": "Zabieg wykonany prawidłowo."}, headers=auth_header(s["nurse_token"]))
     assert client.post(f"/procedures/{proc['procedure_id']}/reschedule",
                        json={"procedure_datetime": new_dt.isoformat()}, headers=auth_header(s["nurse_token"])).status_code == 409
+
+
+def test_zalegle_zabiegi(client, nursing_setup, db_session):
+    """Zaplanowany zabieg z przeszłym terminem trafia do skrzynki zaległych."""
+    from uuid import UUID
+    from app.models import NursingProcedure
+    s = nursing_setup
+    proc = plan(client, s).json()
+    # cofnij termin w przeszłość (symulacja zaległości)
+    p = db_session.get(NursingProcedure, UUID(proc["procedure_id"]))
+    p.procedure_datetime = datetime.now() - timedelta(days=1)
+    db_session.commit()
+    overdue = client.get("/procedures/overdue", headers=auth_header(s["nurse_token"])).json()
+    assert any(o["procedure_id"] == proc["procedure_id"] for o in overdue)
+    # po wykonaniu znika z zaległych
+    client.post(f"/procedures/{proc['procedure_id']}/complete",
+                json={"notes": "Wykonano z opóźnieniem."}, headers=auth_header(s["nurse_token"]))
+    assert client.get("/procedures/overdue", headers=auth_header(s["nurse_token"])).json() == []

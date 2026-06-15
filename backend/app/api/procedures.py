@@ -125,6 +125,25 @@ def procedures_day(
     return [procedure_out(db, p) for p in rows]
 
 
+@router.get("/overdue", response_model=list[ProcedureOut])
+def overdue_procedures(
+    user: AppUser = Depends(require_roles("pielegniarka")),
+    db: Session = Depends(get_db),
+):
+    """Zaległe zabiegi: zaplanowane, których termin już minął, a nie zostały
+    wykonane ani odwołane — żeby nie przepadły poza widokiem dnia."""
+    rows = db.scalars(
+        select(NursingProcedure)
+        .where(
+            NursingProcedure.nurse_id == user.user_id,
+            NursingProcedure.procedure_status == ST_PLANNED,
+            NursingProcedure.procedure_datetime < datetime.now(),
+        )
+        .order_by(NursingProcedure.procedure_datetime)
+    )
+    return [procedure_out(db, p) for p in rows]
+
+
 def get_own_procedure(procedure_id: UUID, user: AppUser, db: Session) -> NursingProcedure:
     p = db.get(NursingProcedure, procedure_id)
     if p is None:

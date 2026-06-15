@@ -306,6 +306,14 @@ const EN: Record<string, string> = {
   'ur.': 'born',
   'Odepnij': 'Unlink',
   'Potwierdź': 'Confirm',
+  'Przygotowanie do wizyty': 'Before your visit',
+  'Zgłoś się 10 minut wcześniej z dokumentem tożsamości i skierowaniem (jeśli wymagane). Badania laboratoryjne wykonuje się zwykle na czczo.':
+    'Arrive 10 minutes early with an ID and a referral (if required). Lab tests are usually done while fasting.',
+  'Zgłoś się 10 minut wcześniej z dokumentem tożsamości. Weź skierowanie (jeśli dotyczy) oraz listę przyjmowanych leków.':
+    'Arrive 10 minutes early with an ID. Bring a referral (if applicable) and a list of your medications.',
+  'Pełnoletni': 'Adult',
+  'Pełnoletni podopieczny — dostęp opiekuna wygasł. Powinien założyć własne konto (tym samym PESEL-em odzyska dokumentację).':
+    'Adult dependent — guardian access has expired. They should create their own account (the same PESEL recovers the records).',
   'Ważna do': 'Valid until',
   'Recepta wygasła': 'Prescription expired',
   'Wyniki': 'Results',

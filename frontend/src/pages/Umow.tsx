@@ -839,12 +839,22 @@ export function Umow() {
             )}
 
             {payPhase === 'success' && (
-              <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={16} /></span>
-                <div>
-                  <p className="font-extrabold text-emerald-800">{slot.price ? t('Wizyta potwierdzona i opłacona') : t('Wizyta potwierdzona')}</p>
-                  <p className="mt-0.5 text-sm font-medium text-emerald-700">
-                    {t('Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.')}
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={16} /></span>
+                  <div>
+                    <p className="font-extrabold text-emerald-800">{slot.price ? t('Wizyta potwierdzona i opłacona') : t('Wizyta potwierdzona')}</p>
+                    <p className="mt-0.5 text-sm font-medium text-emerald-700">
+                      {t('Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.')}
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-sky-50 px-4 py-3">
+                  <p className="text-xs font-extrabold tracking-wider text-sky-700 uppercase">{t('Przygotowanie do wizyty')}</p>
+                  <p className="mt-1 text-sm font-medium text-sky-900">
+                    {slot.service_name
+                      ? t('Zgłoś się 10 minut wcześniej z dokumentem tożsamości i skierowaniem (jeśli wymagane). Badania laboratoryjne wykonuje się zwykle na czczo.')
+                      : t('Zgłoś się 10 minut wcześniej z dokumentem tożsamości. Weź skierowanie (jeśli dotyczy) oraz listę przyjmowanych leków.')}
                   </p>
                 </div>
               </div>

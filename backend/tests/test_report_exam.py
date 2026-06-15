@@ -33,3 +33,16 @@ def test_raport_z_badaniem_nie_wywala(client, factory, db_session):
     # CSV też nie wywala
     assert client.get(f"/clinics/{clinic.clinic_id}/reports/csv?month={month}",
                       headers=auth_header(reg)).status_code == 200
+
+
+def test_raport_zakres_dat(client, factory):
+    """Raport poradni przyjmuje dowolny zakres dat (from/to), nie tylko miesiąc."""
+    _, reg = factory.user("rejestracja")
+    clinic = factory.clinic()
+    cid = clinic.clinic_id
+    r = client.get(f"/clinics/{cid}/reports?from=2026-06-01&to=2026-06-30", headers=auth_header(reg))
+    assert r.status_code == 200, r.text
+    assert r.json()["month"] == "2026-06-01 — 2026-06-30"
+    # błędny zakres (do < od) → 422
+    assert client.get(f"/clinics/{cid}/reports?from=2026-06-30&to=2026-06-01",
+                      headers=auth_header(reg)).status_code == 422

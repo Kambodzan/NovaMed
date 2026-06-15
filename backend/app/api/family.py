@@ -48,6 +48,13 @@ class DependentOut(BaseModel):
     last_name: str
     pesel: str
     birth_date: date
+    is_adult: bool = False  # pełnoletni — dostęp opiekuna wygasa
+
+
+def is_adult(birth_date: date) -> bool:
+    today = date.today()
+    age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+    return age >= 18
 
 
 def resolve_patient_id(db: Session, user: AppUser, as_patient: UUID | None) -> int:
@@ -57,13 +64,21 @@ def resolve_patient_id(db: Session, user: AppUser, as_patient: UUID | None) -> i
     dependent = db.get(Patient, as_patient)
     if dependent is None or dependent.guardian_id != user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest profil Twojego podopiecznego.")
+    if is_adult(dependent.birth_date):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Podopieczny jest pełnoletni — dostęp opiekuna wygasł. Powinien założyć własne konto (tym samym PESEL-em przejmie dotychczasową dokumentację).",
+        )
     return as_patient
 
 
 def allowed_patient_ids(db: Session, user: AppUser) -> set[UUID]:
-    """Pacjenci, w których imieniu może działać użytkownik (on sam + podopieczni)."""
+    """Pacjenci, w których imieniu może działać użytkownik (on sam + podopieczni
+    NIEpełnoletni — z chwilą 18. urodzin dostęp opiekuna wygasa)."""
     ids = {user.user_id}
-    ids.update(db.scalars(select(Patient.patient_id).where(Patient.guardian_id == user.user_id)))
+    for p in db.scalars(select(Patient).where(Patient.guardian_id == user.user_id)):
+        if not is_adult(p.birth_date):
+            ids.add(p.patient_id)
     return ids
 
 
@@ -94,7 +109,7 @@ def add_dependent(
         guardian_id=user.user_id,
     ))
     db.commit()
-    return DependentOut(patient_id=account.user_id, **body.model_dump())
+    return DependentOut(patient_id=account.user_id, is_adult=is_adult(body.birth_date), **body.model_dump())
 
 
 @router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -123,7 +138,7 @@ def my_dependents(
     return [
         DependentOut(
             patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
-            pesel=p.pesel, birth_date=p.birth_date,
+            pesel=p.pesel, birth_date=p.birth_date, is_adult=is_adult(p.birth_date),
         )
         for p in rows
     ]

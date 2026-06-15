@@ -1,7 +1,7 @@
 from uuid import UUID
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import PlainTextResponse
@@ -46,12 +46,30 @@ def month_range(month: str) -> tuple[datetime, datetime]:
     return start, end
 
 
-def build_report(db: Session, clinic_id: UUID, month: str) -> ReportOut:
-    """UC-PP4: statystyki miesiąca. „Wizyta" = termin z przypisanym pacjentem
+def resolve_period(month: str | None, date_from: str | None, date_to: str | None) -> tuple[datetime, datetime, str]:
+    """Okres raportu: miesiąc (YYYY-MM) albo dowolny zakres od–do (włącznie)."""
+    if date_from and date_to:
+        try:
+            start = datetime.fromisoformat(date_from)
+            end = datetime.fromisoformat(date_to) + timedelta(days=1)  # „do" włącznie
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Daty w formacie YYYY-MM-DD.") from exc
+        if end <= start:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Data końca zakresu jest przed datą początku.")
+        return start, end, f"{date_from} — {date_to}"
+    if month:
+        start, end = month_range(month)
+        return start, end, month
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Podaj miesiąc (month) albo zakres (from/to).")
+
+
+def build_report(db: Session, clinic_id: UUID, month: str | None = None,
+                 date_from: str | None = None, date_to: str | None = None) -> ReportOut:
+    """UC-PP4: statystyki okresu. „Wizyta" = termin z przypisanym pacjentem
     (wolne sloty nie wchodzą do statystyk)."""
     if db.get(Clinic, clinic_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placówka nie istnieje.")
-    start, end = month_range(month)
+    start, end, label = resolve_period(month, date_from, date_to)
     rows = db.scalars(select(Appointment).where(
         Appointment.clinic_id == clinic_id,
         Appointment.appointment_datetime >= start,
@@ -78,7 +96,7 @@ def build_report(db: Session, clinic_id: UUID, month: str) -> ReportOut:
             entry.completed += 1
 
     return ReportOut(
-        month=month,
+        month=label,
         total_booked=len(rows),
         completed=completed,
         cancelled=cancelled,
@@ -91,22 +109,26 @@ def build_report(db: Session, clinic_id: UUID, month: str) -> ReportOut:
 @router.get("/clinics/{clinic_id}/reports", response_model=ReportOut)
 def clinic_report(
     clinic_id: UUID,
-    month: str = Query(description="Miesiąc w formacie YYYY-MM"),
+    month: str | None = Query(default=None, description="Miesiąc YYYY-MM (albo from/to)"),
+    date_from: str | None = Query(default=None, alias="from", description="Początek zakresu YYYY-MM-DD"),
+    date_to: str | None = Query(default=None, alias="to", description="Koniec zakresu (włącznie) YYYY-MM-DD"),
     _: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
-    return build_report(db, clinic_id, month)
+    return build_report(db, clinic_id, month, date_from, date_to)
 
 
 @router.get("/clinics/{clinic_id}/reports/csv", response_class=PlainTextResponse)
 def clinic_report_csv(
     clinic_id: UUID,
-    month: str = Query(description="Miesiąc w formacie YYYY-MM"),
+    month: str | None = Query(default=None),
+    date_from: str | None = Query(default=None, alias="from"),
+    date_to: str | None = Query(default=None, alias="to"),
     _: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
-    """Eksport raportu do CSV (UC-PP4; PDF — etap szlifu M10)."""
-    report = build_report(db, clinic_id, month)
+    """Eksport raportu do CSV (UC-PP4)."""
+    report = build_report(db, clinic_id, month, date_from, date_to)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Raport placówki", f"miesiąc {report.month}"])
@@ -123,19 +145,21 @@ def clinic_report_csv(
     return PlainTextResponse(
         content=buf.getvalue(),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="raport-{report.month}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="raport-{_fname(report.month)}.csv"'},
     )
 
 
 @router.get("/clinics/{clinic_id}/reports/pdf")
 def clinic_report_pdf(
     clinic_id: UUID,
-    month: str = Query(description="Miesiąc w formacie YYYY-MM"),
+    month: str | None = Query(default=None),
+    date_from: str | None = Query(default=None, alias="from"),
+    date_to: str | None = Query(default=None, alias="to"),
     _: AppUser = Depends(require_roles(*REPORT_ROLES)),
     db: Session = Depends(get_db),
 ):
     """Eksport raportu poradni do PDF (UC-PP4)."""
-    report = build_report(db, clinic_id, month)
+    report = build_report(db, clinic_id, month, date_from, date_to)
     clinic = db.get(Clinic, clinic_id)
     pdf = render_report_pdf(
         clinic_name=clinic.clinic_name, month=report.month,
@@ -146,5 +170,10 @@ def clinic_report_pdf(
     )
     return Response(
         content=pdf, media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="raport-{report.month}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="raport-{_fname(report.month)}.pdf"'},
     )
+
+
+def _fname(label: str) -> str:
+    """Etykieta okresu → bezpieczny fragment nazwy pliku."""
+    return "".join(c if c.isalnum() else "_" for c in label).strip("_")

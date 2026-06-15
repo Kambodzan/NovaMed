@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ClipboardList } from 'lucide-react'
-import { Button, EmptyState, Field, Loading, Modal, Overline, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
+import { AlertTriangle, Check, ClipboardList } from 'lucide-react'
+import { Button, EmptyState, Field, Loading, Modal, Overline, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { ProcedureOut } from '../../lib/types'
@@ -30,9 +30,15 @@ export function Zabiegi() {
     queryKey: ['procedures-day', day],
     queryFn: () => api<ProcedureOut[]>(`/procedures/day?day=${day}`),
   })
+  // zaległe (zaplanowane, termin minął) — żeby nie przepadły poza widokiem dnia
+  const { data: overdue } = useQuery({
+    queryKey: ['procedures-overdue'],
+    queryFn: () => api<ProcedureOut[]>('/procedures/overdue'),
+  })
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['procedures-day'] })
+    void queryClient.invalidateQueries({ queryKey: ['procedures-overdue'] })
     void queryClient.invalidateQueries({ queryKey: ['nursing-referrals'] })
   }
 
@@ -78,6 +84,27 @@ export function Zabiegi() {
       </div>
 
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+
+      {(overdue?.length ?? 0) > 0 && (
+        <Tile className="p-4 ring-1 ring-red-200" delay={40}>
+          <TileHeader title={<span className="inline-flex items-center gap-1.5 text-red-700"><AlertTriangle size={13} /> Zaległe zabiegi <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-700">{overdue!.length}</span></span>} />
+          <ul className="space-y-1.5">
+            {overdue!.map(p => (
+              <li key={p.procedure_id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-red-50/60 px-4 py-2.5">
+                <span className="w-28 text-xs font-extrabold text-red-600 [font-variant-numeric:tabular-nums]">
+                  {formatDatePL(p.procedure_datetime)}, {formatTime(p.procedure_datetime)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-extrabold text-gray-900">{p.procedure_type}</p>
+                  <p className="truncate text-xs font-semibold text-gray-500">{p.patient_name}</p>
+                </div>
+                <Button size="sm" onClick={() => { setCompleteFor(p); setError(null) }}><Check size={14} /> Odnotuj</Button>
+                <Button size="sm" variant="secondary" onClick={() => openReschedule(p)}>Przełóż</Button>
+              </li>
+            ))}
+          </ul>
+        </Tile>
+      )}
 
       <Tile className="p-3 sm:p-4" delay={60}>
         {procedures === undefined ? <Loading /> : procedures.length === 0 ? (

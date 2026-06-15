@@ -63,10 +63,18 @@ export function Rodzina() {
             {dependents.map(d => (
               <li key={d.patient_id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-extrabold text-gray-900">{d.first_name} {d.last_name}</p>
+                  <p className="text-sm font-extrabold text-gray-900">
+                    {d.first_name} {d.last_name}
+                    {d.is_adult && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 align-middle">{t('Pełnoletni')}</span>}
+                  </p>
                   <p className="text-xs font-medium text-gray-500">PESEL {d.pesel} · {t('ur.')} {formatDatePL(d.birth_date)}</p>
+                  {d.is_adult && (
+                    <p className="mt-0.5 text-xs font-medium text-amber-700">
+                      {t('Pełnoletni podopieczny — dostęp opiekuna wygasł. Powinien założyć własne konto (tym samym PESEL-em odzyska dokumentację).')}
+                    </p>
+                  )}
                 </div>
-                {activeId === d.patient_id ? (
+                {d.is_adult ? null : activeId === d.patient_id ? (
                   <Button size="sm" variant="secondary" onClick={() => setActiveId(null)}>{t('Wróć na mój profil')}</Button>
                 ) : (
                   <Button size="sm" onClick={() => setActiveId(d.patient_id)}>{t('Przełącz na ten profil')}</Button>
