@@ -7,7 +7,7 @@ import { AlertTriangle, Check, ChevronDown, ClipboardPen, FileCheck2, FolderOpen
 import { Badge, Button, Field, Modal, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
-import type { AppointmentOut, ClinicalNote, DocumentOut, PatientInfo } from '../../lib/types'
+import type { AppointmentOut, ClinicalNote, DocumentOut, HistoryEntry, PatientInfo } from '../../lib/types'
 import { KIND_LABEL, WystawDokument, searchIcd10 } from '../../components/WystawDokument'
 import { DokumentyLista } from '../../components/DokumentyLista'
 import { Typeahead } from '../../components/Typeahead'
@@ -85,6 +85,13 @@ export function Gabinet() {
     queryFn: () => api<DocumentOut[]>(`/patients/${patientId}/documents`),
     enabled: !!patientId,
   })
+  // historia wizyt z notami — ciągłość leczenia (co było, rozpoznanie, zalecenia)
+  const { data: history } = useQuery({
+    queryKey: ['patient-history', patientId],
+    queryFn: () => api<HistoryEntry[]>(`/patients/${patientId}/history`),
+    enabled: !!patientId,
+  })
+  const [openHist, setOpenHist] = useState(0)  // index rozwiniętej wizyty (0 = ostatnia)
   // nota z wizyty (encounter note) — szkic/podpis/uzupełnienia + audyt
   const { data: clinicalNote } = useQuery({
     queryKey: ['note', id],
@@ -450,6 +457,57 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             </div>
           )}
 
+          {/* historia wizyt z notami — najważniejszy kontekst ciągłości leczenia */}
+          {(history?.length ?? 0) > 0 && (
+            <div className="mb-5">
+              <TileHeader title={<span className="inline-flex items-center gap-1.5"><History size={13} /> Poprzednie wizyty <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-extrabold text-gray-500">{history!.length}</span></span>} />
+              <ul className="space-y-1.5">
+                {history!.map((h, i) => {
+                  const open = openHist === i
+                  return (
+                    <li key={h.appointment_id} className="rounded-2xl bg-gray-50">
+                      <button type="button" aria-expanded={open}
+                        onClick={() => setOpenHist(open ? -1 : i)}
+                        className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left">
+                        <span className="min-w-0">
+                          <span className="block text-sm font-extrabold text-gray-900">{formatDatePL(h.date)}</span>
+                          <span className="block truncate text-xs font-semibold text-gray-500">
+                            {h.doctor_name} · {h.appointment_type === 'ONLINE' ? 'teleporada' : 'stacjonarna'}
+                            {h.note ? '' : ' · brak noty'}
+                          </span>
+                        </span>
+                        <ChevronDown size={15} className={cx('shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+                      </button>
+                      {open && (
+                        <div className="space-y-2 border-t border-gray-100 px-4 py-3">
+                          {h.note ? (
+                            <p className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{h.note}</p>
+                          ) : (
+                            <p className="text-sm font-medium text-gray-400">Lekarz nie zostawił noty z tej wizyty.</p>
+                          )}
+                          {h.addenda.map((a, j) => (
+                            <p key={j} className="border-l-2 border-primary/40 pl-3 text-sm font-medium whitespace-pre-wrap text-gray-700">
+                              <span className="text-[11px] font-extrabold tracking-wider text-primary/70 uppercase">Uzupełnienie: </span>{a}
+                            </p>
+                          ))}
+                          {h.documents.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {h.documents.map((d, j) => (
+                                <span key={j} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600 tile-shadow">
+                                  {d.label}{d.code ? ` · ${d.code}` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setHistOpen(o => !o)}
@@ -457,7 +515,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             className="flex w-full cursor-pointer items-center justify-between rounded-xl px-1 py-1.5 text-left hover:bg-gray-50"
           >
             <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
-              <FolderOpen size={13} /> Wcześniejsza dokumentacja
+              <FolderOpen size={13} /> Wszystkie dokumenty
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-extrabold text-gray-500 normal-case">{historyDocs.length}</span>
             </span>
             <ChevronDown size={15} className={cx('text-gray-400 transition-transform', histOpen && 'rotate-180')} />

@@ -138,6 +138,17 @@ export interface DocumentOut {
   appointment_id: string | null
 }
 
+export interface HistoryDoc { label: string; code: string | null; details: string | null }
+export interface HistoryEntry {
+  appointment_id: string
+  date: string
+  doctor_name: string
+  appointment_type: 'ONLINE' | 'STATIONARY'
+  note: string | null
+  addenda: string[]
+  documents: HistoryDoc[]
+}
+
 export interface NoteAddendum { author_name: string; content: string; created_at: string }
 export interface NoteEvent { actor_name: string; action: string; created_at: string }
 export interface ClinicalNote {

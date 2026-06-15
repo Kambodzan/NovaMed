@@ -521,6 +521,69 @@ def verify_insurance(
     return patient_info_out(db, p)
 
 
+class HistoryDocOut(BaseModel):
+    label: str
+    code: str | None
+    details: str | None
+
+
+class HistoryEntryOut(BaseModel):
+    appointment_id: UUID
+    date: datetime
+    doctor_name: str
+    appointment_type: str
+    note: str | None = None
+    addenda: list[str] = []
+    documents: list[HistoryDocOut] = []
+
+
+@router.get("/patients/{patient_id}/history", response_model=list[HistoryEntryOut])
+def patient_history(
+    patient_id: UUID,
+    user: AppUser = Depends(require_roles(*STAFF_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Historia wizyt pacjenta z notami i wystawionymi dokumentami (UC-L1) —
+    ciągłość leczenia: co było, co rozpoznano, co zalecono. Najważniejszy
+    kontekst dla lekarza, ważniejszy niż płaska lista dokumentów."""
+    from app.models import ClinicalNote  # import lokalny
+
+    if db.get(Patient, patient_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id, detail="historia wizyt")
+
+    visits = db.scalars(
+        select(Appointment).where(
+            Appointment.patient_id == patient_id,
+            Appointment.doctor_id.is_not(None),
+            Appointment.appointment_status == "COMPLETED",
+        ).order_by(Appointment.appointment_datetime.desc())
+    ).all()
+
+    out: list[HistoryEntryOut] = []
+    for a in visits:
+        doc_user = db.get(AppUser, a.doctor_id)
+        note = db.scalar(select(ClinicalNote).where(
+            ClinicalNote.appointment_id == a.appointment_id, ClinicalNote.status == "SIGNED"))
+        docs = db.scalars(select(MedicalDocument).where(
+            MedicalDocument.appointment_id == a.appointment_id)
+            .order_by(MedicalDocument.issued_at)).all()
+        entries = []
+        for d in docs:
+            o = document_out(db, d)
+            entries.append(HistoryDocOut(label=DOC_LABELS.get(d.document_type, d.document_type),
+                                         code=o.code, details=o.details))
+        out.append(HistoryEntryOut(
+            appointment_id=a.appointment_id, date=a.appointment_datetime,
+            doctor_name=doc_user.username if doc_user else "—",
+            appointment_type=a.appointment_type,
+            note=note.content if note else None,
+            addenda=[ad.content for ad in note.addenda] if note else [],
+            documents=entries,
+        ))
+    return out
+
+
 @router.get("/patients/{patient_id}/documents", response_model=list[DocumentOut])
 def patient_documents(
     patient_id: UUID,

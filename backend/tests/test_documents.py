@@ -214,3 +214,22 @@ def test_zaswiadczenie_lekarskie(client, visit, fakes):
     assert any(d["document_type"] == "CERTIFICATE" for d in docs)
     pdf = client.get(f"/documents/{doc['document_id']}/pdf", headers=auth_header(visit["doctor_token"]))
     assert pdf.status_code == 200 and pdf.content[:5] == b"%PDF-"
+
+
+def test_historia_wizyt_z_notami(client, visit, fakes):
+    aid = visit["appointment_id"]
+    dt = auth_header(visit["doctor_token"])
+    client.post(f"/appointments/{aid}/status", json={"new_status": "IN_PROGRESS"}, headers=dt)
+    client.put(f"/appointments/{aid}/note",
+               json={"content": "Rozpoznanie: I10\n\nZalecenia: kontrola za miesiąc"}, headers=dt)
+    client.post(f"/patients/{visit['patient'].user_id}/prescriptions",
+                json={"appointment_id": aid, "icd10": "I10", "drugs": "Atorvasterol 40 mg"}, headers=dt)
+    client.post(f"/appointments/{aid}/status", json={"new_status": "COMPLETED"}, headers=dt)  # auto-podpis noty
+
+    hist = client.get(f"/patients/{visit['patient'].user_id}/history", headers=dt).json()
+    assert len(hist) == 1
+    assert "Rozpoznanie: I10" in hist[0]["note"]          # nota z wizyty w historii
+    assert any("recepta" in d["label"].lower() for d in hist[0]["documents"])  # i wystawione dokumenty
+    # pacjent nie ma dostepu do tego endpointu personelu
+    assert client.get(f"/patients/{visit['patient'].user_id}/history",
+                      headers=auth_header(visit["patient_token"])).status_code == 403
