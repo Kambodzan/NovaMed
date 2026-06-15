@@ -16,11 +16,17 @@ import { Typeahead } from '../../components/Typeahead'
 // Rozpoznanie jest osobnym, JEDNYM polem (ICD-10) — wchodzi do notatki
 // i automatycznie do wystawianych recept/skierowań
 const EMPTY_NOTE = { wywiad: '', badanie: '', zalecenia: '' }
-// szablony noty (autotekst) — przyspieszają częste wizyty; lekarz dopisuje szczegóły
-const NOTE_TEMPLATES: Array<{ label: string; wywiad: string; badanie: string; rozpoznanie: string; zalecenia: string }> = [
-  { label: 'Kontrola NT', wywiad: 'Wizyta kontrolna — nadciśnienie tętnicze. Samokontrola RR (dzienniczek): …', badanie: 'RR w gabinecie …/… mmHg, tętno … /min miarowe. Osłuchowo serce/płuca bez zmian.', rozpoznanie: 'I10', zalecenia: 'Kontynuacja leczenia hipotensyjnego. Dzienniczek RR. Kontrola za 3 miesiące.' },
-  { label: 'Infekcja GDO', wywiad: 'Od … dni: gorączka, ból gardła, katar, kaszel.', badanie: 'Gardło zaczerwienione, węzły chłonne szyjne …, osłuchowo płuca bez zmian.', rozpoznanie: 'J06', zalecenia: 'Leczenie objawowe, nawodnienie, odpoczynek. Kontrola przy braku poprawy / nasileniu objawów.' },
-  { label: 'Kontynuacja recepty', wywiad: 'Wizyta receptowa — kontynuacja leczenia przewlekłego, stan stabilny, bez nowych dolegliwości.', badanie: '', rozpoznanie: '', zalecenia: 'Kontynuacja dotychczasowych leków. Kontrola za … .' },
+// szablony noty (autotekst) — ogólne rusztowania częstych wizyt; lekarz dopisuje
+// szczegóły. Celowo BEZ kodu ICD-10 (rozpoznanie wpisuje lekarz osobno).
+const NOTE_TEMPLATES: Array<{ label: string; wywiad: string; badanie: string; zalecenia: string }> = [
+  { label: 'Wizyta kontrolna', wywiad: 'Wizyta kontrolna — choroba przewlekła, stan stabilny, bez nowych dolegliwości. Leczenie tolerowane dobrze.', badanie: 'Stan ogólny dobry. Badaniem przedmiotowym bez istotnych odchyleń.', zalecenia: 'Kontynuacja dotychczasowego leczenia. Kontrola za … . Pilne zgłoszenie przy nasileniu objawów.' },
+  { label: 'Kontynuacja recepty', wywiad: 'Wizyta receptowa — kontynuacja leczenia przewlekłego. Bez nowych dolegliwości, leki tolerowane dobrze.', badanie: '', zalecenia: 'Kontynuacja dotychczasowych leków w dawkach jak dotąd. Kontrola za … .' },
+  { label: 'Infekcja dróg oddechowych', wywiad: 'Od … dni: gorączka do …°C, ból gardła, katar, kaszel. Bez duszności.', badanie: 'Gardło zaczerwienione, węzły chłonne szyjne … . Osłuchowo nad płucami szmer pęcherzykowy prawidłowy.', zalecenia: 'Leczenie objawowe, nawodnienie, odpoczynek. Kontrola przy braku poprawy / nasileniu objawów.' },
+  { label: 'Omówienie wyników', wywiad: 'Wizyta w celu omówienia wyników badań ( … ). Samopoczucie … .', badanie: 'Stan ogólny dobry. Bez istotnych odchyleń w badaniu przedmiotowym.', zalecenia: 'Omówiono wyniki. Dalsze postępowanie: … . Kontrola za … .' },
+  { label: 'Dolegliwości bólowe', wywiad: 'Od … : ból w okolicy … , charakter … , nasilenie …/10, czynniki nasilające/łagodzące … .', badanie: 'Okolica … — palpacyjnie … . Ruchomość … . Bez objawów alarmowych.', zalecenia: 'Leczenie przeciwbólowe, oszczędzający tryb. Kontrola / dalsza diagnostyka przy braku poprawy.' },
+  { label: 'Zaostrzenie przewlekłe', wywiad: 'Zaostrzenie choroby przewlekłej ( … ) od … . Objawy: … .', badanie: 'Stan ogólny … . Odchylenia: … .', zalecenia: 'Modyfikacja leczenia: … . Kontrola za … . Wskazania do pilnej konsultacji omówiono.' },
+  { label: 'Badanie profilaktyczne', wywiad: 'Wizyta profilaktyczna / bilans. Bez zgłaszanych dolegliwości. Wywiad rodzinny: … .', badanie: 'Stan ogólny dobry. Pomiary: masa … , wzrost … , RR …/… mmHg. Bez odchyleń.', zalecenia: 'Zdrowy styl życia. Badania profilaktyczne: … . Kontrola za … .' },
+  { label: 'Porada / konsultacja', wywiad: 'Pacjent zgłasza … . Czas trwania … , okoliczności … .', badanie: 'Badaniem przedmiotowym: … .', zalecenia: 'Zalecono … . Kontrola w razie potrzeby.' },
 ]
 const NOTE_SECTIONS: Array<{ key: keyof typeof EMPTY_NOTE; label: string; placeholder: string; tall?: boolean }> = [
   { key: 'wywiad', label: 'Wywiad', placeholder: 'co zgłasza pacjent, od kiedy, okoliczności…', tall: true },
@@ -66,6 +72,7 @@ export function Gabinet() {
   const [rozpoznanie, setRozpoznanie] = useState('')
   const [addendum, setAddendum] = useState('')
   const [noteSaved, setNoteSaved] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)  // „Gotowe szablony" — domyślnie schowane
   const [error, setError] = useState<string | null>(null)
   // potwierdzenia akcji bez powrotu: NO_SHOW i zakończenie z niezapisanym szkicem
   const [confirm, setConfirm] = useState<'NO_SHOW' | 'COMPLETE_UNSAVED' | null>(null)
@@ -437,15 +444,23 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                   <Pause size={13} /> Wizyta wstrzymana — wypełnienia są zachowane. Kliknij „Wznów wizytę", aby kontynuować.
                 </p>
               )}
-              <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                <span className="text-xs font-bold text-gray-400">Szablon:</span>
-                {NOTE_TEMPLATES.map(tpl => (
-                  <button key={tpl.label} type="button"
-                    onClick={() => { setNote({ wywiad: tpl.wywiad, badanie: tpl.badanie, zalecenia: tpl.zalecenia }); if (tpl.rozpoznanie) setRozpoznanie(tpl.rozpoznanie) }}
-                    className="cursor-pointer rounded-full bg-gray-100 px-3 py-1 text-xs font-extrabold text-gray-600 hover:bg-primary-soft hover:text-primary">
-                    {tpl.label}
-                  </button>
-                ))}
+              <div className="mb-3">
+                <button type="button" onClick={() => setTemplatesOpen(o => !o)} aria-expanded={templatesOpen}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-extrabold text-gray-600 hover:bg-primary-soft hover:text-primary">
+                  <ClipboardPen size={13} /> Gotowe szablony
+                  <ChevronDown size={13} className={cx('transition-transform', templatesOpen && 'rotate-180')} />
+                </button>
+                {templatesOpen && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {NOTE_TEMPLATES.map(tpl => (
+                      <button key={tpl.label} type="button"
+                        onClick={() => { setNote({ wywiad: tpl.wywiad, badanie: tpl.badanie, zalecenia: tpl.zalecenia }); setTemplatesOpen(false) }}
+                        className="cursor-pointer rounded-full bg-gray-100 px-3 py-1 text-xs font-extrabold text-gray-600 hover:bg-primary-soft hover:text-primary">
+                        {tpl.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-3">
                 {NOTE_SECTIONS.slice(0, 2).map(s => (
