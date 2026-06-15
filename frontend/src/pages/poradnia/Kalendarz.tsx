@@ -346,18 +346,18 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
 }
 
 // ---- modal: ustawienia placówki ----
-function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; slot_interval_min: number; earlier_notice_min_hours: number; confirmation_required: boolean; confirmation_hours: number }; onClose: () => void }) {
+function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; slot_interval_min: number; earlier_notice_min_hours: number; reminder_mode: 'NONE' | 'REMINDER' | 'CONFIRM'; confirmation_hours: number }; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [intervalMin, setIntervalMin] = useState(String(clinic.slot_interval_min))
   const [noticeHours, setNoticeHours] = useState(String(clinic.earlier_notice_min_hours))
-  const [confirmRequired, setConfirmRequired] = useState(clinic.confirmation_required)
+  const [reminderMode, setReminderMode] = useState<string>(clinic.reminder_mode)
   const [confirmHours, setConfirmHours] = useState(String(clinic.confirmation_hours))
   const [error, setError] = useState<string | null>(null)
 
   const save = useMutation({
     mutationFn: () => api(`/clinics/${clinic.clinic_id}/settings`, {
       method: 'PATCH',
-      body: { slot_interval_min: Number(intervalMin), earlier_notice_min_hours: Number(noticeHours), confirmation_required: confirmRequired, confirmation_hours: Number(confirmHours) },
+      body: { slot_interval_min: Number(intervalMin), earlier_notice_min_hours: Number(noticeHours), reminder_mode: reminderMode, confirmation_hours: Number(confirmHours) },
     }),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['clinics'] }); onClose() },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać ustawień.'),
@@ -373,11 +373,15 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
         <Field label="Min. wyprzedzenie [h]" hint="powiadomienia o wcześniejszym terminie">
           <input type="number" min="0" max="720" className={inputCls} value={noticeHours} onChange={e => setNoticeHours(e.target.value)} />
         </Field>
-        <Field label="Potwierdzanie obecności">
-          <Select value={confirmRequired ? 'yes' : 'no'} onChange={v => setConfirmRequired(v === 'yes')}
-            options={[{ value: 'no', label: 'wyłączone' }, { value: 'yes', label: 'wymagane' }]} />
+        <Field label="Przypomnienia SMS o wizycie" hint="24 h przed terminem">
+          <Select value={reminderMode} onChange={setReminderMode}
+            options={[
+              { value: 'NONE', label: 'brak' },
+              { value: 'REMINDER', label: 'tylko przypomnienie' },
+              { value: 'CONFIRM', label: 'przypomnienie + potwierdzenie' },
+            ]} />
         </Field>
-        {confirmRequired && (
+        {reminderMode === 'CONFIRM' && (
           <Field label="Prośba o potwierdzenie [h przed]">
             <Select value={confirmHours} onChange={setConfirmHours} options={[12, 24, 48, 72, 168].map(n => ({ value: String(n), label: `${n} h` }))} />
           </Field>

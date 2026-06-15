@@ -29,8 +29,12 @@ class Clinic(Base):
     # Siatka terminów [min] — godziny slotów muszą leżeć na wielokrotności
     # (np. 15 → :00/:15/:30/:45); konfigurowalne per placówka.
     slot_interval_min: Mapped[int] = mapped_column(Integer, default=15)
-    # Potwierdzanie obecności przez pacjenta: czy wymagane i ile godzin przed
-    # wizytą wysyłamy prośbę (OFF = tylko zwykłe przypominajki)
+    # Tryb przypomnień SMS/in-app o wizytach:
+    #   NONE     – brak przypomnień,
+    #   REMINDER – tylko przypomnienie 24h przed (bez potwierdzania),
+    #   CONFIRM  – przypomnienie + prośba o potwierdzenie obecności.
+    reminder_mode: Mapped[str] = mapped_column(String(10), default="REMINDER", server_default="REMINDER")
+    # synchronizowane z reminder_mode (== CONFIRM); zostaje dla zgodności
     confirmation_required: Mapped[bool] = mapped_column(Boolean, default=False)
     confirmation_hours: Mapped[int] = mapped_column(Integer, default=48)
 

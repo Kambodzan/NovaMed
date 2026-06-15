@@ -11,6 +11,7 @@ export interface ClinicLite {
   // ustawienia placówki (zwracane przez /clinics) — używane m.in. w Kalendarzu rejestracji
   slot_interval_min: number
   earlier_notice_min_hours: number
+  reminder_mode: 'NONE' | 'REMINDER' | 'CONFIRM'
   confirmation_required: boolean
   confirmation_hours: number
 }

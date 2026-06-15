@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     payments_base_url: str = "http://127.0.0.1:8105"
     sms_base_url: str = "http://127.0.0.1:8106"
     sms_enabled: bool = True
+    # Dostawca SMS: "mock" (mock-serwis :8106) albo "twilio" (realna dostawa).
+    # Twilio: konto trial wystarcza (SMS tylko na zweryfikowane numery). Sekrety w .env.
+    sms_provider: str = "mock"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from: str = ""          # numer nadawcy z Twilio, E.164 (np. +1...)
+    sms_default_country: str = "48"  # domyślny kierunkowy dla numerów bez „+"
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     # dev: front otwierany z adresów LAN (testy z innych urządzeń w sieci lokalnej)

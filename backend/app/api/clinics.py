@@ -32,6 +32,7 @@ class ClinicOut(ClinicIn):
     clinic_id: UUID
     earlier_notice_min_hours: int = 24
     slot_interval_min: int = 15
+    reminder_mode: str = "REMINDER"   # NONE / REMINDER / CONFIRM
     confirmation_required: bool = False
     confirmation_hours: int = 48
 
@@ -39,7 +40,9 @@ class ClinicOut(ClinicIn):
 class ClinicSettingsIn(BaseModel):
     earlier_notice_min_hours: int = Field(ge=0, le=720, description="Min. wyprzedzenie [h] powiadomień o wcześniejszym terminie")
     slot_interval_min: int = Field(default=15, ge=5, le=120, description="Siatka terminów [min] — np. 15 lub 20")
-    confirmation_required: bool = Field(default=False, description="Czy pacjent ma potwierdzać obecność przed wizytą")
+    # nowy, 3-pozycyjny tryb przypomnień; confirmation_required pozostaje dla zgodności
+    reminder_mode: str | None = Field(default=None, description="NONE / REMINDER / CONFIRM")
+    confirmation_required: bool = Field(default=False, description="(legacy) potwierdzanie obecności = reminder_mode CONFIRM")
     confirmation_hours: int = Field(default=48, ge=2, le=336, description="Ile godzin przed wizytą wysłać prośbę o potwierdzenie")
 
 
@@ -94,6 +97,7 @@ def clinic_out(c: Clinic) -> ClinicOut:
         photo_url=c.photo_url,
         earlier_notice_min_hours=c.earlier_notice_min_hours,
         slot_interval_min=c.slot_interval_min,
+        reminder_mode=c.reminder_mode,
         confirmation_required=c.confirmation_required,
         confirmation_hours=c.confirmation_hours,
     )
@@ -116,8 +120,15 @@ def update_clinic_settings(
     clinic = get_clinic_or_404(clinic_id, db)
     clinic.earlier_notice_min_hours = body.earlier_notice_min_hours
     clinic.slot_interval_min = body.slot_interval_min
-    clinic.confirmation_required = body.confirmation_required
     clinic.confirmation_hours = body.confirmation_hours
+    # reminder_mode jest źródłem prawdy; gdy podano (nowy front) — z niego liczymy
+    # confirmation_required. Gdy nie (legacy/testy) — odwrotnie z confirmation_required.
+    if body.reminder_mode in ("NONE", "REMINDER", "CONFIRM"):
+        clinic.reminder_mode = body.reminder_mode
+        clinic.confirmation_required = body.reminder_mode == "CONFIRM"
+    else:
+        clinic.confirmation_required = body.confirmation_required
+        clinic.reminder_mode = "CONFIRM" if body.confirmation_required else "REMINDER"
     db.commit()
     return clinic_out(clinic)
 

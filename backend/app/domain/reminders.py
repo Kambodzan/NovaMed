@@ -12,15 +12,21 @@ from app.models import Appointment, AppUser, Clinic, Payment
 
 
 def send_due_reminders(db: Session) -> int:
-    """Wysyła przypomnienia dla potwierdzonych wizyt w oknie najbliższych 24h."""
+    """Wysyła przypomnienia dla potwierdzonych wizyt w oknie najbliższych 24h —
+    o ile placówka nie ma trybu NONE."""
     now = datetime.now()
-    rows = db.scalars(select(Appointment).where(
-        Appointment.appointment_status == AppointmentStatus.CONFIRMED.value,
-        Appointment.patient_id.is_not(None),
-        Appointment.reminder_sent.is_(False),
-        Appointment.appointment_datetime > now,
-        Appointment.appointment_datetime <= now + timedelta(hours=24),
-    )).all()
+    rows = db.scalars(
+        select(Appointment)
+        .join(Clinic, Clinic.clinic_id == Appointment.clinic_id)
+        .where(
+            Clinic.reminder_mode != "NONE",
+            Appointment.appointment_status == AppointmentStatus.CONFIRMED.value,
+            Appointment.patient_id.is_not(None),
+            Appointment.reminder_sent.is_(False),
+            Appointment.appointment_datetime > now,
+            Appointment.appointment_datetime <= now + timedelta(hours=24),
+        )
+    ).all()
     for a in rows:
         doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
         who = doctor_user.username if doctor_user else f"badanie {a.service_name}"

@@ -21,6 +21,32 @@ def setup(client, factory):
     }
 
 
+def test_reminder_mode_3_pozycyjny(client, setup, db_session):
+    """Tryb przypomnień NONE/REMINDER/CONFIRM: NONE pomija przypomnienia 24h,
+    CONFIRM wysyła i synchronizuje confirmation_required."""
+    from app.domain.reminders import send_due_reminders
+    from app.domain.appointments import AppointmentStatus
+    from app.models import Appointment, Clinic
+    s = setup
+    cid = s["clinic"].clinic_id
+    base = {"earlier_notice_min_hours": 24, "slot_interval_min": 15}
+
+    r = client.patch(f"/clinics/{cid}/settings", headers=auth_header(s["reg_token"]), json={**base, "reminder_mode": "NONE"})
+    assert r.status_code == 200 and r.json()["reminder_mode"] == "NONE" and r.json()["confirmation_required"] is False
+
+    a = Appointment(patient_id=s["patient"].user_id, doctor_id=s["doctor"].user_id, clinic_id=cid,
+                    appointment_datetime=datetime.now() + timedelta(hours=12),
+                    appointment_status=AppointmentStatus.CONFIRMED.value, appointment_type="STATIONARY")
+    db_session.add(a)
+    db_session.commit()
+    assert send_due_reminders(db_session) == 0  # NONE → brak przypomnień
+
+    client.patch(f"/clinics/{cid}/settings", headers=auth_header(s["reg_token"]), json={**base, "reminder_mode": "CONFIRM"})
+    assert db_session.get(Clinic, cid).confirmation_required is True  # zsynchronizowane
+    db_session.refresh(a); a.reminder_sent = False; db_session.commit()
+    assert send_due_reminders(db_session) == 1  # CONFIRM (≠NONE) → wysyła
+
+
 def test_wynik_z_papieru_bez_wizyty(client, setup):
     """UC-PP3: rejestracja przyjmuje wynik „z papieru" luzem — bez wizyty/lekarza
     — i ląduje on w dokumentacji pacjenta (z wartościami parametrów)."""
