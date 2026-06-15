@@ -85,6 +85,8 @@ def test_erecepta_sukces_i_wglad_pacjenta(client, visit, fakes):
     doc = resp.json()
     assert doc["document_status"] == "CONFIRMED"
     assert doc["code"] is not None
+    # e-recepta ma datę ważności (30 dni od wystawienia)
+    assert doc["valid_until"] == (date.today() + timedelta(days=30)).isoformat()
 
     resp = client.get("/documents/my", headers=auth_header(visit["patient_token"]))
     assert resp.status_code == 200

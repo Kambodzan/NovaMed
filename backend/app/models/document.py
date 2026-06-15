@@ -38,6 +38,7 @@ class Prescription(Base):
     document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     prescription_code: Mapped[str] = mapped_column(String(50))  # kod z (mock) P1
     prescribed_drugs: Mapped[str] = mapped_column(Text)
+    valid_until: Mapped[date | None] = mapped_column(Date)  # ważność e-recepty (domyślnie 30 dni)
 
     document = relationship("MedicalDocument")
 

@@ -28,6 +28,7 @@ from app.models import (
 router = APIRouter(tags=["documents"])
 
 STAFF_ROLES = ("lekarz", "pielegniarka", "rejestracja", "kierownik", "administrator")
+PRESCRIPTION_VALID_DAYS = 30  # ważność e-recepty (standardowo 30 dni)
 
 
 # ---------- schematy ----------
@@ -93,6 +94,7 @@ class DocumentOut(BaseModel):
     referral_type: str | None = None  # NURSING/LAB/SPECIALIST (tylko skierowania)
     appointment_id: UUID | None = None  # wizyta, w której wystawiono dokument
     lab_values: list[LabValueOut] | None = None  # ustrukturyzowane wyniki badania
+    valid_until: date | None = None  # ważność (e-recepta)
 
 
 # ---------- pomocnicze ----------
@@ -110,11 +112,13 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
     code = None
     referral_type = None
     lab_values = None
+    valid_until = None
     details = doc.document_content
     if doc.document_type == DocumentType.PRESCRIPTION.value:
         child = db.scalar(select(Prescription).where(Prescription.document_id == doc.document_id))
         if child:
             code, details = child.prescription_code, child.prescribed_drugs
+            valid_until = child.valid_until
     elif doc.document_type == DocumentType.REFERRAL.value:
         child = db.scalar(select(Referral).where(Referral.document_id == doc.document_id))
         if child:
@@ -155,6 +159,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         appointment_id=doc.appointment_id,
         error_message=error_message,
         lab_values=lab_values,
+        valid_until=valid_until,
     )
 
 
@@ -236,7 +241,8 @@ def issue_prescription(
         db.commit()
         return document_out(db, doc, error_message=exc.message)
     doc.document_status = DocumentStatus.CONFIRMED.value
-    db.add(Prescription(document_id=doc.document_id, prescription_code=code, prescribed_drugs=body.drugs))
+    db.add(Prescription(document_id=doc.document_id, prescription_code=code, prescribed_drugs=body.drugs,
+                        valid_until=date.today() + timedelta(days=PRESCRIPTION_VALID_DAYS)))
     notify_new_document(db, doc, code)
     db.commit()
     return document_out(db, doc)
@@ -420,7 +426,8 @@ def resend_document(
             code = p1.issue_prescription(pesel=patient.pesel, doctor_pwz=pwz,
                                          icd10=data["icd10"], drugs=data["drugs"])
             db.add(Prescription(document_id=doc.document_id, prescription_code=code,
-                                prescribed_drugs=data["drugs"]))
+                                prescribed_drugs=data["drugs"],
+                                valid_until=date.today() + timedelta(days=PRESCRIPTION_VALID_DAYS)))
             doc.document_status = DocumentStatus.CONFIRMED.value
         elif doc.document_type == DocumentType.REFERRAL.value:
             code = p1.issue_referral(pesel=patient.pesel, doctor_pwz=pwz, icd10=data["icd10"],

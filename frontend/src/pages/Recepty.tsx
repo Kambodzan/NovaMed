@@ -49,6 +49,11 @@ export function Recepty() {
                       <Overline>{formatDatePL(doc.issued_at)} · {doc.doctor_name}</Overline>
                       <p className="mt-1 text-sm leading-relaxed font-medium text-gray-700">{doc.details}</p>
                       <p className="mt-1 text-xs font-medium text-gray-400">{t('W aptece podaj kod i PESEL.')}</p>
+                      {doc.valid_until && (
+                        new Date(doc.valid_until) < new Date()
+                          ? <p className="mt-0.5 text-xs font-bold text-red-600">{t('Recepta wygasła')} ({formatDatePL(doc.valid_until)})</p>
+                          : <p className="mt-0.5 text-xs font-semibold text-gray-500">{t('Ważna do')} {formatDatePL(doc.valid_until)}</p>
+                      )}
                     </div>
                     <StatusBadge status={doc.document_status} />
                   </div>

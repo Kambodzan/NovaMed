@@ -111,6 +111,14 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
             <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Status')}</dt>
             <dd className="mt-1"><StatusBadge status={doc.document_status} /></dd>
           </div>
+          {doc.valid_until && (
+            <div>
+              <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Ważna do')}</dt>
+              <dd className={cx('mt-0.5 font-bold', new Date(doc.valid_until) < new Date() ? 'text-red-600' : 'text-gray-900')}>
+                {formatDatePL(doc.valid_until)}{new Date(doc.valid_until) < new Date() && ` — ${t('Recepta wygasła')}`}
+              </dd>
+            </div>
+          )}
         </dl>
 
         {doc.lab_values && doc.lab_values.length > 0 ? (

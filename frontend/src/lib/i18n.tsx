@@ -306,6 +306,8 @@ const EN: Record<string, string> = {
   'ur.': 'born',
   'Odepnij': 'Unlink',
   'Potwierdź': 'Confirm',
+  'Ważna do': 'Valid until',
+  'Recepta wygasła': 'Prescription expired',
   'Wyniki': 'Results',
   'Parametr': 'Parameter',
   'Wynik': 'Result',

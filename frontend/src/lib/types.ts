@@ -139,6 +139,7 @@ export interface DocumentOut {
   referral_type: 'NURSING' | 'LAB' | 'SPECIALIST' | null
   appointment_id: string | null
   lab_values?: LabValue[] | null
+  valid_until?: string | null
 }
 
 export interface LabValue {
