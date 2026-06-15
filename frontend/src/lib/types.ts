@@ -56,6 +56,14 @@ export interface ShareOut {
   revoked: boolean
 }
 
+export interface SharedNote {
+  appointment_id: string
+  date: string
+  doctor_name: string
+  content: string
+  addenda: string[]
+}
+
 export interface SharedDocsOut {
   patient_id: string
   patient_name: string
@@ -63,6 +71,7 @@ export interface SharedDocsOut {
   scope_label: string
   expires_at: string
   documents: DocumentOut[]
+  notes: SharedNote[]
 }
 
 export interface AdminUser {

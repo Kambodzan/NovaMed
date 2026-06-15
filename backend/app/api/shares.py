@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_roles
 from app.core.db import get_db
 from app.api.documents import DocumentOut, document_out
-from app.models import AppUser, DocumentShare, MedicalDocument, Patient
+from app.models import Appointment, AppUser, ClinicalNote, DocumentShare, MedicalDocument, Patient
 
 router = APIRouter(prefix="/shares", tags=["shares"])
 
@@ -54,6 +54,14 @@ class AccessIn(BaseModel):
     code: str = Field(min_length=6, max_length=10)
 
 
+class SharedNoteOut(BaseModel):
+    appointment_id: UUID
+    date: datetime
+    doctor_name: str
+    content: str
+    addenda: list[str] = []
+
+
 class SharedDocsOut(BaseModel):
     patient_id: UUID
     patient_name: str
@@ -61,6 +69,7 @@ class SharedDocsOut(BaseModel):
     scope_label: str
     expires_at: datetime
     documents: list[DocumentOut]
+    notes: list[SharedNoteOut] = []
 
 
 def share_out(s: DocumentShare) -> ShareOut:
@@ -146,6 +155,24 @@ def access_by_code(
         q = q.where(MedicalDocument.issued_at >= datetime.now() - timedelta(days=365))
     docs = db.scalars(q.order_by(MedicalDocument.issued_at.desc())).all()
 
+    # noty z wizyt (podpisane) — w zakresie ogólnym i „ostatnie 12 mies."
+    notes: list[SharedNoteOut] = []
+    if share.scope in ("ALL", "LAST_12M"):
+        nq = select(ClinicalNote).where(
+            ClinicalNote.patient_id == share.patient_id, ClinicalNote.status == "SIGNED")
+        if share.scope == "LAST_12M":
+            nq = nq.where(ClinicalNote.signed_at >= datetime.now() - timedelta(days=365))
+        for n in db.scalars(nq.order_by(ClinicalNote.signed_at.desc())):
+            author = db.get(AppUser, n.author_id)
+            appt = db.get(Appointment, n.appointment_id)
+            notes.append(SharedNoteOut(
+                appointment_id=n.appointment_id,
+                date=appt.appointment_datetime if appt else (n.signed_at or n.created_at),
+                doctor_name=author.username if author else "—",
+                content=n.content,
+                addenda=[a.content for a in n.addenda],
+            ))
+
     patient = db.get(Patient, share.patient_id)
     return SharedDocsOut(
         patient_id=patient.patient_id,
@@ -154,4 +181,5 @@ def access_by_code(
         scope_label=SCOPE_LABELS.get(share.scope, share.scope),
         expires_at=share.expires_at,
         documents=[document_out(db, d) for d in docs],
+        notes=notes,
     )

@@ -92,3 +92,36 @@ def test_rbac_noty(client, setup, factory):
     pat = client.get(f"/appointments/{aid}/note", headers=auth_header(s["patient_token"])).json()
     assert pat["status"] == "SIGNED" and pat["content"] == "szkic poufny"
     assert pat["events"] == []  # pacjent nie widzi audytu
+
+
+def test_uzupelnienie_od_innego_lekarza(client, setup, factory):
+    s = setup
+    aid = booked_visit(client, s)
+    dt = auth_header(s["doctor_token"])
+    client.put(f"/appointments/{aid}/note", json={"content": "Rozpoznanie: I10"}, headers=dt)
+    client.post(f"/appointments/{aid}/note/sign", headers=dt)
+    # inny lekarz (konsultujący) dodaje uzupełnienie — EHR pozwala
+    other_user, other_token = factory.doctor()
+    r = client.post(f"/appointments/{aid}/note/addenda",
+                    json={"content": "Konsultacja: bez przeciwwskazań."}, headers=auth_header(other_token))
+    assert r.status_code == 200
+    note = client.get(f"/appointments/{aid}/note", headers=auth_header(other_token)).json()
+    assert note["addenda"][-1]["author_name"] == other_user.username
+
+
+def test_nota_w_udostepnianiu_kodem(client, setup):
+    s = setup
+    aid = booked_visit(client, s)
+    dt = auth_header(s["doctor_token"])
+    client.put(f"/appointments/{aid}/note", json={"content": "Rozpoznanie: J45.0 astma"}, headers=dt)
+    client.post(f"/appointments/{aid}/note/sign", headers=dt)
+
+    # zakres ogólny — nota widoczna w udostępnieniu kodem
+    share = client.post("/shares", json={"scope": "ALL"}, headers=auth_header(s["patient_token"])).json()
+    shared = client.post("/shares/access", json={"code": share["access_code"]}, headers=dt).json()
+    assert len(shared["notes"]) == 1 and "J45.0" in shared["notes"][0]["content"]
+
+    # zakres tylko-recepty — bez not
+    share2 = client.post("/shares", json={"scope": "PRESCRIPTION"}, headers=auth_header(s["patient_token"])).json()
+    shared2 = client.post("/shares/access", json={"code": share2["access_code"]}, headers=dt).json()
+    assert shared2["notes"] == []

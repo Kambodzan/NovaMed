@@ -131,9 +131,29 @@ export function KodOdPacjenta() {
             </Overline>
           </div>
 
-          {shared.documents.length === 0 ? (
+          {/* noty z wizyt (encounter notes) — w zakresie ogólnym / ostatnie 12 mies. */}
+          {shared.notes.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">Noty z wizyt</p>
+              <ul className="space-y-2">
+                {shared.notes.map(n => (
+                  <li key={n.appointment_id} className="rounded-2xl bg-gray-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-gray-400">{formatDatePL(n.date)} · {n.doctor_name}</p>
+                    <p className="mt-1 text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{n.content}</p>
+                    {n.addenda.map((a, i) => (
+                      <p key={i} className="mt-1.5 border-l-2 border-primary/40 pl-3 text-sm font-medium whitespace-pre-wrap text-gray-700">
+                        <span className="text-[11px] font-extrabold tracking-wider text-primary/70 uppercase">Uzupełnienie: </span>{a}
+                      </p>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {shared.documents.length === 0 && shared.notes.length === 0 ? (
             <p className="py-6 text-center text-sm font-medium text-gray-400">Brak dokumentów w udostępnionym zakresie.</p>
-          ) : (
+          ) : shared.documents.length > 0 && (
             <ul className="space-y-2">
               {shared.documents.map(d => {
                 const Icon = docIcon[d.document_type] ?? FileText

@@ -106,7 +106,8 @@ def get_note(
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
     role = user.role.role_name
-    is_doctor = role == "lekarz" and a.doctor_id == user.user_id
+    # każdy lekarz czyta notę (EHR); edycję/podpis pilnują osobne endpointy
+    is_doctor = role == "lekarz"
     is_patient = role == "pacjent" and a.patient_id in allowed_patient_ids(db, user)
     if not (is_doctor or is_patient or role in ("rejestracja", "kierownik", "administrator")):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do noty tej wizyty.")
@@ -168,8 +169,10 @@ def add_addendum(
     user: AppUser = Depends(require_roles("lekarz")),
     db: Session = Depends(get_db),
 ):
-    """Uzupełnienie do podpisanej noty (osobny, niezmienny wpis z autorem i datą)."""
-    _visit_doctor_or_403(db, appointment_id, user)
+    """Uzupełnienie do podpisanej noty (osobny, niezmienny wpis z autorem i datą).
+    Może je dodać KAŻDY lekarz (np. konsultujący), nie tylko prowadzący — jak w EHR."""
+    if db.get(Appointment, appointment_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
     note = db.scalar(select(ClinicalNote).where(ClinicalNote.appointment_id == appointment_id))
     if note is None or note.status != "SIGNED":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
