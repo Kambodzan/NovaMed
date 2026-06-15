@@ -557,6 +557,9 @@ def patient_history(
             Appointment.patient_id == patient_id,
             Appointment.doctor_id.is_not(None),
             Appointment.appointment_status == "COMPLETED",
+            # zakończona wizyta jest z definicji w przeszłości — odsiewa artefakty
+            # danych testowych (przyszłe daty), żeby na górze była realna ostatnia
+            Appointment.appointment_datetime <= datetime.now(),
         ).order_by(Appointment.appointment_datetime.desc())
     ).all()
 

@@ -216,9 +216,22 @@ def test_zaswiadczenie_lekarskie(client, visit, fakes):
     assert pdf.status_code == 200 and pdf.content[:5] == b"%PDF-"
 
 
-def test_historia_wizyt_z_notami(client, visit, fakes):
-    aid = visit["appointment_id"]
+def test_historia_wizyt_z_notami(client, visit, fakes, db_session):
+    from uuid import UUID
+    from app.models import Appointment
+
+    # przeszła zakończona wizyta (wczoraj) — historia pokazuje tylko przeszłe
+    clinic_id = db_session.get(Appointment, UUID(visit["appointment_id"])).clinic_id
+    past = Appointment(
+        patient_id=visit["patient"].user_id, doctor_id=visit["doctor"].user_id,
+        clinic_id=clinic_id, appointment_datetime=datetime.now() - timedelta(days=1),
+        appointment_status="CONFIRMED", appointment_type="STATIONARY",
+    )
+    db_session.add(past)
+    db_session.commit()
+    aid = str(past.appointment_id)
     dt = auth_header(visit["doctor_token"])
+
     client.post(f"/appointments/{aid}/status", json={"new_status": "IN_PROGRESS"}, headers=dt)
     client.put(f"/appointments/{aid}/note",
                json={"content": "Rozpoznanie: I10\n\nZalecenia: kontrola za miesiąc"}, headers=dt)
@@ -228,8 +241,7 @@ def test_historia_wizyt_z_notami(client, visit, fakes):
 
     hist = client.get(f"/patients/{visit['patient'].user_id}/history", headers=dt).json()
     assert len(hist) == 1
-    assert "Rozpoznanie: I10" in hist[0]["note"]          # nota z wizyty w historii
-    assert any("recepta" in d["label"].lower() for d in hist[0]["documents"])  # i wystawione dokumenty
-    # pacjent nie ma dostepu do tego endpointu personelu
+    assert "Rozpoznanie: I10" in hist[0]["note"]
+    assert any("recepta" in d["label"].lower() for d in hist[0]["documents"])
     assert client.get(f"/patients/{visit['patient'].user_id}/history",
                       headers=auth_header(visit["patient_token"])).status_code == 403
