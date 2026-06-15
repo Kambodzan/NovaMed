@@ -33,7 +33,7 @@ ANON = next(
 # i w minuty :15/:45 (dane testowe są na :00/:30) — unika kolizji z gęstym grafikiem
 RUN = int(time.time() // 60)
 MINUTE = (RUN % 2) * 30 + 15        # 15 albo 45
-BASE_DAYS = 40 + (RUN % 25)         # 40–64 dni w przód, różny zakres per bieg
+BASE_DAYS = 40 + (RUN % 120)        # 40–159 dni w przód, szeroki zakres per bieg (anty-kolizja)
 
 passed, failed = [], []
 
