@@ -97,7 +97,15 @@ export function Gabinet() {
     queryFn: () => api<HistoryEntry[]>(`/patients/${patientId}/history`),
     enabled: !!patientId,
   })
-  const [openHist, setOpenHist] = useState(0)  // index rozwiniętej wizyty (0 = ostatnia)
+  // indeksy ROZWINIĘTYCH wizyt — niezależne przełączniki (można otworzyć kilka
+  // naraz, zostają otwarte do ponownego kliknięcia). Domyślnie ostatnia (0).
+  const [openHist, setOpenHist] = useState<Set<number>>(() => new Set([0]))
+  const toggleHist = (i: number) => setOpenHist(prev => {
+    const next = new Set(prev)
+    if (next.has(i)) next.delete(i)
+    else next.add(i)
+    return next
+  })
   // nota z wizyty (encounter note) — szkic/podpis/uzupełnienia + audyt
   const { data: clinicalNote } = useQuery({
     queryKey: ['note', id],
@@ -590,11 +598,11 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
               <TileHeader title={<span className="inline-flex items-center gap-1.5"><History size={13} /> Poprzednie wizyty <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-extrabold text-gray-500">{history!.length}</span></span>} />
               <ul className="space-y-1.5">
                 {history!.map((h, i) => {
-                  const open = openHist === i
+                  const open = openHist.has(i)
                   return (
                     <li key={h.appointment_id} className="rounded-2xl bg-gray-50">
                       <button type="button" aria-expanded={open}
-                        onClick={() => setOpenHist(open ? -1 : i)}
+                        onClick={() => toggleHist(i)}
                         className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left">
                         <span className="min-w-0">
                           <span className="block text-sm font-extrabold text-gray-900">{formatDatePL(h.date)}, {formatTime(h.date)}</span>
