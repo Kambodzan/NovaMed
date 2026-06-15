@@ -1,7 +1,7 @@
 from uuid import UUID
 import json
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, model_validator
@@ -537,6 +537,11 @@ class HistoryEntryOut(BaseModel):
     documents: list[HistoryDocOut] = []
 
 
+def _start_of_tomorrow() -> datetime:
+    """Północ jutro — granica „data slotu ≤ dziś" dla historii wizyt."""
+    return (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 @router.get("/patients/{patient_id}/history", response_model=list[HistoryEntryOut])
 def patient_history(
     patient_id: UUID,
@@ -557,9 +562,10 @@ def patient_history(
             Appointment.patient_id == patient_id,
             Appointment.doctor_id.is_not(None),
             Appointment.appointment_status == "COMPLETED",
-            # zakończona wizyta jest z definicji w przeszłości — odsiewa artefakty
-            # danych testowych (przyszłe daty), żeby na górze była realna ostatnia
-            Appointment.appointment_datetime <= datetime.now(),
+            # odsiewa artefakty danych testowych (smoke kończy wizyty 40+ dni
+            # naprzód), ale ZACHOWUJE dzisiejsze — slot bywa później niż realne
+            # zakończenie, więc filtrujemy po dacie (≤ dziś), nie po godzinie
+            Appointment.appointment_datetime < _start_of_tomorrow(),
         ).order_by(Appointment.appointment_datetime.desc())
     ).all()
 
