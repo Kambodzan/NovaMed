@@ -306,6 +306,11 @@ const EN: Record<string, string> = {
   'ur.': 'born',
   'Odepnij': 'Unlink',
   'Potwierdź': 'Confirm',
+  'Odbiorca zobaczy': 'The recipient will see',
+  'dok.': 'docs',
+  'notatek z wizyt': 'visit notes',
+  'Ten zakres udostępnia też pełną treść notatek lekarskich z wizyt — nie tylko dokumenty.':
+    "This scope also shares the full text of doctors' visit notes — not just documents.",
   'Odpiąć podopiecznego?': 'Unlink this dependent?',
   'Profil i dokumentacja zostają w placówce — znika tylko dostęp z Twojego konta.':
     'The profile and medical records stay with the clinic — only access from your account is removed.',

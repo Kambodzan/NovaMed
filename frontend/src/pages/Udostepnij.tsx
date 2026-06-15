@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Share2, Trash2 } from 'lucide-react'
+import { AlertTriangle, Copy, Share2, Trash2 } from 'lucide-react'
 import { Button, EmptyState, Field, Overline, Tile, TileHeader } from '../ui'
 import { Select } from '../components/Select'
 import { api, ApiError } from '../lib/api'
@@ -30,6 +30,11 @@ export function Udostepnij() {
   const { data: shares } = useQuery({
     queryKey: ['shares'],
     queryFn: () => api<ShareOut[]>('/shares/my'),
+  })
+  // podgląd „co zobaczy odbiorca" w wybranym zakresie (liczy dok. i noty)
+  const { data: preview } = useQuery({
+    queryKey: ['share-preview', scope],
+    queryFn: () => api<{ document_count: number; note_count: number }>(`/shares/preview?scope=${scope}`),
   })
 
   const create = useMutation({
@@ -86,6 +91,21 @@ export function Udostepnij() {
                 { value: 'LAST_12M', label: t('Dokumenty z ostatnich 12 miesięcy') },
               ]} />
           </Field>
+
+          {preview && (
+            <div className="-mt-1 space-y-2">
+              <p className="text-sm font-semibold text-gray-500">
+                {t('Odbiorca zobaczy')}: <span className="font-extrabold text-gray-800">{preview.document_count}</span> {t('dok.')}
+                {preview.note_count > 0 && <> · <span className="font-extrabold text-gray-800">{preview.note_count}</span> {t('notatek z wizyt')}</>}
+              </p>
+              {preview.note_count > 0 && (
+                <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-bold text-amber-800">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+                  {t('Ten zakres udostępnia też pełną treść notatek lekarskich z wizyt — nie tylko dokumenty.')}
+                </p>
+              )}
+            </div>
+          )}
           <Field label={t('Ważność kodu')}>
             <Select value={hours} onChange={setHours}
               options={[

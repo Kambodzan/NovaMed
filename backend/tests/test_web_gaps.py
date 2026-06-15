@@ -81,6 +81,19 @@ def test_udostepnianie_zakres_filtruje(client, setup):
     assert shared["documents"] == []
 
 
+def test_udostepnianie_podglad(client, setup):
+    s = setup
+    make_visit_with_prescription(client, s)
+    pt = auth_header(s["patient_token"])
+    # podgląd „co zobaczy odbiorca" — 1 recepta, 0 notatek (brak podpisanej noty)
+    prev = client.get("/shares/preview?scope=ALL", headers=pt).json()
+    assert prev["document_count"] == 1 and prev["note_count"] == 0
+    # zakres LAB_RESULT — recepta poza zakresem
+    assert client.get("/shares/preview?scope=LAB_RESULT", headers=pt).json()["document_count"] == 0
+    # podgląd to akcja pacjenta
+    assert client.get("/shares/preview?scope=ALL", headers=auth_header(s["doctor_token"])).status_code == 403
+
+
 def test_zly_kod_404(client, setup):
     resp = client.post("/shares/access", json={"code": "XXX-999"}, headers=auth_header(setup["doctor_token"]))
     assert resp.status_code == 404

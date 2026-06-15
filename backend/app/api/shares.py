@@ -29,6 +29,26 @@ SCOPE_LABELS = {
 }
 
 
+def _scoped_doc_query(patient_id: UUID, scope: str):
+    q = select(MedicalDocument).where(MedicalDocument.patient_id == patient_id)
+    if scope in ("PRESCRIPTION", "LAB_RESULT"):
+        q = q.where(MedicalDocument.document_type == scope)
+    elif scope == "LAST_12M":
+        q = q.where(MedicalDocument.issued_at >= datetime.now() - timedelta(days=365))
+    return q.order_by(MedicalDocument.issued_at.desc())
+
+
+def _scoped_note_query(patient_id: UUID, scope: str):
+    """Podpisane noty z wizyt wchodzą tylko w zakres ogólny i „ostatnie 12 mies."."""
+    if scope not in ("ALL", "LAST_12M"):
+        return None
+    nq = select(ClinicalNote).where(
+        ClinicalNote.patient_id == patient_id, ClinicalNote.status == "SIGNED")
+    if scope == "LAST_12M":
+        nq = nq.where(ClinicalNote.signed_at >= datetime.now() - timedelta(days=365))
+    return nq.order_by(ClinicalNote.signed_at.desc())
+
+
 def generate_code(db: Session) -> str:
     while True:
         raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
@@ -100,6 +120,32 @@ def create_share(
     return share_out(share)
 
 
+class SharePreviewOut(BaseModel):
+    scope: str
+    scope_label: str
+    document_count: int
+    note_count: int  # podpisane noty z wizyt (treści kliniczne) w tym zakresie
+
+
+@router.get("/preview", response_model=SharePreviewOut)
+def preview_share(
+    scope: str = "ALL",
+    user: AppUser = Depends(require_roles("pacjent")),
+    db: Session = Depends(get_db),
+):
+    """Podgląd „co zobaczy odbiorca" zanim pacjent wygeneruje kod — liczba
+    dokumentów i (osobno) notatek lekarskich w danym zakresie."""
+    if scope not in SCOPES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nieznany zakres udostępnienia.")
+    docs = db.scalars(_scoped_doc_query(user.user_id, scope)).all()
+    nq = _scoped_note_query(user.user_id, scope)
+    note_count = len(db.scalars(nq).all()) if nq is not None else 0
+    return SharePreviewOut(
+        scope=scope, scope_label=SCOPE_LABELS.get(scope, scope),
+        document_count=len(docs), note_count=note_count,
+    )
+
+
 @router.get("/my", response_model=list[ShareOut])
 def my_shares(
     user: AppUser = Depends(require_roles("pacjent")),
@@ -152,21 +198,13 @@ def access_by_code(
     log_access(db, actor=user, action="ACCESS_SHARE", patient_id=share.patient_id,
                detail=f"kod {share.access_code} ({share.scope})")
 
-    q = select(MedicalDocument).where(MedicalDocument.patient_id == share.patient_id)
-    if share.scope in ("PRESCRIPTION", "LAB_RESULT"):
-        q = q.where(MedicalDocument.document_type == share.scope)
-    elif share.scope == "LAST_12M":
-        q = q.where(MedicalDocument.issued_at >= datetime.now() - timedelta(days=365))
-    docs = db.scalars(q.order_by(MedicalDocument.issued_at.desc())).all()
+    docs = db.scalars(_scoped_doc_query(share.patient_id, share.scope)).all()
 
     # noty z wizyt (podpisane) — w zakresie ogólnym i „ostatnie 12 mies."
     notes: list[SharedNoteOut] = []
-    if share.scope in ("ALL", "LAST_12M"):
-        nq = select(ClinicalNote).where(
-            ClinicalNote.patient_id == share.patient_id, ClinicalNote.status == "SIGNED")
-        if share.scope == "LAST_12M":
-            nq = nq.where(ClinicalNote.signed_at >= datetime.now() - timedelta(days=365))
-        for n in db.scalars(nq.order_by(ClinicalNote.signed_at.desc())):
+    nq = _scoped_note_query(share.patient_id, share.scope)
+    if nq is not None:
+        for n in db.scalars(nq):
             author = db.get(AppUser, n.author_id)
             appt = db.get(Appointment, n.appointment_id)
             notes.append(SharedNoteOut(
