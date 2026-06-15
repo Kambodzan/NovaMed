@@ -21,6 +21,9 @@ export function Zabiegi() {
   const [completeFor, setCompleteFor] = useState<ProcedureOut | null>(null)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [rescheduleFor, setRescheduleFor] = useState<ProcedureOut | null>(null)
+  const [rsDate, setRsDate] = useState('')
+  const [rsTime, setRsTime] = useState('09:00')
 
   const { data: procedures } = useQuery({
     queryKey: ['procedures-day', day],
@@ -44,6 +47,20 @@ export function Zabiegi() {
     onSuccess: () => { invalidate(); setError(null) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się odwołać zabiegu.'),
   })
+
+  const reschedule = useMutation({
+    mutationFn: ({ id, dt }: { id: string; dt: string }) =>
+      api(`/procedures/${id}/reschedule`, { method: 'POST', body: { procedure_datetime: dt } }),
+    onSuccess: () => { invalidate(); setRescheduleFor(null); setError(null) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się przełożyć zabiegu.'),
+  })
+
+  const openReschedule = (p: ProcedureOut) => {
+    setRescheduleFor(p)
+    setRsDate(p.procedure_datetime.slice(0, 10))
+    setRsTime(p.procedure_datetime.slice(11, 16))
+    setError(null)
+  }
 
   const planned = (procedures ?? []).filter(p => p.procedure_status === 'PLANNED').length
   const done = (procedures ?? []).filter(p => p.procedure_status === 'DONE').length
@@ -99,6 +116,7 @@ export function Zabiegi() {
                     <Button size="sm" onClick={() => { setCompleteFor(p); setError(null) }}>
                       <Check size={14} /> Odnotuj wykonanie
                     </Button>
+                    <Button size="sm" variant="secondary" onClick={() => openReschedule(p)}>Przełóż</Button>
                     <Button size="sm" variant="ghost" disabled={cancel.isPending}
                       onClick={() => { if (window.confirm(`Odwołać zabieg „${p.procedure_type}" dla ${p.patient_name}?`)) cancel.mutate(p.procedure_id) }}>
                       Odwołaj
@@ -136,6 +154,29 @@ export function Zabiegi() {
               />
             </Field>
             {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+          </div>
+        </Modal>
+      )}
+
+      {rescheduleFor && (
+        <Modal
+          overline="Przełożenie zabiegu"
+          title={`${rescheduleFor.procedure_type} — ${rescheduleFor.patient_name}`}
+          onClose={() => setRescheduleFor(null)}
+          footer={<>
+            <Button variant="secondary" onClick={() => setRescheduleFor(null)}>Anuluj</Button>
+            <Button disabled={reschedule.isPending || !rsDate}
+              onClick={() => reschedule.mutate({ id: rescheduleFor.procedure_id, dt: `${rsDate}T${rsTime}:00` })}>
+              {reschedule.isPending ? 'Przekładanie…' : 'Przełóż zabieg'}
+            </Button>
+          </>}
+        >
+          <div className="grid grid-cols-2 gap-3 pb-2">
+            <Field label="Nowa data"><DatePicker value={rsDate} min={todayIso()} onChange={setRsDate} /></Field>
+            <Field label="Godzina">
+              <input type="time" className={inputCls} value={rsTime} onChange={e => setRsTime(e.target.value)} />
+            </Field>
+            {error && <p className="col-span-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
           </div>
         </Modal>
       )}

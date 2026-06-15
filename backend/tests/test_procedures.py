@@ -158,3 +158,21 @@ def test_raport_poradni_i_csv(client, nursing_setup):
     resp = client.get(f"/clinics/{clinic_id}/reports/csv?month={month}", headers=auth_header(s["reg_token"]))
     assert resp.status_code == 200
     assert "Lekarz;Wizyty;Zako" in resp.text
+
+
+def test_przelozenie_zabiegu(client, nursing_setup):
+    s = nursing_setup
+    proc = plan(client, s).json()
+    new_dt = (datetime.now() + timedelta(days=3)).replace(hour=11, minute=0, second=0, microsecond=0)
+    r = client.post(f"/procedures/{proc['procedure_id']}/reschedule",
+                    json={"procedure_datetime": new_dt.isoformat()}, headers=auth_header(s["nurse_token"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["procedure_status"] == "PLANNED"
+    # widoczny w nowym dniu, nie w starym
+    new_day = new_dt.strftime("%Y-%m-%d")
+    assert len(client.get(f"/procedures/day?day={new_day}", headers=auth_header(s["nurse_token"])).json()) == 1
+    # wykonanego nie da się przełożyć
+    client.post(f"/procedures/{proc['procedure_id']}/complete",
+                json={"notes": "Zabieg wykonany prawidłowo."}, headers=auth_header(s["nurse_token"]))
+    assert client.post(f"/procedures/{proc['procedure_id']}/reschedule",
+                       json={"procedure_datetime": new_dt.isoformat()}, headers=auth_header(s["nurse_token"])).status_code == 409

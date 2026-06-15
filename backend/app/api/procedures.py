@@ -30,6 +30,10 @@ class CompleteProcedureIn(BaseModel):
     notes: str = Field(min_length=2, description="Przebieg zabiegu — dokumentacja czynności pielęgniarskich (UC-N3)")
 
 
+class RescheduleProcedureIn(BaseModel):
+    procedure_datetime: datetime
+
+
 class ProcedureOut(BaseModel):
     procedure_id: UUID
     procedure_datetime: datetime
@@ -146,6 +150,23 @@ def complete_procedure(
     referral = db.get(Referral, p.referral_id)
     doc = db.get(MedicalDocument, referral.document_id)
     doc.document_status = DocumentStatus.REALIZED.value
+    db.commit()
+    return procedure_out(db, p)
+
+
+@router.post("/{procedure_id}/reschedule", response_model=ProcedureOut)
+def reschedule_procedure(
+    procedure_id: UUID,
+    body: RescheduleProcedureIn,
+    user: AppUser = Depends(require_roles("pielegniarka")),
+    db: Session = Depends(get_db),
+):
+    """Przełożenie zaplanowanego zabiegu na inny termin — bez kasowania skierowania
+    (pacjent dzwoni „proszę przesunąć"). Tylko zabieg PLANNED."""
+    p = get_own_procedure(procedure_id, user, db)
+    if p.procedure_status != ST_PLANNED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Przełożyć można tylko zaplanowany zabieg.")
+    p.procedure_datetime = body.procedure_datetime
     db.commit()
     return procedure_out(db, p)
 

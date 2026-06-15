@@ -236,3 +236,61 @@ def test_rejestracja_odrzuca_bledny_pesel(client, setup):
         "birth_date": "1990-01-01", "phone_number": "601234567",
     })
     assert r.status_code == 422
+
+
+def test_rejestracja_przeklada_w_oknie_24h(client, setup, db_session):
+    """Recepcja przekłada cudzą wizytę nawet < 24 h (pacjent w tym oknie nie może)."""
+    from app.models import Appointment
+
+    old = Appointment(
+        patient_id=setup["patient"].user_id, doctor_id=setup["doctor"].user_id,
+        clinic_id=setup["clinic"].clinic_id, appointment_datetime=datetime.now() + timedelta(hours=2),
+        appointment_status="CONFIRMED", appointment_type="STATIONARY",
+    )
+    db_session.add(old)
+    db_session.commit()
+    old_id = str(old.appointment_id)
+    new_id = make_slot(client, setup, days_ahead=2, hour=10)
+
+    # pacjent NIE może (< 24 h)
+    assert client.post(f"/appointments/{old_id}/reschedule", json={"new_appointment_id": new_id},
+                       headers=auth_header(setup["patient_token"])).status_code == 409
+    # rejestracja MOŻE
+    r = client.post(f"/appointments/{old_id}/reschedule", json={"new_appointment_id": new_id},
+                    headers=auth_header(setup["reg_token"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment_id"] == new_id and r.json()["appointment_status"] == "CONFIRMED"
+
+
+def test_przelozenie_przenosi_platnosc(client, setup, db_session):
+    """Opłacona wizyta przenosi się na nowy termin tej samej ceny — bez ponownej zapłaty."""
+    from app.models import Appointment, Payment
+
+    def appt(days, price, status="FREE", patient=None):
+        a = Appointment(
+            patient_id=patient, doctor_id=setup["doctor"].user_id, clinic_id=setup["clinic"].clinic_id,
+            appointment_datetime=datetime.now() + timedelta(days=days),
+            appointment_status=status, appointment_type="STATIONARY", price=price,
+        )
+        db_session.add(a)
+        db_session.flush()
+        return a
+
+    old = appt(3, 200, "CONFIRMED", setup["patient"].user_id)
+    pay = Payment(appointment_id=old.appointment_id, amount=200, payment_status="PAID",
+                  provider_ref="X", created_at=datetime.now(), paid_at=datetime.now())
+    db_session.add(pay)
+    cheaper, same = appt(4, 150), appt(5, 200)
+    db_session.commit()
+    old_id, pay_id = str(old.appointment_id), pay.payment_id
+    hdr = auth_header(setup["patient_token"])
+
+    # inna cena → 409 (stara wizyta zostaje nietknięta)
+    assert client.post(f"/appointments/{old_id}/reschedule",
+                       json={"new_appointment_id": str(cheaper.appointment_id)}, headers=hdr).status_code == 409
+    # ta sama cena → 200, płatność wędruje na nowy termin
+    r = client.post(f"/appointments/{old_id}/reschedule",
+                    json={"new_appointment_id": str(same.appointment_id)}, headers=hdr)
+    assert r.status_code == 200, r.text
+    db_session.expire_all()
+    assert str(db_session.get(Payment, pay_id).appointment_id) == str(same.appointment_id)

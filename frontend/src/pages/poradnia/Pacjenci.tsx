@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Search, ShieldCheck, Users } from 'lucide-react'
+import { FolderOpen, Pencil, Search, ShieldCheck, Users } from 'lucide-react'
 import { Badge, Button, EmptyState, Field, Loading, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
@@ -93,6 +94,9 @@ export function PacjenciPlacowki() {
                   </td>
                   <td className="border-t border-gray-100 px-4 py-3.5 text-right">
                     <div className="flex justify-end gap-2">
+                      <Link to={`/pacjent/${p.patient_id}`} className="inline-flex h-8 items-center gap-1 rounded-full px-4 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+                        <FolderOpen size={13} /> Kartoteka
+                      </Link>
                       <Button size="sm" variant="ghost" onClick={() => { setEditFor(p); setEditPhone('') }}>
                         <Pencil size={13} /> Kontakt
                       </Button>

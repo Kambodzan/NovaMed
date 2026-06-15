@@ -3,17 +3,25 @@
 // (nota + uzupełnienia + dokumenty danej wizyty).
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, CalendarDays, ChevronDown, FolderOpen, ShieldCheck } from 'lucide-react'
-import { Badge, EmptyState, PageHeader, StatusBadge, Tile, TileHeader, cx } from '../../ui'
-import { api } from '../../lib/api'
-import { formatDatePL, formatTime } from '../../lib/format'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, CalendarClock, CalendarDays, ChevronDown, FolderOpen, MapPin, ShieldCheck, Video } from 'lucide-react'
+import { Badge, Button, DateChip, EmptyState, Modal, PageHeader, StatusBadge, Tile, TileHeader, cx } from '../../ui'
+import { api, ApiError } from '../../lib/api'
+import { dayNo, formatDatePL, formatTime, monthShort } from '../../lib/format'
+import { useAuth } from '../../lib/auth'
 import type { AppointmentOut, DocumentOut, HistoryEntry, PatientInfo } from '../../lib/types'
 import { DokumentyLista } from '../../components/DokumentyLista'
 
+const RECEPTION_ROLES = ['rejestracja', 'kierownik', 'administrator']
+
 export function PacjentRecord() {
   const { id } = useParams()
+  const { me } = useAuth()
+  const queryClient = useQueryClient()
+  const isReception = RECEPTION_ROLES.includes(me?.role ?? '')
   const [open, setOpen] = useState<string | null>(null)
+  const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
+  const [actionErr, setActionErr] = useState<string | null>(null)
 
   const { data: patient } = useQuery({
     queryKey: ['patient', id],
@@ -36,6 +44,19 @@ export function PacjentRecord() {
 
   // lekarz/pielęgniarka nie potrzebują odwołanych wizyt — to szum administracyjny
   const shown = (visits ?? []).filter(v => v.appointment_status !== 'CANCELLED')
+  // nadchodzące, zarezerwowane wizyty — rejestracja może je przełożyć/odwołać
+  const upcoming = (visits ?? []).filter(
+    v => v.appointment_status === 'CONFIRMED' && new Date(v.appointment_datetime) > new Date())
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['patient-appointments', id] })
+    void queryClient.invalidateQueries({ queryKey: ['patient-history', id] })
+  }
+  const cancel = useMutation({
+    mutationFn: (visitId: string) => api(`/appointments/${visitId}/cancel`, { method: 'POST' }),
+    onSuccess: () => { setActionErr(null); refresh() },
+    onError: (e) => setActionErr(e instanceof ApiError ? e.message : 'Nie udało się odwołać wizyty.'),
+  })
 
   return (
     <div className="space-y-6">
@@ -50,6 +71,45 @@ export function PacjentRecord() {
             : undefined}
         />
       </div>
+
+      {actionErr && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{actionErr}</p>}
+
+      {/* rejestracja: zarządzanie nadchodzącymi wizytami (przełóż/odwołaj — UC-P9/P10) */}
+      {isReception && upcoming.length > 0 && (
+        <Tile className="p-5" delay={40}>
+          <TileHeader title={<span className="inline-flex items-center gap-1.5"><CalendarClock size={13} /> Nadchodzące wizyty</span>} />
+          <ul className="space-y-1.5">
+            {upcoming.map(v => (
+              <li key={v.appointment_id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
+                <span className="text-gray-400">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">
+                    {formatDatePL(v.appointment_datetime)}, {formatTime(v.appointment_datetime)}
+                  </p>
+                  <p className="truncate text-xs font-medium text-gray-500">
+                    {v.doctor_id ? v.doctor_name : v.service_name} · {v.price ? `${v.price} zł` : 'NFZ'}
+                  </p>
+                </div>
+                {v.doctor_id && (
+                  <Button size="sm" variant="secondary" onClick={() => { setRescheduleFor(v); setActionErr(null) }}>Przełóż</Button>
+                )}
+                <Button size="sm" variant="ghost" disabled={cancel.isPending}
+                  onClick={() => { if (window.confirm(`Odwołać wizytę ${formatDatePL(v.appointment_datetime)} ${formatTime(v.appointment_datetime)}?`)) cancel.mutate(v.appointment_id) }}>
+                  Odwołaj
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Tile>
+      )}
+
+      {rescheduleFor && (
+        <StaffReschedule
+          visit={rescheduleFor}
+          onClose={() => setRescheduleFor(null)}
+          onDone={() => { setRescheduleFor(null); refresh() }}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
         <Tile className="p-5" delay={60}>
@@ -130,5 +190,57 @@ export function PacjentRecord() {
         </Tile>
       </div>
     </div>
+  )
+}
+
+// Przełożenie wizyty przez rejestrację — wybór nowego wolnego terminu u tego
+// samego lekarza (backend pilnuje równości ceny i przenosi płatność).
+function StaffReschedule({ visit, onClose, onDone }: {
+  visit: AppointmentOut
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
+  const { data: slots } = useQuery({
+    queryKey: ['slots', visit.doctor_id],
+    queryFn: () => api<AppointmentOut[]>(`/slots?doctor_id=${visit.doctor_id}`),
+  })
+  const reschedule = useMutation({
+    mutationFn: (newId: string) => api(`/appointments/${visit.appointment_id}/reschedule`, {
+      method: 'POST', body: { new_appointment_id: newId },
+    }),
+    onSuccess: onDone,
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się przełożyć wizyty.'),
+  })
+
+  return (
+    <Modal
+      overline={`${visit.doctor_name} · obecnie ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)}`}
+      title="Wybierz nowy termin" onClose={onClose}
+    >
+      {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+      {slots && slots.length > 0 ? (
+        <ul className="space-y-2 pb-4">
+          {slots.slice(0, showAll ? undefined : 8).map(s => (
+            <li key={s.appointment_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
+              <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
+              <span className="flex-1 text-sm font-semibold text-gray-500">
+                {s.appointment_type === 'ONLINE' ? 'teleporada' : s.clinic_name}
+                <span className={cx('ml-2 font-bold', s.price ? 'text-gray-900' : 'text-emerald-700')}>{s.price ? `${s.price} zł` : 'NFZ'}</span>
+              </span>
+              <Button size="sm" disabled={reschedule.isPending} onClick={() => reschedule.mutate(s.appointment_id)}>Wybierz</Button>
+            </li>
+          ))}
+          {!showAll && slots.length > 8 && (
+            <li className="text-center">
+              <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>Pokaż więcej ({slots.length - 8})</Button>
+            </li>
+          )}
+        </ul>
+      ) : (
+        <p className="pb-4 text-sm font-medium text-gray-500">Ten lekarz nie ma teraz wolnych terminów.</p>
+      )}
+    </Modal>
   )
 }

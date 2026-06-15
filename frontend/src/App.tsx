@@ -175,6 +175,7 @@ export default function App() {
           <Route index element={<UmowWizyte />} />
           <Route path="terminy" element={<Terminy />} />
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
+          <Route path="pacjent/:id" element={<PacjentRecord />} />
           <Route path="raporty" element={<Raporty />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

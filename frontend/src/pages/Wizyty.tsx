@@ -483,6 +483,9 @@ function RescheduleModal({ visit, onClose, onDone }: {
               <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
               <span className="flex-1 text-sm font-semibold text-gray-500">
                 {s.appointment_type === 'ONLINE' ? t('teleporada') : s.clinic_name}
+                <span className={cx('ml-2 font-bold', s.price ? 'text-gray-900' : 'text-emerald-700')}>
+                  {s.price ? `${s.price} zł` : 'NFZ'}
+                </span>
               </span>
               <Button size="sm" disabled={reschedule.isPending} onClick={() => reschedule.mutate(s.appointment_id)}>
                 {t('Wybierz')}
