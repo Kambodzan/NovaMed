@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileSignature, LocateFixed, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, FileSignature, LocateFixed, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
+import { useSecondsLeft, mmss } from '../components/Countdown'
 import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
 
 const parseGeo = (filter: string | null): (GeoArea & { name: string | null }) | null => {
@@ -225,6 +226,7 @@ export function Umow() {
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
+  const lockLeft = useSecondsLeft(booked?.appointment.locked_until)
   const [waitlistOpen, setWaitlistOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [notifyEarlier, setNotifyEarlier] = useState(false)
@@ -819,6 +821,10 @@ export function Umow() {
                   {t('Termin zablokowany. Do zapłaty:')} <span className="font-extrabold text-gray-900">{booked.payment.amount} zł</span>.{' '}
                   {t('Operator płatności jest symulowany — wybierz wynik autoryzacji.')}
                 </p>
+                {lockLeft !== null && (lockLeft > 0
+                  ? <p className="flex items-center gap-1.5 text-sm font-bold text-amber-700"><Clock size={14} /> {t('Termin zarezerwowany jeszcze przez')} {mmss(lockLeft)}</p>
+                  : <p className="text-sm font-bold text-red-700">{t('Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.')}</p>
+                )}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Button size="lg" disabled={pay.isPending}
                     onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'success' })}>

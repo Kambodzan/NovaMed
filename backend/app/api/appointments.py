@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
+from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import (
     CANCEL_MIN_HOURS,
@@ -109,6 +110,9 @@ class AppointmentOut(BaseModel):
     # potwierdzanie obecności (gdy placówka wymaga)
     confirmation_requested: bool = False
     patient_confirmed: bool = False
+    # płatność: do kiedy slot jest zablokowany (TEMP_LOCK) + status rozliczenia
+    locked_until: datetime | None = None
+    payment_status: str | None = None  # PENDING/PAID/FAILED/REFUNDED (wizyty płatne)
 
 
 class PaymentInfoOut(BaseModel):
@@ -150,6 +154,16 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
     doctor = db.get(Doctor, a.doctor_id) if a.doctor_id else None
     clinic = db.get(Clinic, a.clinic_id)
     patient = db.get(Patient, a.patient_id) if a.patient_id else None
+    # płatność liczymy tylko gdy może istnieć (TEMP_LOCK lub wizyta płatna) —
+    # bez dodatkowego zapytania dla zwykłych terminów NFZ
+    locked_until = payment_status = None
+    if a.appointment_status == AppointmentStatus.TEMP_LOCK.value or a.price is not None:
+        pay = db.scalar(select(Payment).where(Payment.appointment_id == a.appointment_id)
+                        .order_by(Payment.created_at.desc()))
+        if pay is not None:
+            payment_status = pay.payment_status
+            if pay.payment_status == "PENDING":
+                locked_until = pay.created_at + timedelta(minutes=settings.temp_lock_minutes)
     return AppointmentOut(
         appointment_id=a.appointment_id,
         appointment_datetime=a.appointment_datetime,
@@ -169,6 +183,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         referral_required=a.referral_required,
         confirmation_requested=a.confirmation_requested,
         patient_confirmed=a.patient_confirmed,
+        locked_until=locked_until,
+        payment_status=payment_status,
     )
 
 
@@ -649,10 +665,18 @@ def cancel_appointment(
 
     assert_transition(a.appointment_status, AppointmentStatus.CANCELLED)
     a.appointment_status = AppointmentStatus.CANCELLED.value
+    # zwrot opłaty za odwołaną wizytę płatną — oznaczamy płatność jako zwróconą
+    refunded = False
+    if a.price is not None:
+        paid = db.scalar(select(Payment).where(
+            Payment.appointment_id == a.appointment_id, Payment.payment_status == "PAID"))
+        if paid is not None:
+            paid.payment_status = "REFUNDED"
+            refunded = True
     if a.patient_id:
         notify(db, a.patient_id, "Wizyta odwołana",
                f"Wizyta {visit_label(db, a)} została odwołana."
-               + (" Jeśli była opłacona, zwrot nastąpi tą samą metodą płatności." if a.price else ""))
+               + (f" Zwrot {float(a.price):.0f} zł nastąpi tą samą metodą płatności." if refunded else ""))
 
     # zwrot terminu do puli, jeśli wizyta jeszcze przed czasem
     if hours_left > 0:

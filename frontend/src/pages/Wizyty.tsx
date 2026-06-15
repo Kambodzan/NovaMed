@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, CalendarPlus, Check, ClipboardList, MapPin, Star, Video } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Check, ClipboardList, Clock, MapPin, Star, Video } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
+import { useSecondsLeft, mmss } from '../components/Countdown'
 import type { ClinicalNote, DocumentOut } from '../lib/types'
 import { Button, DateChip, EmptyState, Loading, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
 import { API_URL, api, ApiError, getAuthToken } from '../lib/api'
@@ -81,6 +82,12 @@ export function Wizyty() {
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
             <Check size={12} /> {t('Obecność potwierdzona')}
           </span>
+        )}
+        {v.payment_status === 'PAID' && v.appointment_status !== 'CANCELLED' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{t('opłacona')}</span>
+        )}
+        {v.payment_status === 'REFUNDED' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">{t('zwrot środków')}</span>
         )}
         <StatusBadge status={v.appointment_status} />
         {actions && v.appointment_status === 'CONFIRMED' && (
@@ -404,6 +411,7 @@ function PayModal({ visit, onClose, onDone }: {
   const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const [declined, setDeclined] = useState(false)
+  const lockLeft = useSecondsLeft(visit.locked_until)
 
   const pay = useMutation({
     mutationFn: (outcome: 'success' | 'failure') =>
@@ -436,6 +444,10 @@ function PayModal({ visit, onClose, onDone }: {
               <span className="font-extrabold text-gray-900">{visit.price} zł</span>.{' '}
               {t('Operator płatności jest symulowany — wybierz wynik autoryzacji.')}
             </p>
+            {lockLeft !== null && (lockLeft > 0
+              ? <p className="flex items-center gap-1.5 text-sm font-bold text-amber-700"><Clock size={14} /> {t('Termin zarezerwowany jeszcze przez')} {mmss(lockLeft)}</p>
+              : <p className="text-sm font-bold text-red-700">{t('Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.')}</p>
+            )}
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
             <div className="grid gap-2 sm:grid-cols-2">
               <Button disabled={pay.isPending} onClick={() => pay.mutate('success')}>

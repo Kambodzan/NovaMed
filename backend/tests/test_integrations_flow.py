@@ -44,6 +44,10 @@ def test_platna_wizyta_sukces(client, setup):
     # zablokowany slot nie jest widoczny w wyszukiwarce
     assert client.get("/slots", headers=auth_header(setup["patient_token"])).json() == []
 
+    # blokada TEMP_LOCK ma widoczny dla pacjenta termin wygaśnięcia + status PENDING
+    assert body["appointment"]["locked_until"] is not None
+    assert body["appointment"]["payment_status"] == "PENDING"
+
     resp = client.post(
         f"/appointments/{slot['appointment_id']}/pay",
         json={"outcome": "success"}, headers=auth_header(setup["patient_token"]),
@@ -51,6 +55,15 @@ def test_platna_wizyta_sukces(client, setup):
     assert resp.status_code == 200
     assert resp.json()["appointment"]["appointment_status"] == "CONFIRMED"
     assert resp.json()["payment"]["payment_status"] == "PAID"
+    assert resp.json()["appointment"]["payment_status"] == "PAID"
+    assert resp.json()["appointment"]["locked_until"] is None  # po opłaceniu brak blokady
+
+    # anulowanie opłaconej wizyty → zwrot (REFUNDED) widoczny u pacjenta
+    c = client.post(f"/appointments/{slot['appointment_id']}/cancel", headers=auth_header(setup["patient_token"]))
+    assert c.status_code == 200
+    mine = client.get("/appointments/my", headers=auth_header(setup["patient_token"])).json()
+    visit = next(v for v in mine if v["appointment_id"] == slot["appointment_id"])
+    assert visit["appointment_status"] == "CANCELLED" and visit["payment_status"] == "REFUNDED"
 
 
 def test_platna_wizyta_odmowa_zwalnia_slot(client, setup, factory):

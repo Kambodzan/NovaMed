@@ -31,6 +31,8 @@ export interface AppointmentOut {
   notify_earlier: boolean
   confirmation_requested: boolean
   patient_confirmed: boolean
+  locked_until?: string | null
+  payment_status?: string | null
 }
 
 export interface NotificationOut {

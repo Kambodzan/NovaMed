@@ -306,6 +306,11 @@ const EN: Record<string, string> = {
   'ur.': 'born',
   'Odepnij': 'Unlink',
   'Potwierdź': 'Confirm',
+  'Termin zarezerwowany jeszcze przez': 'Slot held for another',
+  'Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.':
+    'Payment time expired — the slot may be released. Please book again.',
+  'opłacona': 'paid',
+  'zwrot środków': 'refunded',
   'Odbiorca zobaczy': 'The recipient will see',
   'dok.': 'docs',
   'notatek z wizyt': 'visit notes',
