@@ -26,6 +26,9 @@ class FakeP1:
     def issue_referral(self, **kwargs) -> str:
         return self._next()
 
+    def revoke_document(self, *, code: str) -> None:
+        self.revoked = code
+
 
 class FakeZus:
     def __init__(self):
@@ -35,6 +38,9 @@ class FakeZus:
         if self.fail:
             raise IntegrationError("ZUS odrzucił zwolnienie: symulowany błąd.")
         return "ZLA-2026-1001"
+
+    def revoke_sick_leave(self, *, code: str) -> None:
+        self.revoked = code
 
 
 @pytest.fixture()
@@ -281,3 +287,35 @@ def test_pauza_i_jedna_wizyta_w_toku(client, visit, db_session):
     # po zakończeniu drugiej pierwszą można wznowić
     assert status(b_id, "COMPLETED").status_code == 200
     assert status(a_id, "IN_PROGRESS").status_code == 200
+
+
+def test_storno_dokumentu(client, visit, fakes):
+    """Lekarz anuluje błędną e-receptę i e-ZLA — status REVOKED, revoke w P1/ZUS."""
+    p1, zus = fakes
+    dt = auth_header(visit["doctor_token"])
+    pid = visit["patient"].user_id
+    aid = visit["appointment_id"]
+
+    rx = client.post(f"/patients/{pid}/prescriptions",
+                     json={"appointment_id": aid, "icd10": "I10", "drugs": "Atorvasterol 40 mg"}, headers=dt)
+    assert rx.status_code == 201, rx.text
+    doc_id = rx.json()["document_id"]
+
+    c = client.post(f"/documents/{doc_id}/cancel", json={"reason": "błędny lek"}, headers=dt)
+    assert c.status_code == 200, c.text
+    assert c.json()["document_status"] == "REVOKED"
+    assert getattr(p1, "revoked", None) == rx.json()["code"]  # anulowano też w P1
+
+    # ponowne anulowanie → 409
+    assert client.post(f"/documents/{doc_id}/cancel", headers=dt).status_code == 409
+    # pacjent widzi anulowany dokument
+    my = client.get("/documents/my", headers=auth_header(visit["patient_token"])).json()
+    assert any(d["document_id"] == doc_id and d["document_status"] == "REVOKED" for d in my)
+
+    # e-ZLA — storno woła revoke w ZUS
+    zla = client.post(f"/patients/{pid}/sick-leaves",
+                      json={"appointment_id": aid, "date_from": str(date.today()),
+                            "date_to": str(date.today() + timedelta(days=3))}, headers=dt)
+    assert zla.status_code == 201, zla.text
+    assert client.post(f"/documents/{zla.json()['document_id']}/cancel", headers=dt).status_code == 200
+    assert getattr(zus, "revoked", None) == "ZLA-2026-1001"

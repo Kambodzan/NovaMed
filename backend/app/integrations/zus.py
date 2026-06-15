@@ -13,6 +13,10 @@ class ZusClient(Protocol):
         """Zwraca kod e-ZLA."""
         ...
 
+    def revoke_sick_leave(self, *, code: str) -> None:
+        """Anuluje e-ZLA (np. błędnie wystawione zwolnienie)."""
+        ...
+
 
 class HttpZusClient:
     def __init__(self, base_url: str | None = None, timeout: float = 5.0):
@@ -36,6 +40,18 @@ class HttpZusClient:
                 detail = resp.text
             raise IntegrationError(f"ZUS odrzucił zwolnienie: {detail}")
         return resp.json()["sick_leave_code"]
+
+    def revoke_sick_leave(self, *, code: str) -> None:
+        try:
+            resp = httpx.post(f"{self.base_url}/api/v1/sick-leaves/{code}/revoke", timeout=self.timeout)
+        except httpx.HTTPError as exc:
+            raise IntegrationError("Brak połączenia z ZUS e-ZLA — spróbuj ponownie później.") from exc
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json().get("detail", resp.text)
+            except ValueError:
+                detail = resp.text
+            raise IntegrationError(f"ZUS nie anulował zwolnienia: {detail}")
 
 
 def get_zus_client() -> ZusClient:

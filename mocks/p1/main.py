@@ -63,6 +63,18 @@ def get_document(code: str):
     return doc
 
 
+@app.post("/api/v1/documents/{code}/revoke")
+def revoke_document(code: str):
+    """Anulowanie wystawionego dokumentu (storno e-recepty/e-skierowania)."""
+    doc = _issued.get(code)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="P1: dokument o podanym kodzie nie istnieje.")
+    if doc.get("revoked"):
+        raise HTTPException(status_code=409, detail="P1: dokument został już anulowany.")
+    doc["revoked"] = True
+    return {"code": code, "status": "REVOKED"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "mock-p1"}

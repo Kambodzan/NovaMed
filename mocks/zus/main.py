@@ -46,6 +46,18 @@ def get_sick_leave(code: str):
     return {**doc, "review_status": "PRZYJETE"}
 
 
+@app.post("/api/v1/sick-leaves/{code}/revoke")
+def revoke_sick_leave(code: str):
+    """Anulowanie e-ZLA (np. błędnie wystawione zwolnienie)."""
+    doc = _issued.get(code)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="ZUS: zwolnienie o podanym kodzie nie istnieje.")
+    if doc.get("revoked"):
+        raise HTTPException(status_code=409, detail="ZUS: zwolnienie zostało już anulowane.")
+    doc["revoked"] = True
+    return {"sick_leave_code": code, "status": "REVOKED"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "mock-zus-ezla"}

@@ -18,6 +18,10 @@ class P1Client(Protocol):
         """Zwraca kod e-skierowania."""
         ...
 
+    def revoke_document(self, *, code: str) -> None:
+        """Anuluje wystawiony dokument w P1 (storno e-recepty/e-skierowania)."""
+        ...
+
 
 class HttpP1Client:
     def __init__(self, base_url: str | None = None, timeout: float = 5.0):
@@ -49,6 +53,9 @@ class HttpP1Client:
             "referral_type": referral_type, "notes": notes,
         })
         return data["referral_code"]
+
+    def revoke_document(self, *, code: str) -> None:
+        self._post(f"/api/v1/documents/{code}/revoke", {})
 
 
 def get_p1_client() -> P1Client:

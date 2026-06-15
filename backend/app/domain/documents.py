@@ -22,6 +22,7 @@ class DocumentStatus(str, Enum):
     SENT = "SENT"            # e-ZLA przyjęte przez ZUS
     READY = "READY"          # wynik badania dostępny
     FINAL = "FINAL"          # notatka z wizyty
+    REVOKED = "REVOKED"      # anulowany przez lekarza (storno) — także w P1/ZUS
 
 
 class ReferralType(str, Enum):

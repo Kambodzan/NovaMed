@@ -118,6 +118,7 @@ const statusMap: Record<string, { label: string; tone: Tone }> = {
   IN_ANALYSIS: { label: 'w analizie', tone: 'warn' },
   READY: { label: 'wynik gotowy', tone: 'success' },
   RECEIVED_BY_DOCTOR: { label: 'odebrany', tone: 'neutral' },
+  REVOKED: { label: 'anulowano', tone: 'error' },
   INVALID_SAMPLE: { label: 'materiał niewłaściwy', tone: 'error' },
   ACTIVE: { label: 'aktywne', tone: 'success' },
   FINAL: { label: 'zatwierdzona', tone: 'neutral' },

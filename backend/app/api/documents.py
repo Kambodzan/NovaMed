@@ -432,6 +432,79 @@ def resend_document(
     return document_out(db, doc)
 
 
+class CancelDocumentIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/documents/{document_id}/cancel", response_model=DocumentOut)
+def cancel_document(
+    document_id: UUID,
+    body: CancelDocumentIn | None = None,
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+    p1: P1Client = Depends(get_p1_client),
+    zus: ZusClient = Depends(get_zus_client),
+):
+    """Storno — anulowanie błędnie wystawionego dokumentu. Dla e-recepty,
+    e-skierowania i e-ZLA anuluje także w systemie centralnym (P1/ZUS). Nie
+    dotyczy dokumentów już zrealizowanych (wykupiona recepta, zrealizowane
+    skierowanie). Skierowanie na zabieg pielęgniarski wymaga wpierw odwołania
+    samego zabiegu."""
+    doc = db.get(MedicalDocument, document_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nie istnieje.")
+    if doc.doctor_id != user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest dokument tego lekarza.")
+    if doc.document_status == DocumentStatus.REVOKED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Dokument jest już anulowany.")
+    if doc.document_status == DocumentStatus.REALIZED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Dokument został już zrealizowany — nie można go anulować.")
+
+    referral = db.scalar(select(Referral).where(Referral.document_id == doc.document_id))
+    if referral is not None and referral.referral_type == ReferralType.NURSING.value:
+        from app.models import NursingProcedure  # import lokalny — unika cyklu
+        active = db.scalar(select(NursingProcedure).where(
+            NursingProcedure.referral_id == referral.referral_id,
+            NursingProcedure.procedure_status != "CANCELLED",
+        ))
+        if active is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Na to skierowanie zaplanowano zabieg — najpierw odwołaj zabieg w Portalu Pielęgniarki.",
+            )
+
+    # anulowanie w systemie centralnym dla dokumentów z kodem zewnętrznym (P1/ZUS)
+    try:
+        if doc.document_type == DocumentType.PRESCRIPTION.value:
+            child = db.scalar(select(Prescription).where(Prescription.document_id == doc.document_id))
+            if child is not None:
+                p1.revoke_document(code=child.prescription_code)
+        elif (doc.document_type == DocumentType.REFERRAL.value
+                and referral is not None and referral.referral_type != ReferralType.NURSING.value):
+            p1.revoke_document(code=referral.referral_code)
+        elif doc.document_type == DocumentType.SICK_LEAVE.value:
+            child = db.scalar(select(SickLeave).where(SickLeave.document_id == doc.document_id))
+            if child is not None:
+                zus.revoke_sick_leave(code=child.sick_leave_code)
+    except IntegrationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Nie udało się anulować w systemie zewnętrznym: {exc.message}",
+        ) from exc
+
+    doc.document_status = DocumentStatus.REVOKED.value
+    reason = body.reason.strip() if body and body.reason else ""
+    log_access(db, actor=user, action="CANCEL_DOCUMENT", patient_id=doc.patient_id,
+               detail=f"{doc.document_type}{(' — ' + reason) if reason else ''}")
+    if doc.patient_id:
+        label = DOC_LABELS.get(doc.document_type, "dokument")
+        notify(db, doc.patient_id, "Dokument anulowany",
+               f"Twój dokument ({label}) został anulowany przez lekarza."
+               + (f" Powód: {reason}." if reason else ""))
+    db.commit()
+    return document_out(db, doc)
+
+
 # ---------- wgląd ----------
 
 class PatientInfoOut(BaseModel):

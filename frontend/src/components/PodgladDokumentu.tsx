@@ -1,12 +1,15 @@
 // Podgląd dokumentu w aplikacji — natywny widok danych z bazy (te same pola,
 // z których w locie generowany jest PDF), bez osadzania PDF-a w przeglądarce.
 import { useState } from 'react'
-import { Download, Printer } from 'lucide-react'
-import { Button, Modal, StatusBadge } from '../ui'
+import { Ban, Download, Printer } from 'lucide-react'
+import { Button, Modal, StatusBadge, cx, inputCls } from '../ui'
 import { API_URL, getAuthToken } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { formatDatePL, formatTime } from '../lib/format'
 import type { DocumentOut } from '../lib/types'
+
+// dokumentu zrealizowanego/już anulowanego nie da się stornować
+const CANCELLABLE = (s: string) => s !== 'REVOKED' && s !== 'REALIZED'
 
 const KIND: Record<string, string> = {
   PRESCRIPTION: 'E-recepta',
@@ -17,12 +20,29 @@ const KIND: Record<string, string> = {
   CERTIFICATE: 'Zaświadczenie',
 }
 
-export function PodgladDokumentu({ doc, onClose }: {
+export function PodgladDokumentu({ doc, onClose, onCancel }: {
   doc: DocumentOut
   onClose: () => void
+  onCancel?: (doc: DocumentOut, reason: string) => Promise<void> // tylko lekarz (storno)
 }) {
   const { t } = useI18n()
   const [error, setError] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [reason, setReason] = useState('')
+  const [canceling, setCanceling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+
+  const doCancel = async () => {
+    if (!onCancel) return
+    setCanceling(true); setCancelError(null)
+    try {
+      await onCancel(doc, reason.trim())
+      onClose()
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : 'Nie udało się anulować dokumentu.')
+      setCanceling(false)
+    }
+  }
 
   const fetchPdf = async () => {
     const resp = await fetch(`${API_URL}/documents/${doc.document_id}/pdf`, {
@@ -104,6 +124,33 @@ export function PodgladDokumentu({ doc, onClose }: {
           <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">
             {t('Nie udało się pobrać PDF — spróbuj ponownie.')}
           </p>
+        )}
+
+        {/* storno — tylko w kontekście lekarza (onCancel przekazane) */}
+        {onCancel && CANCELLABLE(doc.document_status) && (
+          <div className="rounded-2xl border border-red-100 bg-red-50/50 px-4 py-3">
+            {!confirming ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-red-700/80">Dokument wystawiony błędnie? Można go anulować (storno).</p>
+                <Button size="sm" variant="ghost" className="!text-red-600 hover:!bg-red-100" onClick={() => setConfirming(true)}>
+                  <Ban size={14} /> Anuluj dokument
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                <p className="text-sm font-bold text-red-800">Anulowanie jest nieodwracalne — dokument trafi do anulowanych, a e-recepta/e-ZLA/e-skierowanie także w P1/ZUS.</p>
+                <input className={cx(inputCls, 'bg-surface')} value={reason} onChange={e => setReason(e.target.value)}
+                  placeholder="Powód anulowania (opcjonalnie, trafi do pacjenta)" />
+                {cancelError && <p className="text-sm font-bold text-red-700">{cancelError}</p>}
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Wróć</Button>
+                  <Button size="sm" variant="danger" disabled={canceling} onClick={() => void doCancel()}>
+                    {canceling ? 'Anulowanie…' : 'Tak, anuluj dokument'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </Modal>

@@ -1,7 +1,7 @@
 // Rejestr dokumentów wystawionych przez zalogowanego lekarza (UC-L2/L4)
 // z filtrem rodzaju — szybki wgląd „co komu wystawiłem".
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, Tile, cx } from '../../ui'
 import { api } from '../../lib/api'
 import type { DocumentOut } from '../../lib/types'
@@ -12,11 +12,18 @@ type Kind = DocumentOut['document_type']
 const KINDS: Kind[] = ['PRESCRIPTION', 'REFERRAL', 'SICK_LEAVE', 'LAB_RESULT', 'NOTE']
 
 export function LekarzDokumenty() {
+  const queryClient = useQueryClient()
   const [filter, setFilter] = useState<'ALL' | Kind>('ALL')
   const { data: docs } = useQuery({
     queryKey: ['issued-documents'],
     queryFn: () => api<DocumentOut[]>('/documents/issued'),
   })
+
+  // storno — anulowanie błędnie wystawionego dokumentu (P1/ZUS też)
+  const cancelDoc = async (doc: DocumentOut, reason: string) => {
+    await api(`/documents/${doc.document_id}/cancel`, { method: 'POST', body: { reason: reason || undefined } })
+    void queryClient.invalidateQueries({ queryKey: ['issued-documents'] })
+  }
 
   const count = (k: Kind) => (docs ?? []).filter(d => d.document_type === k).length
   const shown = (docs ?? []).filter(d => filter === 'ALL' || d.document_type === filter)
@@ -50,6 +57,7 @@ export function LekarzDokumenty() {
         <DokumentyLista
           documents={shown}
           byline="patient"
+          onCancel={cancelDoc}
           emptyHint="Dokumenty wystawiane w gabinecie pojawią się tutaj."
         />
       </Tile>

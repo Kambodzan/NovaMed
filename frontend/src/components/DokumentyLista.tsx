@@ -13,10 +13,11 @@ const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
   SICK_LEAVE: FileText, NOTE: FileText, CERTIFICATE: Stamp,
 }
 
-export function DokumentyLista({ documents, emptyHint, byline = 'doctor' }: {
+export function DokumentyLista({ documents, emptyHint, byline = 'doctor', onCancel }: {
   documents: DocumentOut[]
   emptyHint?: string
   byline?: 'doctor' | 'patient' // czyje nazwisko w wierszu (rejestr lekarza → pacjent)
+  onCancel?: (doc: DocumentOut, reason: string) => Promise<void> // lekarz: storno z podglądu
 }) {
   const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   if (documents.length === 0) {
@@ -55,7 +56,7 @@ export function DokumentyLista({ documents, emptyHint, byline = 'doctor' }: {
         )
       })}
     </ul>
-    {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} />}
+    {previewFor && <PodgladDokumentu doc={previewFor} onClose={() => setPreviewFor(null)} onCancel={onCancel} />}
     </>
   )
 }

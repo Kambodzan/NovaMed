@@ -118,6 +118,12 @@ export function Gabinet() {
 
   const invalidateNote = () => void queryClient.invalidateQueries({ queryKey: ['note', id] })
 
+  // storno dokumentu z poziomu gabinetu (np. tuż po pomyłkowym wystawieniu)
+  const cancelDoc = async (doc: DocumentOut, reason: string) => {
+    await api(`/documents/${doc.document_id}/cancel`, { method: 'POST', body: { reason: reason || undefined } })
+    void queryClient.invalidateQueries({ queryKey: ['patient-documents', patientId] })
+  }
+
   const changeStatus = useMutation({
     mutationFn: (status: string) => api(`/appointments/${id}/status`, { method: 'POST', body: { new_status: status } }),
     onSuccess: (_d, status) => {
@@ -473,7 +479,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 )}
               />
               {visitDocs.length > 0 ? (
-                <DokumentyLista documents={visitDocs} />
+                <DokumentyLista documents={visitDocs} onCancel={cancelDoc} />
               ) : (
                 <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-sm font-medium text-gray-400">
                   Wystawione dokumenty (recepty, skierowania, wyniki) pojawią się tutaj od razu.
