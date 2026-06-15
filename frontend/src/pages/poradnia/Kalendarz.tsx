@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarRange, ChevronLeft, ChevronRight, Plus, Search, Settings2, Video, X } from 'lucide-react'
+import { CalendarRange, Check, ChevronLeft, ChevronRight, Plus, Search, Settings2, Video, X } from 'lucide-react'
 import { Button, EmptyState, Field, Loading, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -148,7 +148,9 @@ export function Kalendarz() {
               Brak terminów w tym dniu — „najbliższy wolny" przy każdym lekarzu (klik = przejdź do tego dnia).
             </p>
           )}
-          <div className="min-w-fit">
+          {/* w-max + jawna min-szerokość: kolumny NIE kompaktują się przy wąskim oknie,
+              tylko poziomy scroll (time 64px + kolumny po 176px) */}
+          <div className="w-max" style={{ minWidth: 64 + columns.length * 176 }}>
             {/* nagłówek z lekarzami + najbliższy wolny termin */}
             <div className="sticky top-0 z-10 flex border-b border-gray-100 bg-surface/95 backdrop-blur">
               <div className="w-16 shrink-0" />
@@ -194,8 +196,12 @@ export function Kalendarz() {
                         ) : (
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-bold text-gray-900">{a.patient_name ?? a.service_name}</span>
-                            {a.appointment_status === 'CONFIRMED' && a.confirmation_requested && !a.patient_confirmed && (
-                              <span className="block text-[10px] font-bold text-amber-600">bez potw.</span>
+                            {a.appointment_status === 'CONFIRMED' && (
+                              a.patient_confirmed
+                                ? <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-600"><Check size={10} /> potwierdzona</span>
+                                : a.confirmation_requested
+                                  ? <span className="block text-[10px] font-bold text-amber-600">czeka na potw.</span>
+                                  : null
                             )}
                           </span>
                         )}
@@ -237,6 +243,15 @@ export function Kalendarz() {
               <>
                 <p><span className="font-semibold text-gray-500">Pacjent:</span> <span className="font-bold text-gray-900">{detail.patient_name ?? '—'}</span></p>
                 <p className="flex items-center gap-2"><span className="font-semibold text-gray-500">Status:</span> <StatusBadge status={detail.appointment_status} /></p>
+                {detail.appointment_status === 'CONFIRMED' && (
+                  <p><span className="font-semibold text-gray-500">Obecność:</span>{' '}
+                    {detail.patient_confirmed
+                      ? <span className="font-bold text-emerald-600">potwierdzona przez pacjenta</span>
+                      : detail.confirmation_requested
+                        ? <span className="font-bold text-amber-600">wysłano prośbę — czeka na potwierdzenie</span>
+                        : <span className="text-gray-500">brak prośby o potwierdzenie</span>}
+                  </p>
+                )}
                 {detail.notes && <p><span className="font-semibold text-gray-500">Powód:</span> {detail.notes}</p>}
               </>
             )}
