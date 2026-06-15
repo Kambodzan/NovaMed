@@ -113,7 +113,41 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
           </div>
         </dl>
 
-        {doc.details && (
+        {doc.lab_values && doc.lab_values.length > 0 ? (
+          <div className="rounded-2xl bg-gray-50 px-4 py-3">
+            <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Wyniki')}</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">
+                  <th className="pb-1">{t('Parametr')}</th>
+                  <th className="pb-1 text-right">{t('Wynik')}</th>
+                  <th className="pb-1 text-right">{t('Norma')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doc.lab_values.map((v, i) => {
+                  const low = v.ref_low != null && v.value < v.ref_low
+                  const high = v.ref_high != null && v.value > v.ref_high
+                  const abn = low || high
+                  const range = v.ref_low != null && v.ref_high != null ? `${v.ref_low}–${v.ref_high}`
+                    : v.ref_high != null ? `< ${v.ref_high}` : v.ref_low != null ? `> ${v.ref_low}` : '—'
+                  return (
+                    <tr key={i} className="border-t border-gray-200/70">
+                      <td className="py-1.5 font-semibold text-gray-700">{v.name}</td>
+                      <td className={cx('py-1.5 text-right font-extrabold [font-variant-numeric:tabular-nums]', abn ? 'text-red-600' : 'text-gray-900')}>
+                        {v.value} {v.unit}{abn && <span className="ml-1">{high ? '↑' : '↓'}</span>}
+                      </td>
+                      <td className="py-1.5 text-right text-xs font-medium text-gray-400 [font-variant-numeric:tabular-nums]">{range} {v.unit}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {doc.lab_values.some(v => (v.ref_low != null && v.value < v.ref_low) || (v.ref_high != null && v.value > v.ref_high)) && (
+              <p className="mt-2 text-xs font-bold text-red-600">{t('Wartości poza normą oznaczono na czerwono (↑ powyżej, ↓ poniżej zakresu).')}</p>
+            )}
+          </div>
+        ) : doc.details && (
           <div className="rounded-2xl bg-gray-50 px-4 py-3">
             <p className="mb-1 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Treść')}</p>
             <p className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{doc.details}</p>

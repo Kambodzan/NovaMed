@@ -306,6 +306,12 @@ const EN: Record<string, string> = {
   'ur.': 'born',
   'Odepnij': 'Unlink',
   'Potwierdź': 'Confirm',
+  'Wyniki': 'Results',
+  'Parametr': 'Parameter',
+  'Wynik': 'Result',
+  'Norma': 'Reference',
+  'Wartości poza normą oznaczono na czerwono (↑ powyżej, ↓ poniżej zakresu).':
+    'Out-of-range values are marked in red (↑ above, ↓ below the reference range).',
   'Termin zarezerwowany jeszcze przez': 'Slot held for another',
   'Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.':
     'Payment time expired — the slot may be released. Please book again.',

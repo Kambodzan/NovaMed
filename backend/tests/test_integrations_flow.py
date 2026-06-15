@@ -175,6 +175,10 @@ def test_lab_zlecenie_i_synchronizacja(client, setup, integration_fakes):
     integration_fakes.lab.results = [{
         "referral_code": code, "test_type": "lipidogram",
         "result": "Cholesterol całk. 228 mg/dl • LDL 142 mg/dl",
+        "analytes": [
+            {"name": "Cholesterol całkowity", "value": 228, "unit": "mg/dl", "ref_low": None, "ref_high": 190},
+            {"name": "HDL", "value": 55, "unit": "mg/dl", "ref_low": 40, "ref_high": None},
+        ],
     }]
     resp = client.post("/integrations/lab/sync", headers=auth_header(setup["reg_token"]))
     assert resp.status_code == 200
@@ -186,6 +190,11 @@ def test_lab_zlecenie_i_synchronizacja(client, setup, integration_fakes):
     assert types["LAB_RESULT"]["document_status"] == "READY"
     assert "Cholesterol" in types["LAB_RESULT"]["details"]
     assert types["REFERRAL"]["document_status"] == "REALIZED"
+    # ustrukturyzowane wartości z zakresami referencyjnymi (do flagi „poza normą")
+    vals = types["LAB_RESULT"]["lab_values"]
+    assert len(vals) == 2
+    chol = next(v for v in vals if v["name"] == "Cholesterol całkowity")
+    assert chol["value"] == 228 and chol["ref_high"] == 190  # 228 > 190 → poza normą
 
     # wynik trafia do skrzynki „do opisania" lekarza ZLECAJĄCEGO + powiadomienie
     dt = auth_header(setup["doctor_token"])

@@ -15,23 +15,41 @@ app = FastAPI(title="Mock Laboratorium")
 
 _orders: dict[str, dict] = {}  # referral_code → zlecenie z wynikiem
 
-RESULT_TEMPLATES = {
-    "morfologia": "WBC {0:.1f} tys/µl • RBC {1:.1f} mln/µl • HGB {2:.1f} g/dl • PLT {3} tys/µl",
-    "lipidogram": "Cholesterol całk. {3} mg/dl • LDL {4} mg/dl • HDL {5} mg/dl • TG {6} mg/dl",
-    "glukoza": "Glukoza na czczo: {7} mg/dl",
+# Panele badań: każdy analit ma jednostkę i zakres referencyjny (low/high; None =
+# brak ograniczenia z danej strony). Wartości losowane szerzej niż norma, więc
+# część wyników bywa „poza normą" — system placówki je wyróżni.
+PANELS = {
+    "morfologia": [
+        ("WBC", (3.0, 12.0), "tys/µl", 4.0, 10.0),
+        ("RBC", (3.6, 5.8), "mln/µl", 4.2, 5.4),
+        ("HGB", (11.0, 18.0), "g/dl", 13.0, 17.0),
+        ("PLT", (110, 420), "tys/µl", 150, 400),
+    ],
+    "lipidogram": [
+        ("Cholesterol całkowity", (140, 260), "mg/dl", None, 190),
+        ("LDL", (70, 200), "mg/dl", None, 115),
+        ("HDL", (30, 80), "mg/dl", 40, None),
+        ("Trójglicerydy", (70, 250), "mg/dl", None, 150),
+    ],
+    "glukoza": [("Glukoza na czczo", (70, 140), "mg/dl", 70, 99)],
 }
 
 
-def generate_result(test_type: str) -> str:
-    vals = (
-        random.uniform(4.5, 9.5), random.uniform(4.0, 5.5), random.uniform(12.5, 16.5),
-        random.randint(160, 360), random.randint(80, 160), random.randint(40, 70),
-        random.randint(70, 190), random.randint(72, 118),
-    )
-    key = next((k for k in RESULT_TEMPLATES if k in test_type.lower()), None)
-    if key:
-        return RESULT_TEMPLATES[key].format(*vals)
-    return f"Badanie wykonane, wartości w normie (protokół {random.randint(10000, 99999)})."
+def _rand(lo, hi):
+    return round(random.uniform(lo, hi), 1) if isinstance(lo, float) else random.randint(lo, hi)
+
+
+def generate(test_type: str) -> dict:
+    key = next((k for k in PANELS if k in test_type.lower()), None)
+    if key is None:
+        return {"result": f"Badanie wykonane, wynik w normie (protokół {random.randint(10000, 99999)}).",
+                "analytes": []}
+    analytes = [
+        {"name": name, "value": _rand(lo, hi), "unit": unit, "ref_low": ref_low, "ref_high": ref_high}
+        for name, (lo, hi), unit, ref_low, ref_high in PANELS[key]
+    ]
+    summary = " • ".join(f"{a['name']} {a['value']} {a['unit']}" for a in analytes)
+    return {"result": summary, "analytes": analytes}
 
 
 class OrderIn(BaseModel):
@@ -44,12 +62,14 @@ class OrderIn(BaseModel):
 def create_order(body: OrderIn):
     if body.referral_code in _orders:
         raise HTTPException(status_code=409, detail="Lab: zlecenie o tym kodzie skierowania już istnieje.")
+    gen = generate(body.test_type)
     _orders[body.referral_code] = {
         "referral_code": body.referral_code,
         "pesel": body.pesel,
         "test_type": body.test_type,
         "status": "READY",  # mock wykonuje badanie natychmiast
-        "result": generate_result(body.test_type),
+        "result": gen["result"],
+        "analytes": gen["analytes"],
         "completed_at": datetime.now().isoformat(timespec="seconds"),
     }
     return {"order_id": body.referral_code, "status": "ORDERED"}

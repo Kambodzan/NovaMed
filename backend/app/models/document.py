@@ -64,6 +64,9 @@ class LabResult(Base):
     test_type: Mapped[str] = mapped_column(String(100))
     test_description: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(String(255))
+    # ustrukturyzowane wyniki z laboratorium: JSON listy analitów
+    # [{name, value, unit, ref_low, ref_high}] — do oznaczania „poza normą"
+    values_json: Mapped[str | None] = mapped_column(Text)
 
     document = relationship("MedicalDocument")
 

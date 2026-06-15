@@ -138,6 +138,15 @@ export interface DocumentOut {
   error_message: string | null
   referral_type: 'NURSING' | 'LAB' | 'SPECIALIST' | null
   appointment_id: string | null
+  lab_values?: LabValue[] | null
+}
+
+export interface LabValue {
+  name: string
+  value: number
+  unit: string | null
+  ref_low: number | null
+  ref_high: number | null
 }
 
 export interface HistoryDoc { label: string; code: string | null; details: string | null }

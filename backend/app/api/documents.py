@@ -71,6 +71,14 @@ class CertificateIn(BaseModel):
     valid_until: date | None = None
 
 
+class LabValueOut(BaseModel):
+    name: str
+    value: float
+    unit: str | None = None
+    ref_low: float | None = None
+    ref_high: float | None = None
+
+
 class DocumentOut(BaseModel):
     document_id: UUID
     document_type: str
@@ -84,6 +92,7 @@ class DocumentOut(BaseModel):
     error_message: str | None = None
     referral_type: str | None = None  # NURSING/LAB/SPECIALIST (tylko skierowania)
     appointment_id: UUID | None = None  # wizyta, w której wystawiono dokument
+    lab_values: list[LabValueOut] | None = None  # ustrukturyzowane wyniki badania
 
 
 # ---------- pomocnicze ----------
@@ -100,6 +109,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
     patient = db.get(Patient, doc.patient_id)
     code = None
     referral_type = None
+    lab_values = None
     details = doc.document_content
     if doc.document_type == DocumentType.PRESCRIPTION.value:
         child = db.scalar(select(Prescription).where(Prescription.document_id == doc.document_id))
@@ -120,6 +130,11 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         child = db.scalar(select(LabResult).where(LabResult.document_id == doc.document_id))
         if child:
             details = f"{child.test_type}: {child.test_description or ''}"
+            if child.values_json:
+                try:
+                    lab_values = [LabValueOut(**a) for a in json.loads(child.values_json)]
+                except (ValueError, TypeError):
+                    lab_values = None
     elif doc.document_type == DocumentType.CERTIFICATE.value:
         child = db.scalar(select(Certificate).where(Certificate.document_id == doc.document_id))
         if child:
@@ -139,6 +154,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         referral_type=referral_type,
         appointment_id=doc.appointment_id,
         error_message=error_message,
+        lab_values=lab_values,
     )
 
 

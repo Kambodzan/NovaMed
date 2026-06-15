@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -60,11 +61,13 @@ def lab_sync(
         )
         db.add(doc)
         db.flush()
+        analytes = r.get("analytes") or []
         db.add(LabResult(
             document_id=doc.document_id,
             test_type=r.get("test_type", "Badanie laboratoryjne")[:100],
             test_description=r.get("result"),
             file_url=marker,
+            values_json=json.dumps(analytes, ensure_ascii=False) if analytes else None,
         ))
         # skierowanie LAB zrealizowane — wynik dotarł
         src.document_status = DocumentStatus.REALIZED.value
