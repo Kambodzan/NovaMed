@@ -794,6 +794,33 @@ def doctor_day(
     return [appointment_out(db, a) for a in rows]
 
 
+@router.get("/clinics/{clinic_id}/day", response_model=list[AppointmentOut])
+def clinic_day(
+    clinic_id: UUID,
+    day: str = Query(description="Data w formacie YYYY-MM-DD"),
+    _: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    db: Session = Depends(get_db),
+):
+    """Grafik dnia placówki dla rejestracji (UC-PP2): WSZYSTKIE terminy danego
+    dnia — wolne i zajęte, wszyscy lekarze + badania — żeby ocenić obłożenie
+    i znaleźć lukę, a nie tylko płaską listę wolnych slotów."""
+    try:
+        start = datetime.fromisoformat(day)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nieprawidłowa data.") from exc
+    rows = db.scalars(
+        select(Appointment)
+        .where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.appointment_status != AppointmentStatus.CANCELLED.value,
+            Appointment.appointment_datetime >= start,
+            Appointment.appointment_datetime < start + timedelta(days=1),
+        )
+        .order_by(Appointment.appointment_datetime)
+    )
+    return [appointment_out(db, a) for a in rows]
+
+
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
 def patient_appointments(
     patient_id: UUID,

@@ -294,3 +294,22 @@ def test_przelozenie_przenosi_platnosc(client, setup, db_session):
     assert r.status_code == 200, r.text
     db_session.expire_all()
     assert str(db_session.get(Payment, pay_id).appointment_id) == str(same.appointment_id)
+
+
+def test_grafik_dnia_placowki(client, setup):
+    """Rejestracja widzi WSZYSTKIE terminy dnia placówki — wolne i zajęte."""
+    reg = auth_header(setup["reg_token"])
+    free_id = make_slot(client, setup, days_ahead=2, hour=8)
+    booked_id = make_slot(client, setup, days_ahead=2, hour=9)
+    client.post(f"/appointments/{booked_id}/book", headers=auth_header(setup["patient_token"]))
+    day = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
+    cid = setup["clinic"].clinic_id
+
+    rows = client.get(f"/clinics/{cid}/day?day={day}", headers=reg).json()
+    statuses = {r["appointment_id"]: r["appointment_status"] for r in rows}
+    assert statuses.get(free_id) == "FREE"
+    assert statuses.get(booked_id) == "CONFIRMED"
+
+    # pacjent i lekarz nie korzystają z grafiku placówki (to widok rejestracji)
+    assert client.get(f"/clinics/{cid}/day?day={day}", headers=auth_header(setup["patient_token"])).status_code == 403
+    assert client.get(f"/clinics/{cid}/day?day={day}", headers=auth_header(setup["doctor_token"])).status_code == 403

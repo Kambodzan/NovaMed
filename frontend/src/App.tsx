@@ -33,6 +33,7 @@ import { Toaster } from './components/Toaster'
 import { ConfirmHost } from './components/ConfirmHost'
 import { Terminy } from './pages/poradnia/Terminy'
 import { UmowWizyte } from './pages/poradnia/UmowWizyte'
+import { Grafik } from './pages/poradnia/Grafik'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
 import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
@@ -97,6 +98,7 @@ function PoradniaLayout() {
       brand="Panel Poradni"
       nav={[
         { to: '/', label: 'Umów wizytę', icon: CalendarCheck, end: true },
+        { to: '/grafik', label: 'Grafik dnia', icon: CalendarDays },
         { to: '/terminy', label: 'Terminy', icon: CalendarRange },
         { to: '/pacjenci', label: 'Pacjenci placówki', icon: Users },
         { to: '/raporty', label: 'Raporty', icon: BarChart3 },
@@ -176,6 +178,7 @@ export default function App() {
       {token && me && (role === 'rejestracja' || role === 'kierownik') && (
         <Route path="/" element={<PoradniaLayout />}>
           <Route index element={<UmowWizyte />} />
+          <Route path="grafik" element={<Grafik />} />
           <Route path="terminy" element={<Terminy />} />
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
