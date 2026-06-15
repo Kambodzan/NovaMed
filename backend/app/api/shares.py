@@ -1,13 +1,15 @@
-# Udostępnianie dokumentacji jednorazowym kodem (UC-P6).
-# Pacjent generuje kod (zakres + ważność) i przekazuje go personelowi;
-# lekarz/pielęgniarka otwierają kodem podgląd dokumentacji w zakresie.
+# Udostępnianie dokumentacji kodem (UC-P6) — model „kod aktywuje TRWAŁY dostęp"
+# Pacjent generuje kod ważny krótko (1h) TYLKO na odebranie;
+# pierwszy pracownik, który go użyje, zostaje przypięty jako odbiorca i ma dostęp
+# do udostępnionego zakresu na stałe — aż pacjent go cofnie. Dzięki temu pacjent
+# wracający za tydzień nie musi generować kodu od nowa.
 from uuid import UUID
 import secrets
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
@@ -19,6 +21,10 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/shares", tags=["shares"])
+
+# Okno na ODEBRANIE kodu (po nim nieodebrany kod traci ważność). Odebrany dostęp
+# jest trwały — niezależny od tego okna, kończy go tylko odwołanie przez pacjenta.
+SHARE_REDEEM_WINDOW_HOURS = 1
 
 # Ochrona przed zgadywaniem kodów (enumeracja) przez konto personelu: po serii
 # nieudanych prób w krótkim oknie blokujemy /access (licznik z audit logu).
@@ -66,7 +72,6 @@ def generate_code(db: Session) -> str:
 
 class ShareIn(BaseModel):
     scope: str = Field(default="ALL")
-    hours_valid: int = Field(default=2, ge=1, le=24 * 30)  # krótkie okno = bezpieczniej (zwykle udostępnienie na czas wizyty)
 
 
 class ShareOut(BaseModel):
@@ -74,8 +79,10 @@ class ShareOut(BaseModel):
     access_code: str
     scope: str
     scope_label: str
-    expires_at: datetime
+    expires_at: datetime          # termin na ODEBRANIE kodu (dla nieodebranych)
     revoked: bool
+    recipient_name: str | None = None  # kto odebrał (NULL = kod czeka na odebranie)
+    redeemed_at: datetime | None = None
 
 
 class AccessIn(BaseModel):
@@ -91,20 +98,55 @@ class SharedNoteOut(BaseModel):
 
 
 class SharedDocsOut(BaseModel):
+    share_id: UUID
     patient_id: UUID
     patient_name: str
     pesel: str
     scope_label: str
-    expires_at: datetime
+    granted_at: datetime | None       # od kiedy lekarz ma trwały dostęp
     documents: list[DocumentOut]
     notes: list[SharedNoteOut] = []
 
 
-def share_out(s: DocumentShare) -> ShareOut:
+def share_out(db: Session, s: DocumentShare) -> ShareOut:
+    recipient = db.get(AppUser, s.recipient_id) if s.recipient_id else None
     return ShareOut(
         share_id=s.share_id, access_code=s.access_code, scope=s.scope,
         scope_label=SCOPE_LABELS.get(s.scope, s.scope),
         expires_at=s.expires_at, revoked=s.revoked,
+        recipient_name=recipient.username if recipient else None,
+        redeemed_at=s.redeemed_at,
+    )
+
+
+def _build_shared_docs(db: Session, share: DocumentShare) -> SharedDocsOut:
+    """Buduje podgląd udostępnionego zakresu (dokumenty + noty z wizyt)."""
+    docs = db.scalars(_scoped_doc_query(share.patient_id, share.scope)).all()
+
+    notes: list[SharedNoteOut] = []
+    nq = _scoped_note_query(share.patient_id, share.scope)
+    if nq is not None:
+        for n in db.scalars(nq):
+            author = db.get(AppUser, n.author_id)
+            appt = db.get(Appointment, n.appointment_id)
+            notes.append(SharedNoteOut(
+                appointment_id=n.appointment_id,
+                date=appt.appointment_datetime if appt else (n.signed_at or n.created_at),
+                doctor_name=author.username if author else "—",
+                content=n.content,
+                addenda=[a.content for a in n.addenda],
+            ))
+
+    patient = db.get(Patient, share.patient_id)
+    return SharedDocsOut(
+        share_id=share.share_id,
+        patient_id=patient.patient_id,
+        patient_name=f"{patient.first_name} {patient.last_name}",
+        pesel=patient.pesel,
+        scope_label=SCOPE_LABELS.get(share.scope, share.scope),
+        granted_at=share.redeemed_at,
+        documents=[document_out(db, d) for d in docs],
+        notes=notes,
     )
 
 
@@ -120,11 +162,11 @@ def create_share(
         patient_id=user.user_id,
         access_code=generate_code(db),
         scope=body.scope,
-        expires_at=datetime.now() + timedelta(hours=body.hours_valid),
+        expires_at=datetime.now() + timedelta(hours=SHARE_REDEEM_WINDOW_HOURS),
     )
     db.add(share)
     db.commit()
-    return share_out(share)
+    return share_out(db, share)
 
 
 class SharePreviewOut(BaseModel):
@@ -158,15 +200,16 @@ def my_shares(
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
-    """Aktywne (nieunieważnione, niewygasłe) udostępnienia pacjenta."""
+    """Aktywne udostępnienia pacjenta: trwałe dostępy (odebrane kody) oraz kody
+    wciąż czekające na odebranie. Unieważnione i wygasłe-nieodebrane pomijamy."""
     rows = db.scalars(
         select(DocumentShare).where(
             DocumentShare.patient_id == user.user_id,
             DocumentShare.revoked.is_(False),
-            DocumentShare.expires_at > datetime.now(),
+            or_(DocumentShare.recipient_id.is_not(None), DocumentShare.expires_at > datetime.now()),
         ).order_by(DocumentShare.created_at.desc())
     )
-    return [share_out(s) for s in rows]
+    return [share_out(db, s) for s in rows]
 
 
 @router.delete("/{share_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -175,7 +218,7 @@ def revoke_share(
     user: AppUser = Depends(require_roles("pacjent")),
     db: Session = Depends(get_db),
 ):
-    """UC-P6 A1: pacjent unieważnia kod w każdej chwili."""
+    """UC-P6 A1: pacjent odbiera dostęp (kod nieodebrany albo trwały dostęp lekarza)."""
     share = db.get(DocumentShare, share_id)
     if share is None or share.patient_id != user.user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Udostępnienie nie istnieje.")
@@ -183,14 +226,7 @@ def revoke_share(
     db.commit()
 
 
-@router.post("/access", response_model=SharedDocsOut)
-def access_by_code(
-    body: AccessIn,
-    user: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
-    db: Session = Depends(get_db),
-):
-    """Personel otwiera dokumentację kodem od pacjenta (podgląd w zakresie kodu)."""
-    # Rate-limit: zbyt wiele nieudanych prób z jednego konta = próba zgadywania kodu.
+def _check_rate_limit(db: Session, user: AppUser) -> None:
     recent_fails = db.scalar(
         select(func.count()).select_from(AuditLog).where(
             AuditLog.actor_id == user.user_id,
@@ -200,6 +236,58 @@ def access_by_code(
     if recent_fails >= SHARE_FAIL_LIMIT:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             detail="Zbyt wiele nieudanych prób z tego konta — odczekaj kilka minut.")
+
+
+@router.get("/granted", response_model=list[ShareOut])
+def granted_shares(
+    user: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
+    db: Session = Depends(get_db),
+):
+    """Pacjenci, którzy udostępnili dokumentację temu pracownikowi (trwały dostęp).
+    Pozwala wrócić do dokumentacji bez ponownego wpisywania kodu."""
+    rows = db.scalars(
+        select(DocumentShare).where(
+            DocumentShare.recipient_id == user.user_id,
+            DocumentShare.revoked.is_(False),
+        ).order_by(DocumentShare.redeemed_at.desc())
+    ).all()
+    out = []
+    for s in rows:
+        patient = db.get(Patient, s.patient_id)
+        item = share_out(db, s)
+        # nadpisujemy etykietę nazwiskiem pacjenta dla listy w portalu personelu
+        item.recipient_name = f"{patient.first_name} {patient.last_name}" if patient else None
+        out.append(item)
+    return out
+
+
+@router.get("/granted/{share_id}", response_model=SharedDocsOut)
+def granted_access(
+    share_id: UUID,
+    user: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
+    db: Session = Depends(get_db),
+):
+    """Otwarcie udostępnionej dokumentacji z TRWAŁEGO dostępu (bez kodu)."""
+    share = db.get(DocumentShare, share_id)
+    if share is None or share.recipient_id != user.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brak takiego udostępnienia.")
+    if share.revoked:
+        raise HTTPException(status_code=status.HTTP_410_GONE,
+                            detail="Pacjent cofnął dostęp do tej dokumentacji.")
+    log_access(db, actor=user, action="ACCESS_SHARE", patient_id=share.patient_id,
+               detail=f"trwaly dostep ({share.scope})")
+    return _build_shared_docs(db, share)
+
+
+@router.post("/access", response_model=SharedDocsOut)
+def access_by_code(
+    body: AccessIn,
+    user: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
+    db: Session = Depends(get_db),
+):
+    """Personel aktywuje kodem TRWAŁY dostęp do dokumentacji pacjenta (w zakresie
+    kodu). Pierwszy pracownik, który użyje kodu, zostaje jego odbiorcą."""
+    _check_rate_limit(db, user)  # anty-enumeracja kodów
 
     code = body.code.strip().upper()
     share = db.scalar(select(DocumentShare).where(DocumentShare.access_code == code))
@@ -212,39 +300,24 @@ def access_by_code(
                    detail=f"kod uniewazniony {code}")
         raise HTTPException(status_code=status.HTTP_410_GONE,
                             detail="Ten kod został unieważniony przez pacjenta — poproś o nowy.")
-    if share.expires_at <= datetime.now():
+
+    if share.recipient_id is None:
+        # kod jeszcze nieodebrany — pilnujemy okna na odebranie
+        if share.expires_at <= datetime.now():
+            log_access(db, actor=user, action="ACCESS_SHARE_FAIL", patient_id=share.patient_id,
+                       detail=f"kod wygasl {code}")
+            raise HTTPException(status_code=status.HTTP_410_GONE,
+                                detail="Ten kod stracił ważność (był do odebrania przez 1 h) — poproś pacjenta o nowy.")
+        share.recipient_id = user.user_id
+        share.redeemed_at = datetime.now()
+    elif share.recipient_id != user.user_id:
+        # kod już przypięty do innego pracownika — kod jest jednorazowy w użyciu
         log_access(db, actor=user, action="ACCESS_SHARE_FAIL", patient_id=share.patient_id,
-                   detail=f"kod wygasl {code}")
-        raise HTTPException(status_code=status.HTTP_410_GONE,
-                            detail=f"Ten kod wygasł {share.expires_at.strftime('%d.%m.%Y %H:%M')} — poproś pacjenta o nowy.")
+                   detail=f"kod zajety {code}")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Ten kod został już użyty przez innego pracownika — poproś pacjenta o nowy.")
+    # else: recipient == user → ponowny dostęp do trwałego udostępnienia (OK)
 
     log_access(db, actor=user, action="ACCESS_SHARE", patient_id=share.patient_id,
                detail=f"kod {share.access_code} ({share.scope})")
-
-    docs = db.scalars(_scoped_doc_query(share.patient_id, share.scope)).all()
-
-    # noty z wizyt (podpisane) — w zakresie ogólnym i „ostatnie 12 mies."
-    notes: list[SharedNoteOut] = []
-    nq = _scoped_note_query(share.patient_id, share.scope)
-    if nq is not None:
-        for n in db.scalars(nq):
-            author = db.get(AppUser, n.author_id)
-            appt = db.get(Appointment, n.appointment_id)
-            notes.append(SharedNoteOut(
-                appointment_id=n.appointment_id,
-                date=appt.appointment_datetime if appt else (n.signed_at or n.created_at),
-                doctor_name=author.username if author else "—",
-                content=n.content,
-                addenda=[a.content for a in n.addenda],
-            ))
-
-    patient = db.get(Patient, share.patient_id)
-    return SharedDocsOut(
-        patient_id=patient.patient_id,
-        patient_name=f"{patient.first_name} {patient.last_name}",
-        pesel=patient.pesel,
-        scope_label=SCOPE_LABELS.get(share.scope, share.scope),
-        expires_at=share.expires_at,
-        documents=[document_out(db, d) for d in docs],
-        notes=notes,
-    )
+    return _build_shared_docs(db, share)

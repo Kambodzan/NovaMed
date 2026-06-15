@@ -40,36 +40,71 @@ def make_visit_with_prescription(client, s) -> int:
 # ---------- UC-P6: udostępnianie kodem ----------
 
 def test_udostepnianie_kodem_pelny_cykl(client, setup):
+    """UC-P6 (model trwałego dostępu): kod aktywuje TRWAŁY dostęp dla pierwszego
+    pracownika, który go użyje; potem widzi pacjenta bez kodu, aż pacjent cofnie."""
     s = setup
     make_visit_with_prescription(client, s)
 
-    # pacjent generuje kod
-    resp = client.post("/shares", json={"scope": "ALL", "hours_valid": 24}, headers=auth_header(s["patient_token"]))
+    # pacjent generuje kod (bez wyboru ważności — okno na odebranie jest stałe = 1h)
+    resp = client.post("/shares", json={"scope": "ALL"}, headers=auth_header(s["patient_token"]))
     assert resp.status_code == 201, resp.text
     share = resp.json()
     assert len(share["access_code"]) == 7 and share["access_code"][3] == "-"
+    assert share["recipient_name"] is None  # jeszcze nieodebrany
 
-    # lekarz otwiera kodem
+    # lekarz odbiera kod → zostaje przypięty jako odbiorca
     resp = client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["doctor_token"]))
     assert resp.status_code == 200
     shared = resp.json()
-    assert shared["pesel"] == "90010112345"
-    assert len(shared["documents"]) == 1
+    assert shared["pesel"] == "90010112345" and len(shared["documents"]) == 1
+    assert shared["granted_at"] is not None and shared["share_id"] == share["share_id"]
 
-    # pielęgniarka też może; pacjent nie
-    assert client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["nurse_token"])).status_code == 200
+    # ten sam lekarz wchodzi PONOWNIE tym samym kodem — trwały dostęp, OK
+    assert client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["doctor_token"])).status_code == 200
+
+    # pielęgniarka tym samym (już odebranym) kodem — 403, kod jednorazowy w użyciu
+    assert client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["nurse_token"])).status_code == 403
+    # pacjent nie ma roli personelu
     assert client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["patient_token"])).status_code == 403
 
-    # lista moich + unieważnienie (UC-P6 A1)
+    # lekarz ma teraz pacjenta na liście „udostępnione mi" i wchodzi BEZ kodu
+    granted = client.get("/shares/granted", headers=auth_header(s["doctor_token"])).json()
+    assert len(granted) == 1 and granted[0]["share_id"] == share["share_id"]
+    assert client.get(f"/shares/granted/{share['share_id']}", headers=auth_header(s["doctor_token"])).status_code == 200
+    # cudzy pracownik (pielęgniarka) nie wejdzie w trwały dostęp lekarza
+    assert client.get(f"/shares/granted/{share['share_id']}", headers=auth_header(s["nurse_token"])).status_code == 404
+
+    # u pacjenta dostęp widnieje z nazwiskiem odbiorcy
     mine = client.get("/shares/my", headers=auth_header(s["patient_token"])).json()
-    assert len(mine) == 1
+    assert len(mine) == 1 and mine[0]["recipient_name"]
+
+    # pacjent cofa dostęp (UC-P6 A1) → lekarz traci i kod, i trwały wgląd
     client.delete(f"/shares/{share['share_id']}", headers=auth_header(s["patient_token"]))
     assert client.get("/shares/my", headers=auth_header(s["patient_token"])).json() == []
+    assert client.get("/shares/granted", headers=auth_header(s["doctor_token"])).json() == []
+    assert client.get(f"/shares/granted/{share['share_id']}", headers=auth_header(s["doctor_token"])).status_code == 410
     resp = client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["doctor_token"]))
-    assert resp.status_code == 410  # kod istnieje, ale unieważniony — komunikat odróżnia od literówki
-    assert "unieważniony" in resp.json()["detail"]
+    assert resp.status_code == 410 and "unieważniony" in resp.json()["detail"]
     # kod, którego nigdy nie było → 404
     assert client.post("/shares/access", json={"code": "XXX-999"}, headers=auth_header(s["doctor_token"])).status_code == 404
+
+
+def test_udostepnianie_kod_wygasa_przed_odebraniem(client, setup, db_session):
+    """Nieodebrany kod traci ważność po oknie 1h na odebranie."""
+    import uuid
+    from datetime import datetime, timedelta
+    from app.models import DocumentShare
+    s = setup
+    make_visit_with_prescription(client, s)
+    share = client.post("/shares", json={"scope": "ALL"}, headers=auth_header(s["patient_token"])).json()
+
+    # cofamy expires_at w przeszłość (symulacja minięcia okna na odebranie)
+    row = db_session.get(DocumentShare, uuid.UUID(share["share_id"]))
+    row.expires_at = datetime.now() - timedelta(minutes=1)
+    db_session.commit()
+
+    # nieodebrany, po oknie → 410
+    assert client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(s["doctor_token"])).status_code == 410
 
 
 def test_udostepnianie_zakres_filtruje(client, setup):

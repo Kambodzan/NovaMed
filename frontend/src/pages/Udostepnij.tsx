@@ -22,7 +22,6 @@ export function Udostepnij() {
   const { t } = useI18n()
   const scopeLabel = (s: { scope: string; scope_label: string }) => t(SCOPE_LABEL[s.scope] ?? s.scope_label)
   const [scope, setScope] = useState('ALL')
-  const [hours, setHours] = useState('2')
   const [lastCode, setLastCode] = useState<ShareOut | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,9 +37,7 @@ export function Udostepnij() {
   })
 
   const create = useMutation({
-    mutationFn: () => api<ShareOut>('/shares', {
-      method: 'POST', body: { scope, hours_valid: Number(hours) },
-    }),
+    mutationFn: () => api<ShareOut>('/shares', { method: 'POST', body: { scope } }),
     onSuccess: (s) => { setLastCode(s); setError(null); void queryClient.invalidateQueries({ queryKey: ['shares'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się wygenerować kodu.'),
   })
@@ -76,7 +73,7 @@ export function Udostepnij() {
       <div className="fade-up">
         <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900">{t('Udostępnij dokumentację')}</h1>
         <p className="mt-1.5 text-sm leading-relaxed font-medium text-gray-500">
-          {t('Lekarz lub pielęgniarka wpisze kod w swoim portalu i zobaczy wybrane dokumenty. Dostęp możesz odwołać w każdej chwili.')}
+          {t('Przekaż kod lekarzowi lub pielęgniarce — po użyciu zachowuje stały wgląd w wybrany zakres (nie trzeba dawać kodu przy każdej wizycie). Dostęp odwołasz w każdej chwili poniżej.')}
         </p>
       </div>
 
@@ -106,16 +103,6 @@ export function Udostepnij() {
               )}
             </div>
           )}
-          <Field label={t('Ważność kodu')} hint={t('Krótszy czas = bezpieczniej. Kod możesz w każdej chwili unieważnić poniżej.')}>
-            <Select value={hours} onChange={setHours}
-              options={[
-                { value: '1', label: t('1 godzina') },
-                { value: '2', label: t('2 godziny') },
-                { value: '8', label: t('8 godzin') },
-                { value: '24', label: t('24 godziny') },
-                { value: '168', label: t('7 dni') },
-              ]} />
-          </Field>
           {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
           {!lastCode ? (
@@ -128,7 +115,7 @@ export function Udostepnij() {
               <p className="my-3 text-4xl font-extrabold tracking-[0.25em] text-primary">{lastCode.access_code}</p>
               {qr && <img src={qr} alt="Kod QR" className="mx-auto mb-2 rounded-xl bg-white p-1" />}
               <p className="text-xs font-semibold text-gray-400">
-                {scopeLabel(lastCode)} · {t('ważny do:')} {formatDatePL(lastCode.expires_at)}, {formatTime(lastCode.expires_at)}
+                {scopeLabel(lastCode)} · {t('do odebrania do:')} {formatTime(lastCode.expires_at)} {t('(potem dostęp jest już stały)')}
               </p>
               <div className="mt-4 flex justify-center gap-2">
                 <Button size="sm" variant="secondary" onClick={() => void copy(lastCode.access_code)}>
@@ -148,13 +135,24 @@ export function Udostepnij() {
             {shares.map(s => (
               <li key={s.share_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-extrabold tracking-[0.15em] text-gray-900">{s.access_code}</p>
-                  <p className="text-xs font-medium text-gray-500">
-                    {scopeLabel(s)} · {t('do')} {formatDatePL(s.expires_at)}, {formatTime(s.expires_at)}
-                  </p>
+                  {s.recipient_name ? (
+                    <>
+                      <p className="truncate text-sm font-extrabold text-gray-900">{s.recipient_name}</p>
+                      <p className="text-xs font-medium text-gray-500">
+                        {scopeLabel(s)} · {t('stały dostęp od')} {s.redeemed_at ? formatDatePL(s.redeemed_at) : ''}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-extrabold tracking-[0.15em] text-gray-900">{s.access_code}</p>
+                      <p className="text-xs font-medium text-gray-500">
+                        {scopeLabel(s)} · {t('czeka na odebranie do')} {formatTime(s.expires_at)}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <Button size="sm" variant="ghost" disabled={revoke.isPending} onClick={() => revoke.mutate(s.share_id)}>
-                  <Trash2 size={14} /> {t('Unieważnij')}
+                  <Trash2 size={14} /> {t('Odbierz dostęp')}
                 </Button>
               </li>
             ))}

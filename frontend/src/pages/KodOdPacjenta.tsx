@@ -1,13 +1,13 @@
 // UC-P6 (strona personelu): dostęp do udostępnionej dokumentacji kodem od pacjenta
 // — wpisanym ręcznie albo zeskanowanym kamerą z QR na telefonie pacjenta.
 import { useEffect, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import jsQR from 'jsqr'
-import { Camera, FileSignature, FileText, FlaskConical, KeyRound, Pill, Stamp, X } from 'lucide-react'
-import { Button, Overline, PageHeader, StatusBadge, Tile, cx, inputCls } from '../ui'
+import { Camera, ChevronRight, FileSignature, FileText, FlaskConical, KeyRound, Pill, Stamp, Users, X } from 'lucide-react'
+import { Button, Overline, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
-import { formatDatePL, formatTime } from '../lib/format'
-import type { DocumentOut, SharedDocsOut } from '../lib/types'
+import { formatDatePL } from '../lib/format'
+import type { DocumentOut, ShareOut, SharedDocsOut } from '../lib/types'
 
 const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
   PRESCRIPTION: Pill, REFERRAL: FileSignature, LAB_RESULT: FlaskConical,
@@ -15,6 +15,7 @@ const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
 }
 
 export function KodOdPacjenta() {
+  const queryClient = useQueryClient()
   const [code, setCode] = useState('')
   const [shared, setShared] = useState<SharedDocsOut | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,8 +23,20 @@ export function KodOdPacjenta() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
+  // pacjenci, którzy nadali temu pracownikowi trwały dostęp (bez kodu)
+  const { data: granted } = useQuery({
+    queryKey: ['granted-shares'],
+    queryFn: () => api<ShareOut[]>('/shares/granted'),
+  })
+
   const access = useMutation({
     mutationFn: (c: string | undefined) => api<SharedDocsOut>('/shares/access', { method: 'POST', body: { code: c ?? code } }),
+    onSuccess: (data) => { setShared(data); setError(null); setCode(''); void queryClient.invalidateQueries({ queryKey: ['granted-shares'] }) },
+    onError: (e) => { setShared(null); setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć dokumentacji.') },
+  })
+
+  const openGrant = useMutation({
+    mutationFn: (shareId: string) => api<SharedDocsOut>(`/shares/granted/${shareId}`),
     onSuccess: (data) => { setShared(data); setError(null) },
     onError: (e) => { setShared(null); setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć dokumentacji.') },
   })
@@ -81,7 +94,7 @@ export function KodOdPacjenta() {
     <div className="space-y-6">
       <div className="fade-up">
         <PageHeader
-          overline="UC-P6 · dostęp tymczasowy, w zakresie wybranym przez pacjenta"
+          overline="UC-P6 · kod nadaje stały dostęp w zakresie wybranym przez pacjenta (odwoływalny)"
           title="Dokumentacja z kodu"
         />
       </div>
@@ -119,6 +132,37 @@ export function KodOdPacjenta() {
         {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       </Tile>
 
+      {granted && granted.length > 0 && (
+        <Tile delay={90}>
+          <TileHeader title="Udostępnione mi" />
+          <p className="-mt-2 mb-3 text-sm font-medium text-gray-500">
+            Pacjenci, którzy nadali Ci stały wgląd — otwórz bez kodu.
+          </p>
+          <ul className="space-y-1.5">
+            {granted.map(g => (
+              <li key={g.share_id}>
+                <button
+                  onClick={() => openGrant.mutate(g.share_id)}
+                  disabled={openGrant.isPending}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left transition hover:bg-primary-soft disabled:opacity-60"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-primary tile-shadow">
+                    <Users size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-gray-900">{g.recipient_name}</span>
+                    <span className="block text-xs font-semibold text-gray-400">
+                      {g.scope_label}{g.redeemed_at ? ` · od ${formatDatePL(g.redeemed_at)}` : ''}
+                    </span>
+                  </span>
+                  <ChevronRight size={16} className="shrink-0 text-gray-300" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Tile>
+      )}
+
       {shared && (
         <Tile className="p-5" delay={60}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-primary-soft px-4 py-3">
@@ -127,7 +171,7 @@ export function KodOdPacjenta() {
               <p className="text-xs font-semibold text-gray-500">PESEL {shared.pesel}</p>
             </div>
             <Overline className="!text-primary/70">
-              {shared.scope_label} · dostęp do {formatDatePL(shared.expires_at)}, {formatTime(shared.expires_at)}
+              {shared.scope_label}{shared.granted_at ? ` · stały dostęp od ${formatDatePL(shared.granted_at)}` : ''}
             </Overline>
           </div>
 

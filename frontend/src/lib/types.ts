@@ -54,8 +54,10 @@ export interface ShareOut {
   access_code: string
   scope: string
   scope_label: string
-  expires_at: string
+  expires_at: string                  // termin na odebranie kodu (dla nieodebranych)
   revoked: boolean
+  recipient_name: string | null       // kto odebrał (null = kod czeka na odebranie)
+  redeemed_at: string | null
 }
 
 export interface SharedNote {
@@ -67,11 +69,12 @@ export interface SharedNote {
 }
 
 export interface SharedDocsOut {
+  share_id: string
   patient_id: string
   patient_name: string
   pesel: string
   scope_label: string
-  expires_at: string
+  granted_at: string | null           // od kiedy lekarz ma trwały dostęp
   documents: DocumentOut[]
   notes: SharedNote[]
 }
