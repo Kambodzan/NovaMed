@@ -18,7 +18,8 @@ def setup(client, factory):
             "patient": patient_user, "patient_token": patient_token, "reg_token": reg_token}
 
 
-def booked_visit(client, s, days_ahead=0) -> str:
+def booked_visit(client, s, days_ahead=1) -> str:
+    # jutro 9:00 — zawsze w przyszłości, niezależnie od pory uruchomienia testów
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=9, minute=0, second=0, microsecond=0)
     slot = client.post(f"/clinics/{s['clinic'].clinic_id}/slots",
                        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()]},

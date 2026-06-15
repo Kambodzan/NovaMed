@@ -72,6 +72,13 @@ export function PacjentRecord() {
         />
       </div>
 
+      {patient?.allergies && (
+        <p className="flex items-start gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-900 ring-1 ring-red-200 fade-up">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+          <span><span className="font-extrabold tracking-wider text-red-700 uppercase">Alergie: </span>{patient.allergies}</span>
+        </p>
+      )}
+
       {actionErr && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{actionErr}</p>}
 
       {/* rejestracja: zarządzanie nadchodzącymi wizytami (przełóż/odwołaj — UC-P9/P10) */}

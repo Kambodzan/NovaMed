@@ -515,6 +515,10 @@ class PatientInfoOut(BaseModel):
     birth_date: date
     insurance_status: bool
     phone_number: str | None
+    # dane kliniczne (prowadzi lekarz) — alergie eksponowane przy recepcie
+    allergies: str | None = None
+    chronic_diseases: str | None = None
+    chronic_medications: str | None = None
     # konta rodzinne: podopieczny zwykle nie ma telefonu — kontakt przez opiekuna
     guardian_name: str | None = None
     guardian_phone: str | None = None
@@ -527,6 +531,8 @@ def patient_info_out(db: Session, p: Patient) -> PatientInfoOut:
         patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
         pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
         phone_number=user.phone_number,
+        allergies=p.allergies, chronic_diseases=p.chronic_diseases,
+        chronic_medications=p.chronic_medications,
         guardian_name=guardian.username if guardian else None,
         guardian_phone=guardian.phone_number if guardian else None,
     )
@@ -571,6 +577,34 @@ def update_patient_contact(
     if body.last_name:
         p.last_name = body.last_name
     user.username = f"{p.first_name} {p.last_name}"
+    db.commit()
+    return patient_info_out(db, p)
+
+
+class PatientClinicalIn(BaseModel):
+    allergies: str | None = Field(default=None, max_length=1000)
+    chronic_diseases: str | None = Field(default=None, max_length=1000)
+    chronic_medications: str | None = Field(default=None, max_length=1000)
+
+
+@router.patch("/patients/{patient_id}/clinical", response_model=PatientInfoOut)
+def update_patient_clinical(
+    patient_id: UUID,
+    body: PatientClinicalIn,
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Dane kliniczne pacjenta (alergie, choroby przewlekłe, leki stałe) —
+    prowadzi lekarz; alergie chronią przy wystawianiu recept. Puste pole = brak
+    danych (wyczyszczenie); pola pominięte w żądaniu zostają bez zmian."""
+    p = db.get(Patient, patient_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    fields = body.model_dump(exclude_unset=True)
+    for key, value in fields.items():
+        setattr(p, key, (value.strip() or None) if isinstance(value, str) else value)
+    log_access(db, actor=user, action="EDIT_CLINICAL", patient_id=patient_id,
+               detail="dane kliniczne (alergie/choroby/leki)")
     db.commit()
     return patient_info_out(db, p)
 

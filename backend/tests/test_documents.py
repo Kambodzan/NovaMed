@@ -319,3 +319,25 @@ def test_storno_dokumentu(client, visit, fakes):
     assert zla.status_code == 201, zla.text
     assert client.post(f"/documents/{zla.json()['document_id']}/cancel", headers=dt).status_code == 200
     assert getattr(zus, "revoked", None) == "ZLA-2026-1001"
+
+
+def test_dane_kliniczne_pacjenta(client, visit):
+    """Lekarz prowadzi alergie/choroby/leki; widoczne w karcie, edycja tylko lekarz."""
+    dt = auth_header(visit["doctor_token"])
+    pid = visit["patient"].user_id
+    r = client.patch(f"/patients/{pid}/clinical",
+                     json={"allergies": "penicylina (wysypka)", "chronic_diseases": "nadciśnienie"}, headers=dt)
+    assert r.status_code == 200, r.text
+    assert r.json()["allergies"] == "penicylina (wysypka)"
+    assert r.json()["chronic_diseases"] == "nadciśnienie"
+
+    info = client.get(f"/patients/{pid}", headers=dt).json()
+    assert info["allergies"] == "penicylina (wysypka)"
+
+    # pacjent nie edytuje danych klinicznych (to rola lekarza)
+    assert client.patch(f"/patients/{pid}/clinical", json={"allergies": "x"},
+                        headers=auth_header(visit["patient_token"])).status_code == 403
+    # pominięte pole zostaje, puste pole czyści
+    r2 = client.patch(f"/patients/{pid}/clinical", json={"allergies": ""}, headers=dt)
+    assert r2.json()["allergies"] is None
+    assert r2.json()["chronic_diseases"] == "nadciśnienie"  # niepodane → bez zmian

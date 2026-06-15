@@ -43,13 +43,14 @@ export const KIND_LABEL: Record<DocKind, string> = {
 const CERT_PURPOSES = ['do pracodawcy', 'do szkoły / przedszkola', 'do klubu sportowego',
   'do sanatorium', 'na uczelnię', 'inne (wpisz)']
 
-export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10 }: {
+export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10, allergies }: {
   patientId: string
   appointmentId: string
   hideKinds?: DocKind[]
   // rozpoznanie podane z zewnątrz (gabinet: jedno pole w notatce) —
   // formularz nie pokazuje wtedy własnego pola ICD-10
   icd10?: string
+  allergies?: string | null  // ostrzeżenie nad e-receptą (bezpieczeństwo)
 }) {
   const queryClient = useQueryClient()
   const kinds = (Object.keys(KIND_LABEL) as DocKind[]).filter(k => !hideKinds.includes(k))
@@ -205,6 +206,12 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
 
       {kind === 'PRESCRIPTION' && (
         <>
+          {allergies && (
+            <p className="flex items-start gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-800 ring-1 ring-red-200">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-red-600" />
+              <span>Uwaga — alergie pacjenta: {allergies}. Sprawdź przed wystawieniem recepty.</span>
+            </p>
+          )}
           <Field label="Dodaj lek ze słownika" hint="wybór dopisuje lek do pola poniżej">
             <Typeahead
               id="medications"

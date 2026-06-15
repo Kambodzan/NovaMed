@@ -124,6 +124,23 @@ export function Gabinet() {
     void queryClient.invalidateQueries({ queryKey: ['patient-documents', patientId] })
   }
 
+  // dane kliniczne pacjenta (alergie/choroby/leki) — prowadzi lekarz
+  const [clinicalOpen, setClinicalOpen] = useState(false)
+  const [clin, setClin] = useState({ allergies: '', chronic_diseases: '', chronic_medications: '' })
+  const openClinical = () => {
+    setClin({
+      allergies: patient?.allergies ?? '',
+      chronic_diseases: patient?.chronic_diseases ?? '',
+      chronic_medications: patient?.chronic_medications ?? '',
+    })
+    setClinicalOpen(true)
+  }
+  const saveClinical = useMutation({
+    mutationFn: () => api(`/patients/${patientId}/clinical`, { method: 'PATCH', body: clin }),
+    onSuccess: () => { setError(null); setClinicalOpen(false); void queryClient.invalidateQueries({ queryKey: ['patient', patientId] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać danych klinicznych.'),
+  })
+
   const changeStatus = useMutation({
     mutationFn: (status: string) => api(`/appointments/${id}/status`, { method: 'POST', body: { new_status: status } }),
     onSuccess: (_d, status) => {
@@ -280,6 +297,20 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             />
             {patient ? (
               <div className="space-y-1.5 text-sm">
+                {/* alergie — nad wszystkim innym (bezpieczeństwo przy recepcie) */}
+                {patient.allergies ? (
+                  <div className="mb-2 flex items-start gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 ring-1 ring-red-200">
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-red-600" />
+                    <div>
+                      <p className="text-xs font-extrabold tracking-wider text-red-700 uppercase">Alergie</p>
+                      <p className="mt-0.5 text-sm font-bold text-red-900">{patient.allergies}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={openClinical} className="mb-2 flex w-full cursor-pointer items-center gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-400 hover:bg-gray-100">
+                    <AlertTriangle size={13} /> Alergie: nie odnotowano — kliknij, aby uzupełnić
+                  </button>
+                )}
                 {/* powód wizyty na samej górze — to pierwszy kontekst, którego szuka lekarz */}
                 {visit.notes && (
                   <div className="mb-2 rounded-xl bg-amber-50 px-3.5 py-2.5">
@@ -303,6 +334,20 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                     ? <Badge tone="success"><ShieldCheck size={12} /> eWUŚ: ubezpieczony</Badge>
                     : <Badge tone="warn"><AlertTriangle size={12} /> eWUŚ: brak potwierdzenia</Badge>}
                 </div>
+
+                {(patient.chronic_diseases || patient.chronic_medications) && (
+                  <div className="mt-1.5 space-y-1 rounded-xl bg-gray-50 px-3.5 py-2.5">
+                    {patient.chronic_diseases && (
+                      <p className="text-sm"><span className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">Choroby przewlekłe: </span><span className="font-semibold text-gray-700">{patient.chronic_diseases}</span></p>
+                    )}
+                    {patient.chronic_medications && (
+                      <p className="text-sm"><span className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">Leki stałe: </span><span className="font-semibold text-gray-700">{patient.chronic_medications}</span></p>
+                    )}
+                  </div>
+                )}
+                <button onClick={openClinical} className="inline-flex cursor-pointer items-center gap-1 pt-1 text-xs font-extrabold text-primary hover:underline">
+                  <ClipboardPen size={12} /> {patient.allergies || patient.chronic_diseases || patient.chronic_medications ? 'Edytuj dane kliniczne' : 'Dodaj alergie / choroby / leki'}
+                </button>
               </div>
             ) : <p className="text-sm font-medium text-gray-400">Wczytywanie…</p>}
           </Tile>
@@ -419,7 +464,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           {active && patientId && (
             <Tile className="p-5" delay={140}>
               <TileHeader title="Wystaw dokument" />
-              <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} />
+              <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} allergies={patient?.allergies} />
             </Tile>
           )}
         </div>
@@ -462,6 +507,38 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             <p className="text-sm leading-relaxed font-medium text-gray-600">
               Masz zmiany w szkicie noty, które nie zostały zapisane. Przy zakończeniu wizyty nota zostanie podpisana — zapisz, żeby nie utracić tych zmian.
             </p>
+          </Modal>
+        )}
+
+        {clinicalOpen && (
+          <Modal
+            overline={patient ? `${patient.first_name} ${patient.last_name}` : 'Pacjent'}
+            title="Dane kliniczne pacjenta"
+            onClose={() => setClinicalOpen(false)}
+            footer={<>
+              <Button variant="secondary" onClick={() => setClinicalOpen(false)}>Anuluj</Button>
+              <Button disabled={saveClinical.isPending} onClick={() => saveClinical.mutate()}>
+                <Check size={14} /> {saveClinical.isPending ? 'Zapisywanie…' : 'Zapisz'}
+              </Button>
+            </>}
+          >
+            <div className="space-y-3 pb-2">
+              <Field label="Alergie" hint="np. penicylina (wysypka), pyłki traw — widoczne na czerwono przy recepcie">
+                <textarea className={cx(inputCls, 'h-16 py-2')} value={clin.allergies}
+                  onChange={e => setClin(c => ({ ...c, allergies: e.target.value }))}
+                  placeholder="Brak znanych alergii — zostaw puste" />
+              </Field>
+              <Field label="Choroby przewlekłe">
+                <textarea className={cx(inputCls, 'h-16 py-2')} value={clin.chronic_diseases}
+                  onChange={e => setClin(c => ({ ...c, chronic_diseases: e.target.value }))}
+                  placeholder="np. nadciśnienie, cukrzyca typu 2" />
+              </Field>
+              <Field label="Leki przyjmowane na stałe">
+                <textarea className={cx(inputCls, 'h-16 py-2')} value={clin.chronic_medications}
+                  onChange={e => setClin(c => ({ ...c, chronic_medications: e.target.value }))}
+                  placeholder="np. ramipryl 10 mg, metformina 1000 mg 2×dz." />
+              </Field>
+            </div>
           </Modal>
         )}
 

@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -80,6 +80,11 @@ class Patient(Base):
     pesel: Mapped[str] = mapped_column(String(11))
     birth_date: Mapped[date] = mapped_column(Date)
     insurance_status: Mapped[bool] = mapped_column(Boolean, default=False)  # aktualizowane z eWUŚ
+    # Dane kliniczne istotne przy wystawianiu recept (bezpieczeństwo pacjenta) —
+    # prowadzi lekarz; alergie pokazują się banerem nad każdą receptą.
+    allergies: Mapped[str | None] = mapped_column(Text)
+    chronic_diseases: Mapped[str | None] = mapped_column(Text)
+    chronic_medications: Mapped[str | None] = mapped_column(Text)
     # Konta rodzinne (rozszerzenie ERD): opiekun zarządza
     # wizytami i dokumentacją podopiecznego; podopieczny nie loguje się sam.
     guardian_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.user_id"))
