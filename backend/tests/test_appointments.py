@@ -330,3 +330,15 @@ def test_waitlist_powiadomienie_przy_odwolaniu(client, setup, factory):
     notifs = client.get("/notifications/my", headers=auth_header(b_token)).json()
     assert any("oczekiwania" in n["notification_title"].lower() for n in notifs)
     assert client.get("/waiting-list/my", headers=auth_header(b_token)).json() == []
+
+
+def test_dostawka_walk_in(client, setup):
+    """Lekarz przyjmuje pacjenta od ręki — tworzy wizytę „teraz" (CONFIRMED)."""
+    dt = auth_header(setup["doctor_token"])
+    pid = str(setup["patient"].user_id)
+    r = client.post("/appointments/walk-in", json={"patient_id": pid}, headers=dt)
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment_status"] == "CONFIRMED" and r.json()["patient_id"] == pid
+    # pacjent nie tworzy dostawki
+    assert client.post("/appointments/walk-in", json={"patient_id": pid},
+                       headers=auth_header(setup["patient_token"])).status_code == 403

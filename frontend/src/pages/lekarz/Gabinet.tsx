@@ -16,6 +16,12 @@ import { Typeahead } from '../../components/Typeahead'
 // Rozpoznanie jest osobnym, JEDNYM polem (ICD-10) — wchodzi do notatki
 // i automatycznie do wystawianych recept/skierowań
 const EMPTY_NOTE = { wywiad: '', badanie: '', zalecenia: '' }
+// szablony noty (autotekst) — przyspieszają częste wizyty; lekarz dopisuje szczegóły
+const NOTE_TEMPLATES: Array<{ label: string; wywiad: string; badanie: string; rozpoznanie: string; zalecenia: string }> = [
+  { label: 'Kontrola NT', wywiad: 'Wizyta kontrolna — nadciśnienie tętnicze. Samokontrola RR (dzienniczek): …', badanie: 'RR w gabinecie …/… mmHg, tętno … /min miarowe. Osłuchowo serce/płuca bez zmian.', rozpoznanie: 'I10', zalecenia: 'Kontynuacja leczenia hipotensyjnego. Dzienniczek RR. Kontrola za 3 miesiące.' },
+  { label: 'Infekcja GDO', wywiad: 'Od … dni: gorączka, ból gardła, katar, kaszel.', badanie: 'Gardło zaczerwienione, węzły chłonne szyjne …, osłuchowo płuca bez zmian.', rozpoznanie: 'J06', zalecenia: 'Leczenie objawowe, nawodnienie, odpoczynek. Kontrola przy braku poprawy / nasileniu objawów.' },
+  { label: 'Kontynuacja recepty', wywiad: 'Wizyta receptowa — kontynuacja leczenia przewlekłego, stan stabilny, bez nowych dolegliwości.', badanie: '', rozpoznanie: '', zalecenia: 'Kontynuacja dotychczasowych leków. Kontrola za … .' },
+]
 const NOTE_SECTIONS: Array<{ key: keyof typeof EMPTY_NOTE; label: string; placeholder: string; tall?: boolean }> = [
   { key: 'wywiad', label: 'Wywiad', placeholder: 'co zgłasza pacjent, od kiedy, okoliczności…', tall: true },
   { key: 'badanie', label: 'Badanie przedmiotowe', placeholder: 'wynik badania w gabinecie…' },
@@ -420,6 +426,16 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                   <Pause size={13} /> Wizyta wstrzymana — wypełnienia są zachowane. Kliknij „Wznów wizytę", aby kontynuować.
                 </p>
               )}
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-bold text-gray-400">Szablon:</span>
+                {NOTE_TEMPLATES.map(tpl => (
+                  <button key={tpl.label} type="button"
+                    onClick={() => { setNote({ wywiad: tpl.wywiad, badanie: tpl.badanie, zalecenia: tpl.zalecenia }); if (tpl.rozpoznanie) setRozpoznanie(tpl.rozpoznanie) }}
+                    className="cursor-pointer rounded-full bg-gray-100 px-3 py-1 text-xs font-extrabold text-gray-600 hover:bg-primary-soft hover:text-primary">
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
               <div className="space-y-3">
                 {NOTE_SECTIONS.slice(0, 2).map(s => (
                   <Field key={s.key} label={s.label}>

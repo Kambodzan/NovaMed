@@ -565,6 +565,34 @@ def book_for_patient(
     return appointment_out(db, a)
 
 
+class WalkInIn(BaseModel):
+    patient_id: UUID
+
+
+@router.post("/appointments/walk-in", response_model=AppointmentOut)
+def walk_in(
+    body: WalkInIn,
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Dostawka: lekarz przyjmuje pacjenta bez wcześniejszej rezerwacji — tworzy
+    wizytę „teraz" w swojej placówce. Pozwala też wystawić dokumenty poza
+    zaplanowaną wizytą (kontekstem jest ta wizyta)."""
+    if db.get(Patient, body.patient_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    sc = db.scalar(select(StaffClinic).where(StaffClinic.user_id == user.user_id))
+    if sc is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nie jesteś przypisany do żadnej placówki.")
+    a = Appointment(
+        patient_id=body.patient_id, doctor_id=user.user_id, clinic_id=sc.clinic_id,
+        appointment_datetime=datetime.now(), appointment_status=AppointmentStatus.CONFIRMED.value,
+        appointment_type=AppointmentType.STATIONARY.value,
+    )
+    db.add(a)
+    db.commit()
+    return appointment_out(db, a)
+
+
 @router.post("/appointments/{appointment_id}/pay", response_model=BookOut)
 def pay_appointment(
     appointment_id: UUID,

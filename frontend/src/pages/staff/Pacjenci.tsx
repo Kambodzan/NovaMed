@@ -1,10 +1,11 @@
 // Wyszukiwarka pacjentów placówki (UC-L1/UC-N1) — wejście do kartotek.
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Search, Users } from 'lucide-react'
-import { Badge, EmptyState, Loading, PageHeader, Tile, cx, inputCls } from '../../ui'
-import { api } from '../../lib/api'
+import { Link, useNavigate } from 'react-router-dom'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { ChevronRight, DoorOpen, Search, Users } from 'lucide-react'
+import { Badge, Button, EmptyState, Loading, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { api, ApiError } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 
 interface PatientRow {
@@ -17,12 +18,25 @@ interface PatientRow {
 
 export function StaffPacjenci() {
   const [q, setQ] = useState('')
+  const { me } = useAuth()
+  const navigate = useNavigate()
+  const [error, setError] = useState<string | null>(null)
   const { clinics, clinic, setClinicId } = useClinicSelection()
+  const isDoctor = me?.role === 'lekarz'
 
   const { data: patients } = useQuery({
     queryKey: ['clinic-patients', clinic?.clinic_id],
     queryFn: () => api<PatientRow[]>(`/clinics/${clinic!.clinic_id}/patients`),
     enabled: !!clinic,
+  })
+
+  // dostawka: lekarz przyjmuje pacjenta od ręki (wizyta „teraz" → gabinet)
+  const walkIn = useMutation({
+    mutationFn: (patientId: string) => api<{ appointment_id: string }>('/appointments/walk-in', {
+      method: 'POST', body: { patient_id: patientId },
+    }),
+    onSuccess: (a) => navigate(`/wizyta/${a.appointment_id}`),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się utworzyć wizyty.'),
   })
 
   const filtered = (patients ?? []).filter(p =>
@@ -46,6 +60,8 @@ export function StaffPacjenci() {
         />
       </div>
 
+      {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+
       <Tile className="p-3 sm:p-4" delay={60}>
         {patients === undefined ? <Loading /> : filtered.length === 0 ? (
           <EmptyState
@@ -56,10 +72,10 @@ export function StaffPacjenci() {
         ) : (
           <ul className="space-y-1.5">
             {filtered.map(p => (
-              <li key={p.patient_id}>
+              <li key={p.patient_id} className="flex items-center gap-2">
                 <Link
                   to={`/pacjent/${p.patient_id}`}
-                  className="group flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 hover:bg-primary-soft"
+                  className="group flex flex-1 items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 hover:bg-primary-soft"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-extrabold text-gray-900 group-hover:text-primary">{p.first_name} {p.last_name}</p>
@@ -70,6 +86,13 @@ export function StaffPacjenci() {
                     : <Badge tone="warn">brak potwierdzenia</Badge>}
                   <ChevronRight size={16} className="text-gray-300 group-hover:text-primary" />
                 </Link>
+                {isDoctor && (
+                  <Button size="sm" variant="secondary" disabled={walkIn.isPending}
+                    title="Przyjmij od ręki — utwórz wizytę teraz"
+                    onClick={() => walkIn.mutate(p.patient_id)}>
+                    <DoorOpen size={14} /> Przyjmij
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

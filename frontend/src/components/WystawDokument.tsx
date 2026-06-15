@@ -58,6 +58,20 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
   const [result, setResult] = useState<DocumentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [drugQuery, setDrugQuery] = useState('')
+  const [refilling, setRefilling] = useState(false)
+
+  // refill: skopiuj leki z ostatniej e-recepty pacjenta (kontynuacja leczenia)
+  const repeatLast = async () => {
+    setRefilling(true); setError(null)
+    try {
+      const docs = await api<DocumentOut[]>(`/patients/${patientId}/documents`)
+      const last = docs.find(d => d.document_type === 'PRESCRIPTION' && d.document_status !== 'REVOKED')
+      if (last?.details) setForm(f => ({ ...f, drugs: last.details! }))
+      else setError('Brak wcześniejszej recepty do powtórzenia.')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Nie udało się wczytać poprzedniej recepty.')
+    } finally { setRefilling(false) }
+  }
 
   const [form, setForm] = useState({
     icd10: 'I10',
@@ -212,6 +226,11 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
               <span>Uwaga — alergie pacjenta: {allergies}. Sprawdź przed wystawieniem recepty.</span>
             </p>
           )}
+          <div>
+            <Button type="button" size="sm" variant="ghost" disabled={refilling} onClick={() => void repeatLast()}>
+              <RotateCcw size={14} /> {refilling ? 'Wczytywanie…' : 'Powtórz ostatnią receptę'}
+            </Button>
+          </div>
           <Field label="Dodaj lek ze słownika" hint="wybór dopisuje lek do pola poniżej">
             <Typeahead
               id="medications"
