@@ -14,9 +14,11 @@ class MedicalDocument(Base):
     __tablename__ = "medical_document"
 
     document_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.appointment_id"))
+    # NULL dla wyniku „z papieru" wpisanego przez rejestrację — zewnętrzny lab,
+    # bez wizyty w NovaMed ani lekarza wystawiającego
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("appointment.appointment_id"))
     patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patient.patient_id"))
-    doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctor.doctor_id"))
+    doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"))
     issued_at: Mapped[datetime] = mapped_column(DateTime)
     document_type: Mapped[str] = mapped_column(String(50))  # PRESCRIPTION/REFERRAL/LAB_RESULT/SICK_LEAVE/NOTE
     document_content: Mapped[str | None] = mapped_column(Text)

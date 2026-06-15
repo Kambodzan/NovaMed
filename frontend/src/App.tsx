@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, BarChart3, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, ShieldCheck, Star, Users } from 'lucide-react'
+import { Activity, BarChart3, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, FlaskConical, KeyRound as KeyIcon, LayoutDashboard, Plug, ShieldCheck, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { PowrotDoWizyty } from './components/PowrotDoWizyty'
@@ -37,6 +37,8 @@ import { UmowWizyte } from './pages/poradnia/UmowWizyte'
 import { Grafik } from './pages/poradnia/Grafik'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
+import { Pulpit } from './pages/poradnia/Pulpit'
+import { Wyniki } from './pages/poradnia/Wyniki'
 import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
 import { AdminIntegracje } from './pages/admin/Integracje'
 import { AdminMonitoring } from './pages/admin/Monitoring'
@@ -98,10 +100,11 @@ function PoradniaLayout() {
     <ProShell
       brand="Panel Poradni"
       nav={[
-        { to: '/', label: 'Umów wizytę', icon: CalendarCheck, end: true },
-        { to: '/grafik', label: 'Grafik dnia', icon: CalendarDays },
-        { to: '/terminy', label: 'Terminy', icon: CalendarRange },
-        { to: '/pacjenci', label: 'Pacjenci placówki', icon: Users },
+        { to: '/', label: 'Pulpit', icon: LayoutDashboard, end: true },
+        { to: '/kalendarz', label: 'Kalendarz lekarzy', icon: CalendarDays },
+        { to: '/umow', label: 'Umów wizytę', icon: CalendarCheck },
+        { to: '/pacjenci', label: 'Pacjenci', icon: Users },
+        { to: '/wyniki', label: 'Wyniki badań', icon: FlaskConical },
         { to: '/raporty', label: 'Raporty', icon: BarChart3 },
       ]}
     >
@@ -179,11 +182,13 @@ export default function App() {
 
       {token && me && (role === 'rejestracja' || role === 'kierownik') && (
         <Route path="/" element={<PoradniaLayout />}>
-          <Route index element={<UmowWizyte />} />
-          <Route path="grafik" element={<Grafik />} />
-          <Route path="terminy" element={<Terminy />} />
+          <Route index element={<Pulpit />} />
+          <Route path="kalendarz" element={<Grafik />} />
+          <Route path="umow" element={<UmowWizyte />} />
+          <Route path="terminy" element={<Terminy />} />{/* scalane z Kalendarzem (faza 2) */}
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
+          <Route path="wyniki" element={<Wyniki />} />
           <Route path="raporty" element={<Raporty />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

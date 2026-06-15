@@ -2,9 +2,9 @@
 // vs zajęte terminy, kto/kiedy/u kogo. Klik w zajętą wizytę → kartoteka
 // (przełóż/odwołaj), „Umów" przy wolnym → strona rezerwacji.
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarRange, MapPin, Stethoscope, Video } from 'lucide-react'
+import { CalendarRange, MapPin, Plus, Stethoscope, Video } from 'lucide-react'
 import { EmptyState, Loading, PageHeader, StatusBadge, Tile, TileHeader, cx } from '../../ui'
 import { api } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -54,6 +54,9 @@ export function Grafik() {
             <div className="flex flex-wrap items-center gap-2">
               <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
               <DatePicker className="w-44" value={day} onChange={setDay} />
+              <Link to="/terminy" className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-xs font-extrabold text-gray-600 hover:bg-primary-soft hover:text-primary">
+                <Plus size={14} /> Terminy
+              </Link>
             </div>
           }
         />
@@ -102,7 +105,7 @@ export function Grafik() {
                             <span className="flex-1 text-sm font-medium text-gray-400">
                               wolny termin · {a.price ? `${a.price} zł` : 'NFZ'}
                             </span>
-                            <button onClick={() => navigate('/', { state: { doctorId: a.doctor_id, day } })}
+                            <button onClick={() => navigate('/umow', { state: { doctorId: a.doctor_id, day } })}
                               className="cursor-pointer rounded-full px-3 py-1 text-xs font-extrabold text-primary hover:bg-primary-soft">
                               Umów
                             </button>

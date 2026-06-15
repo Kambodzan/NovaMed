@@ -60,10 +60,21 @@ class SickLeaveIn(BaseModel):
         return self
 
 
+class LabValueOut(BaseModel):
+    name: str
+    value: float
+    unit: str | None = None
+    ref_low: float | None = None
+    ref_high: float | None = None
+
+
 class LabResultIn(BaseModel):
-    appointment_id: UUID
+    # appointment_id opcjonalny: rejestracja wpina wynik „z papieru" luzem
+    # (zewnętrzny lab, bez wizyty w NovaMed)
+    appointment_id: UUID | None = None
     test_type: str = Field(min_length=2, max_length=100)
     test_description: str = Field(min_length=2)
+    values: list[LabValueOut] | None = None  # opcjonalne parametry z normami
 
 
 class CertificateIn(BaseModel):
@@ -71,14 +82,6 @@ class CertificateIn(BaseModel):
     purpose: str = Field(min_length=2, max_length=200, description="Cel/przeznaczenie (np. do pracodawcy)")
     content: str = Field(min_length=2, description="Treść zaświadczenia — opis stanu zdrowia")
     valid_until: date | None = None
-
-
-class LabValueOut(BaseModel):
-    name: str
-    value: float
-    unit: str | None = None
-    ref_low: float | None = None
-    ref_high: float | None = None
 
 
 class DocumentOut(BaseModel):
@@ -108,7 +111,7 @@ REFERRAL_TYPE_LABEL = {
 
 
 def document_out(db: Session, doc: MedicalDocument, error_message: str | None = None) -> DocumentOut:
-    doctor_user = db.get(AppUser, doc.doctor_id)
+    doctor_user = db.get(AppUser, doc.doctor_id) if doc.doctor_id else None
     patient = db.get(Patient, doc.patient_id)
     code = None
     referral_type = None
@@ -153,7 +156,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         issued_at=doc.issued_at,
         patient_id=doc.patient_id,
         patient_name=f"{patient.first_name} {patient.last_name}",
-        doctor_name=doctor_user.username,
+        doctor_name=doctor_user.username if doctor_user else "Rejestracja (wynik zewnętrzny)",
         code=code,
         details=details,
         referral_type=referral_type,
@@ -178,7 +181,7 @@ def validate_visit(db: Session, doctor: AppUser, patient_id: UUID, appointment_i
     return a
 
 
-def new_document(doctor_id: UUID, patient_id: UUID, appointment_id: UUID, doc_type: DocumentType,
+def new_document(doctor_id: UUID | None, patient_id: UUID, appointment_id: UUID | None, doc_type: DocumentType,
                  doc_status: DocumentStatus, content: str | None = None) -> MedicalDocument:
     return MedicalDocument(
         appointment_id=appointment_id,
@@ -355,24 +358,28 @@ def add_lab_result(
     db: Session = Depends(get_db),
 ):
     """UC-L1: wynik badania wykonanego na miejscu (lekarz, w kontekście swojej wizyty)
-    + UC-PP3: rejestracja wpisuje wynik „z papieru" do dowolnej wizyty pacjenta."""
+    + UC-PP3: rejestracja przyjmuje wynik „z papieru" — wpięty do wizyty pacjenta
+    ALBO luzem (zewnętrzny lab, bez wizyty: appointment_id puste)."""
+    if db.get(Patient, patient_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
     if user.role.role_name == "lekarz":
         validate_visit(db, user, patient_id, body.appointment_id)
-        author_id = user.user_id
-    else:
+        author_id, appt_id = user.user_id, body.appointment_id
+    elif body.appointment_id is not None:
         a = db.get(Appointment, body.appointment_id)
         if a is None or a.patient_id != patient_id:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wizyta nie dotyczy tego pacjenta.")
-        if a.doctor_id is None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                                detail="Wynik z papieru podpinaj do wizyty lekarskiej pacjenta.")
-        author_id = a.doctor_id  # dokument podpisany lekarzem wizyty
-    doc = new_document(author_id, patient_id, body.appointment_id,
-                       DocumentType.LAB_RESULT, DocumentStatus.READY)
+        author_id, appt_id = a.doctor_id, body.appointment_id  # podpis lekarza wizyty (może być None dla pracowni)
+    else:
+        # wynik z papieru luzem — rejestracja, bez wizyty/lekarza
+        assert_staff_can_access_patient(db, user, patient_id)
+        author_id, appt_id = None, None
+    doc = new_document(author_id, patient_id, appt_id, DocumentType.LAB_RESULT, DocumentStatus.READY)
     db.add(doc)
     db.flush()
+    values_json = json.dumps([v.model_dump() for v in body.values]) if body.values else None
     db.add(LabResult(document_id=doc.document_id, test_type=body.test_type,
-                     test_description=body.test_description))
+                     test_description=body.test_description, values_json=values_json))
     notify_new_document(db, doc)
     db.commit()
     return document_out(db, doc)

@@ -21,6 +21,25 @@ def setup(client, factory):
     }
 
 
+def test_wynik_z_papieru_bez_wizyty(client, setup):
+    """UC-PP3: rejestracja przyjmuje wynik „z papieru" luzem — bez wizyty/lekarza
+    — i ląduje on w dokumentacji pacjenta (z wartościami parametrów)."""
+    s = setup
+    pid = s["patient"].user_id
+    r = client.post(f"/patients/{pid}/lab-results", headers=auth_header(s["reg_token"]), json={
+        "test_type": "Morfologia krwi",
+        "test_description": "wartości w normie",
+        "values": [{"name": "Hemoglobina", "value": 14.2, "unit": "g/dl", "ref_low": 12, "ref_high": 16}],
+    })
+    assert r.status_code == 201, r.text
+    doc = r.json()
+    assert doc["document_type"] == "LAB_RESULT" and doc["appointment_id"] is None
+    assert doc["lab_values"] and doc["lab_values"][0]["name"] == "Hemoglobina"
+    # widoczny w dokumentacji pacjenta
+    docs = client.get("/documents/my", headers=auth_header(s["patient_token"])).json()
+    assert any(d["document_id"] == doc["document_id"] for d in docs)
+
+
 def make_visit_with_prescription(client, s) -> int:
     dt = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
