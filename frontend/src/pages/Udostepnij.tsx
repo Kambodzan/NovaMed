@@ -22,7 +22,7 @@ export function Udostepnij() {
   const { t } = useI18n()
   const scopeLabel = (s: { scope: string; scope_label: string }) => t(SCOPE_LABEL[s.scope] ?? s.scope_label)
   const [scope, setScope] = useState('ALL')
-  const [hours, setHours] = useState('24')
+  const [hours, setHours] = useState('2')
   const [lastCode, setLastCode] = useState<ShareOut | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -106,12 +106,14 @@ export function Udostepnij() {
               )}
             </div>
           )}
-          <Field label={t('Ważność kodu')}>
+          <Field label={t('Ważność kodu')} hint={t('Krótszy czas = bezpieczniej. Kod możesz w każdej chwili unieważnić poniżej.')}>
             <Select value={hours} onChange={setHours}
               options={[
+                { value: '1', label: t('1 godzina') },
+                { value: '2', label: t('2 godziny') },
+                { value: '8', label: t('8 godzin') },
                 { value: '24', label: t('24 godziny') },
                 { value: '168', label: t('7 dni') },
-                { value: '720', label: t('30 dni') },
               ]} />
           </Field>
           {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}

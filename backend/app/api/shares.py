@@ -66,7 +66,7 @@ def generate_code(db: Session) -> str:
 
 class ShareIn(BaseModel):
     scope: str = Field(default="ALL")
-    hours_valid: int = Field(default=24, ge=1, le=24 * 30)
+    hours_valid: int = Field(default=2, ge=1, le=24 * 30)  # krótkie okno = bezpieczniej (zwykle udostępnienie na czas wizyty)
 
 
 class ShareOut(BaseModel):
