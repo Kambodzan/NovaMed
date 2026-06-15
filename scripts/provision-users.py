@@ -25,7 +25,7 @@ from sqlalchemy import select  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
-    Administrator, Appointment, AppUser, Clinic, Doctor, Nurse, Patient, PatientClinic, Role, StaffClinic,
+    Administrator, AppUser, Clinic, Doctor, Nurse, Patient, PatientClinic, Role, StaffClinic,
 )
 
 TEST_PASSWORD = "NovaMed.Test1"  # wspólne hasło kont testowych (tryb Supabase)
@@ -80,19 +80,18 @@ USERS = [
       "birth_date": date(1985, 11, 22), "phone": "602345678"}),
 ]
 
-# Wariant DEMO (flaga --demo-isolation): personel i pacjenci rozdzieleni po
-# konkretnych placówkach, żeby NA ŻYWO pokazać izolację multi-tenant
-# Indeksy = kolejność w CLINICS: 0=Piastów, 1=Praga, 2=Ursus.
-# Domyślnie (bez flagi) każdy jest przypisany do WSZYSTKICH placówek (izolacja
-# to no-op — przydatne do swobodnego klikania i smoke 81/81).
-DEMO_CLINIC_ASSIGNMENT = {
-    "a.kowalczyk@novamed.dev": [0],         # Kardiolog — tylko Piastów
-    "p.zielinski@novamed.dev": [1],         # Internista — tylko Praga Północ
-    "m.sawicka@novamed.dev": [2],           # Endokrynolog — tylko Ursus
+# Przypisanie personelu i pacjentów do placówek (indeksy = kolejność w CLINICS:
+# 0=Piastów, 1=Praga Północ, 2=Ursus). To realny rozkład wieloplacówkowy —
+# nikt nie jest „wszędzie": Piastów to placówka główna (pełny zespół), pozostali
+# pracują w wybranych. Dzięki temu izolacja danych między placówkami działa na realnych danych, bez żadnego trybu demonstracyjnego.
+CLINIC_ASSIGNMENT = {
+    "a.kowalczyk@novamed.dev": [0, 1],      # Kardiolog — Piastów + Praga Północ
+    "p.zielinski@novamed.dev": [0, 2],      # Internista — Piastów + Ursus
+    "m.sawicka@novamed.dev": [0, 2],        # Endokrynolog — Piastów + Ursus
     "k.lis@novamed.dev": [0],               # pielęgniarka — Piastów
     "rejestracja@novamed.dev": [0, 1, 2],   # recepcja centralna — wszystkie placówki
     "janina.wisniewska@novamed.dev": [0],   # pacjentka — Piastów
-    "tomasz.borkowski@novamed.dev": [2],    # pacjent — Ursus
+    "tomasz.borkowski@novamed.dev": [0, 2], # pacjent — Piastów + Ursus
 }
 
 PESEL_WEIGHTS = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
@@ -140,9 +139,6 @@ def supabase_create_user(email: str, full_name: str) -> str:
 
 
 def main() -> None:
-    demo_isolation = "--demo-isolation" in sys.argv or "--demo" in sys.argv
-    if demo_isolation:
-        print("Wariant DEMO-ISOLATION — personel/pacjenci rozdzieleni po placowkach.")
     use_supabase = supabase_configured()
     if use_supabase:
         print(f"Tryb SUPABASE ({settings.supabase_url}) — konta z haslem '{TEST_PASSWORD}'.")
@@ -207,11 +203,11 @@ def main() -> None:
                     pesel=pesel_full(extra["pesel_base"]), birth_date=extra["birth_date"],
                 ))
 
-            # przypisania placówek. Domyślnie: wszystkie placówki. Tryb demo:
-            # tylko te z DEMO_CLINIC_ASSIGNMENT (z reconcile — usuwamy nadmiar,
-            # żeby przejście „wszyscy wszędzie" -> izolacja faktycznie zadziałało).
-            if demo_isolation and email in DEMO_CLINIC_ASSIGNMENT:
-                target = {clinics[i].clinic_id for i in DEMO_CLINIC_ASSIGNMENT[email]}
+            # Przypisanie do placówek wg CLINIC_ASSIGNMENT (deklaratywnie: dodaj
+            # brakujące, usuń nadmiarowe — przypisania tych kont są w całości
+            # zarządzane przez skrypt). Brak wpisu = wszystkie placówki.
+            if email in CLINIC_ASSIGNMENT:
+                target = {clinics[i].clinic_id for i in CLINIC_ASSIGNMENT[email]}
             else:
                 target = {c.clinic_id for c in clinics}
 
@@ -229,50 +225,15 @@ def main() -> None:
                         db.add(StaffClinic(clinic_id=clinic_id, user_id=user.user_id, start_date=date.today()))
                     else:
                         db.add(PatientClinic(clinic_id=clinic_id, patient_id=user.user_id, assigned_date=date.today()))
-                if demo_isolation:  # usuń przypisania spoza targetu (tylko w trybie demo)
-                    for clinic_id, row in existing.items():
-                        if clinic_id not in target:
-                            db.delete(row)
-
-            # Demo: skonsoliduj WIZYTY pacjenta do jego placówki, żeby ślad (footprint)
-            # był deterministyczny mimo wizyt-cruftu z poprzednich biegów. Zachowuje
-            # wszystkie wizyty/dokumenty/noty — zmienia tylko clinic_id.
-            if demo_isolation and role_name == "pacjent" and len(target) == 1:
-                home = next(iter(target))
-                moved = 0
-                for a in db.scalars(select(Appointment).where(Appointment.patient_id == user.user_id)):
-                    if a.clinic_id != home:
-                        a.clinic_id = home
-                        moved += 1
-                if moved:
-                    print(f"  ~ {email}: przeniesiono {moved} wizyt do jednej placowki (demo)")
+                for clinic_id, row in existing.items():
+                    if clinic_id not in target:
+                        db.delete(row)
 
         db.commit()
         print("\nKonta testowe gotowe:")
         for email, _name, role_name, _extra in USERS:
-            assigned = ""
-            if demo_isolation and email in DEMO_CLINIC_ASSIGNMENT:
-                # etykieta = dzielnica z nazwy ("Zdrowa Rodzina — Ursus" -> "Ursus")
-                assigned = " -> " + ", ".join(
-                    clinics[i].clinic_name.split("—")[-1].strip() for i in DEMO_CLINIC_ASSIGNMENT[email])
-            print(f"  {role_name:<14} {email}{assigned}")
+            print(f"  {role_name:<14} {email}")
         print(f"\nHaslo (tryb Supabase): {TEST_PASSWORD}   |   tryb dev: dowolne haslo.")
-
-        if demo_isolation:
-            print("\n" + "=" * 60)
-            print("SCENARIUSZ DEMO — izolacja miedzy placowkami:")
-            print("  1. Zaloguj sie jako dr Anna Kowalczyk (a.kowalczyk@novamed.dev,")
-            print("     Piastow). W kartotece/wyszukiwarce widzisz Janine Wisniewska")
-            print("     (Piastow), ale NIE Tomasza Borkowskiego (Ursus) — '403, nie z")
-            print("     Twojej placowki'.")
-            print("  2. Zaloguj sie jako dr Magdalena Sawicka (m.sawicka@novamed.dev,")
-            print("     Ursus) — odwrotnie: widzi Tomasza, nie widzi Janiny.")
-            print("  3. Janina (panel pacjenta) generuje KOD UDOSTEPNIENIA i podaje go")
-            print("     dr Sawickiej -> 'Otworz kartoteke kodem' -> dr Sawicka widzi")
-            print("     dokumentacje Janiny MIMO innej placowki (swiadoma zgoda, UC-P6).")
-            print("  Uwaga: slad pacjenta to tez jego WIZYTY — nie umawiaj Janiny/Tomasza")
-            print("  w obcych placowkach, bo to rozszerzy ich dostepnosc.")
-            print("=" * 60)
         if not use_supabase:
             print("Aby przejsc na Supabase: uzupelnij backend/.env (SUPABASE_URL, SUPABASE_JWT_SECRET,")
             print("SUPABASE_SERVICE_ROLE_KEY) i frontend/.env.development (VITE_SUPABASE_URL,")
