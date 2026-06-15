@@ -194,6 +194,45 @@ issue("/reviews", tom, {"appointment_id": t1, "doctor_rating": 4, "clinic_rating
 # nadchodząca wizyta Tomasza w Ursusie (multi-placówka)
 upcoming_visit(ursus, ziel_id, tom_id, days_ahead=4, hour=10)
 
+# --- pula WOLNYCH terminów do rezerwacji (inaczej wyszukiwarka pacjenta pusta) -
+print("Wolne terminy do rezerwacji…")
+saw_id = next(v for k, v in docs.items() if "Sawicka" in k)
+# (lekarz, placówka, [(godz, min, online, cena)]) — czasy per-lekarz rozłączne
+# między placówkami (kolizja slotów lekarza jest globalna)
+SLOT_PLAN = [
+    (kow_id, piastow, [(9, 0, False, None), (10, 0, False, None), (11, 0, False, 150.0)]),
+    (kow_id, next(v for k, v in clinics.items() if "Praga" in k), [(13, 0, True, None), (14, 0, False, None)]),
+    (ziel_id, piastow, [(9, 30, False, None), (10, 30, False, None)]),
+    (ziel_id, ursus, [(13, 30, False, None), (14, 30, False, None)]),
+    (saw_id, piastow, [(11, 30, False, None), (12, 30, False, 200.0)]),
+    (saw_id, ursus, [(15, 0, False, None), (16, 0, True, None)]),
+]
+free_made = 0
+for day in range(1, 7):  # następne 6 dni
+    d0 = datetime.now() + timedelta(days=day)
+    for doctor_id, clinic_id, times in SLOT_PLAN:
+        for hh, mm, online, price in times:
+            dt = d0.replace(hour=hh, minute=mm, second=0, microsecond=0)
+            extra = {}
+            if online:
+                extra["appointment_type"] = "ONLINE"
+            if price:
+                extra["price"] = price
+            r = api("POST", f"/clinics/{clinic_id}/slots", reg,
+                    json={"doctor_id": doctor_id, "datetimes": [dt.isoformat()], **extra})
+            if r.status_code == 201:
+                free_made += 1
+# kilka badań diagnostycznych (pracownia placówki): prywatne i ze skierowaniem
+for day in (2, 4):
+    base = datetime.now() + timedelta(days=day)
+    api("POST", f"/clinics/{piastow}/slots", reg, json={
+        "service_name": "USG jamy brzusznej",
+        "datetimes": [base.replace(hour=8, minute=0, second=0, microsecond=0).isoformat()]})
+    api("POST", f"/clinics/{piastow}/slots", reg, json={
+        "service_name": "RTG klatki piersiowej", "referral_required": True,
+        "datetimes": [base.replace(hour=8, minute=30, second=0, microsecond=0).isoformat()]})
+print(f"  wolnych terminów lekarskich: {free_made} + badania diagnostyczne")
+
 # --- cofnięcie dat zakończonych wizyt (realistyczna historia) ---------------
 print("Cofanie dat wizyt zakończonych (historia)…")
 from app.core.db import SessionLocal  # noqa: E402
@@ -217,6 +256,6 @@ try:
 finally:
     db.close()
 
-print(f"\nGotowe. Wizyt zakończonych: {len(to_backdate)}; nadchodzących: 3.")
+print(f"\nGotowe. Wizyt zakończonych: {len(to_backdate)}; nadchodzących: 3; wolnych terminów: {free_made}+.")
 print("Zaloguj się jako pacjent (np. janina.wisniewska@novamed.dev / NovaMed.Test1),")
 print("lekarz (a.kowalczyk@…) lub rejestracja, żeby przeklikać dane.")
