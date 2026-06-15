@@ -194,8 +194,10 @@ export function Gabinet() {
   const pauseVisit = () => unsavedNote
     ? saveDraft.mutate(undefined, { onSuccess: () => changeStatus.mutate('PAUSED') })
     : changeStatus.mutate('PAUSED')
-  // wizytę rozpoczyna się w dniu jej terminu (spójnie ze strażnikiem backendu)
-  const visitToday = new Date(visit.appointment_datetime).toDateString() === new Date().toDateString()
+  // wizytę rozpoczyna się w dniu jej terminu
+  // TEMP (testy): strażnik dnia wyłączony, żeby dało się rozpoczynać wizyty z innego dnia.
+  // Przywrócić: const visitToday = new Date(visit.appointment_datetime).toDateString() === new Date().toDateString()
+  const visitToday = true
   const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
   const visitDocs = (documents ?? []).filter(d => d.appointment_id === id)
   const historyDocs = (documents ?? []).filter(d => d.appointment_id !== id)

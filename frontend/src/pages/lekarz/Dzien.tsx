@@ -182,7 +182,8 @@ export function LekarzDzien() {
                   )}
                   <StatusBadge status={v.appointment_status} />
                   <div className="flex gap-2">
-                    {isToday && v.appointment_status === 'CONFIRMED' && (
+                    {/* TEMP (testy): zdjęty strażnik dnia (było: isToday && ...) — przywrócić `isToday &&` przed warunkiem */}
+                    {v.appointment_status === 'CONFIRMED' && (
                       <>
                         <Button size="sm" disabled={changeStatus.isPending} onClick={() => startVisit(v)}>
                           {v.appointment_type === 'ONLINE' ? <><Video size={14} /> Połącz</> : <><DoorOpen size={14} /> Rozpocznij</>}
