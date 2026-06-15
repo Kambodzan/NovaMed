@@ -122,7 +122,7 @@ export function Kalendarz() {
                 {day !== todayIso() && <Button variant="ghost" size="sm" onClick={() => setDay(todayIso())}>Dziś</Button>}
               </div>
               <Button variant="secondary" size="sm" onClick={() => setModal('add')}><Plus size={14} /> Dodaj terminy</Button>
-              <Button variant="ghost" size="sm" onClick={() => setModal('settings')}><Settings2 size={14} /></Button>
+              <Button variant="secondary" size="sm" onClick={() => setModal('settings')}><Settings2 size={14} /> Ustawienia</Button>
             </div>
           }
         />
