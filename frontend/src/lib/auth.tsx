@@ -4,8 +4,9 @@
 // 2. Dev (brak konfiguracji): token z backendowego /auth/dev-token — ten sam
 //    przepływ Bearer, zero różnic po stronie API.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, setTokenProvider } from './api'
+import { pushToast } from './toast'
 import type { Me } from './types'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -104,6 +105,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe(null)
     setProfileMissing(false)
   }, [])
+
+  // wygaśnięcie sesji w trakcie pracy (401 z dowolnego zapytania) → wyloguj
+  // i powiedz to wprost, zamiast zostawiać martwy token i techniczny błąd
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  useEffect(() => {
+    const onUnauthorized = () => {
+      if (!tokenRef.current) return  // 401 w trakcie logowania to nie wygaśnięcie sesji
+      pushToast('Sesja wygasła — zaloguj się ponownie.', 'error')
+      void logout()
+    }
+    window.addEventListener('novamed:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('novamed:unauthorized', onUnauthorized)
+  }, [logout])
 
   return (
     <AuthContext.Provider value={{ token, me, profileMissing, loading, login, registerAccount, logout, refreshMe }}>

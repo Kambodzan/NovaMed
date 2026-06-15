@@ -29,6 +29,7 @@ import { StaffPacjenci } from './pages/staff/Pacjenci'
 import { PacjentRecord } from './pages/staff/PacjentRecord'
 import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
+import { Toaster } from './components/Toaster'
 import { Terminy } from './pages/poradnia/Terminy'
 import { UmowWizyte } from './pages/poradnia/UmowWizyte'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
@@ -119,6 +120,7 @@ export default function App() {
   const role = me?.role
 
   return (
+    <>
     <Routes>
       <Route path="/login" element={token && me ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/rejestracja" element={<Rejestracja />} />
@@ -191,5 +193,7 @@ export default function App() {
         </Route>
       )}
     </Routes>
+    <Toaster />
+    </>
   )
 }

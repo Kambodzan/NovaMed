@@ -42,6 +42,8 @@ export async function api<T>(path: string, options: { method?: string; body?: un
       const data = await resp.json()
       if (typeof data.detail === 'string') detail = data.detail
     } catch { /* odpowiedź bez JSON-a */ }
+    // wygaśnięcie sesji w trakcie pracy — AuthProvider nasłuchuje i wylogowuje
+    if (resp.status === 401) window.dispatchEvent(new CustomEvent('novamed:unauthorized'))
     throw new ApiError(resp.status, detail)
   }
   return resp.json() as Promise<T>
