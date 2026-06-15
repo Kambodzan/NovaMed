@@ -192,6 +192,24 @@ def test_szczegoly_wizyty_i_historia_pacjenta(client, setup, factory):
     ).status_code == 403
 
 
+def test_aktywne_wizyty_lekarza_niezaleznie_od_daty(client, setup):
+    """Pasek „wizyta w toku": GET /appointments/active zwraca otwarte wizyty
+    lekarza (IN_PROGRESS/PAUSED) bez względu na dzień terminu."""
+    dt = auth_header(setup["doctor_token"])
+    slot_id = make_slot(client, setup, days_ahead=5, hour=10)  # wizyta z PRZYSZŁOŚCI
+    client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))
+
+    assert client.get("/appointments/active", headers=dt).json() == []  # jeszcze nie rozpoczęta
+    client.post(f"/appointments/{slot_id}/status", json={"new_status": "IN_PROGRESS"}, headers=dt)
+    active = client.get("/appointments/active", headers=dt).json()
+    assert len(active) == 1 and active[0]["appointment_id"] == slot_id  # widoczna mimo przyszłej daty
+
+    client.post(f"/appointments/{slot_id}/status", json={"new_status": "PAUSED"}, headers=dt)
+    assert len(client.get("/appointments/active", headers=dt).json()) == 1  # wstrzymana też się liczy
+    client.post(f"/appointments/{slot_id}/status", json={"new_status": "COMPLETED"}, headers=dt)
+    assert client.get("/appointments/active", headers=dt).json() == []  # zakończona znika z paska
+
+
 def test_lekarz_nie_zmienia_cudzych_wizyt(client, setup, factory):
     slot_id = make_slot(client, setup, days_ahead=2)
     client.post(f"/appointments/{slot_id}/book", headers=auth_header(setup["patient_token"]))

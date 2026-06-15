@@ -11,10 +11,11 @@ import type { AppointmentOut } from '../lib/types'
 export function PowrotDoWizyty() {
   const location = useLocation()
   const navigate = useNavigate()
-  const today = new Date().toISOString().slice(0, 10)
+  // otwarte wizyty lekarza (w toku / wstrzymane) NIEZALEŻNIE od daty — pasek działa
+  // też po północy i dla wizyt z innego dnia (maks. jedna IN_PROGRESS na lekarza)
   const { data } = useQuery({
-    queryKey: ['doctor-day', today],
-    queryFn: () => api<AppointmentOut[]>(`/appointments/day?day=${today}`),
+    queryKey: ['doctor-active'],
+    queryFn: () => api<AppointmentOut[]>(`/appointments/active`),
     refetchInterval: 30_000,
   })
 

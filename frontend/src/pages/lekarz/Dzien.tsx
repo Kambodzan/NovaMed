@@ -46,7 +46,7 @@ export function LekarzDzien() {
   const changeStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api(`/appointments/${id}/status`, { method: 'POST', body: { new_status: status } }),
-    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['doctor-day'] }) },
+    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['doctor-day'] }); void queryClient.invalidateQueries({ queryKey: ['doctor-active'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zmienić statusu.'),
   })
 

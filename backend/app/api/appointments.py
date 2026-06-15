@@ -897,6 +897,27 @@ def doctor_day(
     return [appointment_out(db, a) for a in rows]
 
 
+@router.get("/appointments/active", response_model=list[AppointmentOut])
+def doctor_active_visits(
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Otwarte wizyty lekarza (w toku / wstrzymane) niezależnie od daty — zasila
+    pasek „wizyta w toku". Dzięki temu pasek działa też po północy albo gdy
+    wizyta jest z innego dnia (przy maks. jednej IN_PROGRESS na lekarza)."""
+    rows = db.scalars(
+        select(Appointment)
+        .where(
+            Appointment.doctor_id == user.user_id,
+            Appointment.appointment_status.in_([
+                AppointmentStatus.IN_PROGRESS.value, AppointmentStatus.PAUSED.value,
+            ]),
+        )
+        .order_by(Appointment.appointment_datetime)
+    )
+    return [appointment_out(db, a) for a in rows]
+
+
 @router.get("/clinics/{clinic_id}/day", response_model=list[AppointmentOut])
 def clinic_day(
     clinic_id: UUID,

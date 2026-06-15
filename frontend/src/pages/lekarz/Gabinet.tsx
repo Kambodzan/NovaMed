@@ -153,6 +153,7 @@ export function Gabinet() {
       setError(null)
       void queryClient.invalidateQueries({ queryKey: ['appointment', id] })
       void queryClient.invalidateQueries({ queryKey: ['doctor-day'] })
+      void queryClient.invalidateQueries({ queryKey: ['doctor-active'] })  // pasek „wizyta w toku"
       invalidateNote()  // zakończenie auto-podpisuje notę
       // zakończona/nieodbyta — koniec wizyty; wstrzymana — lekarz wraca po kolejnego pacjenta
       if (status === 'COMPLETED' || status === 'NO_SHOW' || status === 'PAUSED') navigate('/')
