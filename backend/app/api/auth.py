@@ -9,7 +9,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_current_user, get_token_claims
+from app.core.auth import get_current_user, get_token_claims, require_roles
 from app.core.config import settings
 from app.core.db import get_db
 from app.models import AppUser, Patient, Role
@@ -183,3 +183,58 @@ def update_preferences(
     user.notify_sms = body.notify_sms
     db.commit()
     return me(user, db)
+
+
+class ProfileOut(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+    pesel: str | None = None
+    birth_date: date | None = None
+    phone_number: str | None = None
+    email: str
+    insurance_status: bool = False
+    notify_sms: bool = True
+
+
+class ContactIn(BaseModel):
+    first_name: str | None = Field(default=None, min_length=1, max_length=50)
+    last_name: str | None = Field(default=None, min_length=1, max_length=50)
+    phone_number: str | None = Field(default=None, max_length=20)
+
+
+def profile_out(user: AppUser, db: Session) -> ProfileOut:
+    p = db.get(Patient, user.user_id)
+    return ProfileOut(
+        first_name=p.first_name if p else None, last_name=p.last_name if p else None,
+        pesel=p.pesel if p else None, birth_date=p.birth_date if p else None,
+        phone_number=user.phone_number, email=user.email,
+        insurance_status=p.insurance_status if p else False, notify_sms=user.notify_sms,
+    )
+
+
+@router.get("/me/profile", response_model=ProfileOut)
+def my_profile(user: AppUser = Depends(require_roles("pacjent")), db: Session = Depends(get_db)):
+    """Profil pacjenta: dane, status ubezpieczenia (eWUŚ), preferencje."""
+    return profile_out(user, db)
+
+
+@router.patch("/me/contact", response_model=ProfileOut)
+def update_my_contact(
+    body: ContactIn,
+    user: AppUser = Depends(require_roles("pacjent")),
+    db: Session = Depends(get_db),
+):
+    """Pacjent edytuje własne dane kontaktowe (telefon, imię/nazwisko).
+    PESEL i data urodzenia są niezmienne (tożsamość)."""
+    p = db.get(Patient, user.user_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brak profilu pacjenta.")
+    if body.phone_number is not None:
+        user.phone_number = body.phone_number.strip() or None
+    if body.first_name:
+        p.first_name = body.first_name.strip()
+    if body.last_name:
+        p.last_name = body.last_name.strip()
+    user.username = f"{p.first_name} {p.last_name}"
+    db.commit()
+    return profile_out(user, db)

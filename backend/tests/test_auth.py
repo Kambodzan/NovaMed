@@ -51,3 +51,20 @@ def test_walidacja_pesel_422(client):
     token = make_token()
     bad = {**PROFILE, "pesel": "123"}
     assert client.post("/auth/register-profile", json=bad, headers=auth_header(token)).status_code == 422
+
+
+def test_profil_pacjenta_i_edycja(client, factory):
+    """Pacjent widzi swój profil (dane + eWUŚ) i edytuje własne dane kontaktowe."""
+    _, token = factory.patient()
+    prof = client.get("/auth/me/profile", headers=auth_header(token))
+    assert prof.status_code == 200, prof.text
+    assert prof.json()["pesel"] and "insurance_status" in prof.json()
+
+    r = client.patch("/auth/me/contact", json={"phone_number": "601 234 567", "first_name": "Zofia"},
+                     headers=auth_header(token))
+    assert r.status_code == 200
+    assert r.json()["phone_number"] == "601 234 567" and r.json()["first_name"] == "Zofia"
+
+    # personel nie korzysta z profilu pacjenta
+    _, doc_token = factory.doctor()
+    assert client.get("/auth/me/profile", headers=auth_header(doc_token)).status_code == 403

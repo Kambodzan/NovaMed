@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  CalendarPlus, ChevronRight, FileText, FlaskConical, FolderOpen, MapPin, Pill, Stamp, Video, CalendarDays,
+  CalendarPlus, Check, ChevronRight, CreditCard, FileText, FlaskConical, FolderOpen, MapPin, Pill, Stamp, Star, Video, CalendarDays,
 } from 'lucide-react'
-import { Button, DateChip, EmptyState, Tile, TileHeader, StatusBadge } from '../ui'
+import { Button, DateChip, EmptyState, Tile, TileHeader, StatusBadge, cx } from '../ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useFamily } from '../lib/family'
@@ -30,6 +30,21 @@ export function Start() {
     ?.filter(v => v.appointment_status === 'CONFIRMED' && isFuture(v.appointment_datetime))
     .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))[0]
 
+  // „Do zrobienia": akcje wymagające reakcji pacjenta, zebrane w jednym miejscu
+  const count = (arr: unknown[] | undefined) => arr?.length ?? 0
+  const unpaid = count(visits?.filter(v => v.appointment_status === 'TEMP_LOCK'))
+  const toConfirm = count(visits?.filter(v => v.appointment_status === 'CONFIRMED' && v.confirmation_requested && !v.patient_confirmed))
+  const newResults = count(docs?.filter(d => d.document_type === 'LAB_RESULT' && d.document_status === 'READY'))
+  const toBook = count(docs?.filter(d => d.document_type === 'REFERRAL' && d.referral_type === 'SPECIALIST' && !['REALIZED', 'REVOKED'].includes(d.document_status)))
+  const toReview = count(visits?.filter(v => v.appointment_status === 'COMPLETED' && v.doctor_id && !v.reviewed))
+  const todos = [
+    unpaid && { icon: CreditCard, label: `${t('Dokończ płatność')} (${unpaid})`, to: '/wizyty', danger: true },
+    toConfirm && { icon: Check, label: `${t('Potwierdź obecność')} (${toConfirm})`, to: '/wizyty' },
+    newResults && { icon: FlaskConical, label: `${t('Nowe wyniki badań')} (${newResults})`, to: '/dokumentacja' },
+    toBook && { icon: FileText, label: `${t('Skierowanie do umówienia')} (${toBook})`, to: '/umow' },
+    toReview && { icon: Star, label: `${t('Oceń wizytę')} (${toReview})`, to: '/wizyty' },
+  ].filter(Boolean) as { icon: typeof Check; label: string; to: string; danger?: boolean }[]
+
   return (
     <div className="space-y-6">
       <div className="fade-up">
@@ -38,6 +53,24 @@ export function Start() {
           {t('Dzień dobry')}{me?.first_name ? `, ${me.first_name}` : ''}
         </h1>
       </div>
+
+      {todos.length > 0 && (
+        <Tile className="p-5 fade-up" delay={30}>
+          <TileHeader title={t('Do zrobienia')} />
+          <ul className="flex flex-wrap gap-2">
+            {todos.map(item => (
+              <li key={item.to + item.label}>
+                <Link to={item.to}
+                  className={cx('group inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-colors',
+                    item.danger ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-amber-50 text-amber-800 hover:bg-amber-100')}>
+                  <item.icon size={15} /> {item.label}
+                  <ChevronRight size={14} className="opacity-50 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Tile>
+      )}
 
       <div className="grid grid-cols-12 gap-4">
         {/* najbliższa wizyta */}

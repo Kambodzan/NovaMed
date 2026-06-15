@@ -13,6 +13,7 @@ import { Dokumentacja } from './pages/Dokumentacja'
 import { Recepty } from './pages/Recepty'
 import { SkierowaniaPacjenta } from './pages/SkierowaniaPacjenta'
 import { Rodzina } from './pages/Rodzina'
+import { Profil } from './pages/Profil'
 import { RezerwacjaPubliczna } from './pages/RezerwacjaPubliczna'
 import { ResetHasla } from './pages/ResetHasla'
 import { FamilyProvider } from './lib/family'
@@ -144,6 +145,7 @@ export default function App() {
           <Route path="dokumentacja" element={<Dokumentacja />} />
           <Route path="udostepnij" element={<Udostepnij />} />
           <Route path="rodzina" element={<Rodzina />} />
+          <Route path="profil" element={<Profil />} />
           <Route path="telewizyta/:id" element={<Telewizyta />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
