@@ -495,7 +495,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                         onClick={() => setOpenHist(open ? -1 : i)}
                         className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left">
                         <span className="min-w-0">
-                          <span className="block text-sm font-extrabold text-gray-900">{formatDatePL(h.date)}</span>
+                          <span className="block text-sm font-extrabold text-gray-900">{formatDatePL(h.date)}, {formatTime(h.date)}</span>
                           <span className="block truncate text-xs font-semibold text-gray-500">
                             {h.doctor_name} · {h.appointment_type === 'ONLINE' ? 'teleporada' : 'stacjonarna'}
                             {h.note ? '' : ' · brak noty'}
