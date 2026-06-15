@@ -32,9 +32,8 @@ import { Skierowania } from './pages/pielegniarka/Skierowania'
 import { Zabiegi } from './pages/pielegniarka/Zabiegi'
 import { Toaster } from './components/Toaster'
 import { ConfirmHost } from './components/ConfirmHost'
-import { Terminy } from './pages/poradnia/Terminy'
 import { UmowWizyte } from './pages/poradnia/UmowWizyte'
-import { Grafik } from './pages/poradnia/Grafik'
+import { Kalendarz } from './pages/poradnia/Kalendarz'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
 import { Pulpit } from './pages/poradnia/Pulpit'
@@ -183,9 +182,8 @@ export default function App() {
       {token && me && (role === 'rejestracja' || role === 'kierownik') && (
         <Route path="/" element={<PoradniaLayout />}>
           <Route index element={<Pulpit />} />
-          <Route path="kalendarz" element={<Grafik />} />
+          <Route path="kalendarz" element={<Kalendarz />} />
           <Route path="umow" element={<UmowWizyte />} />
-          <Route path="terminy" element={<Terminy />} />{/* scalane z Kalendarzem (faza 2) */}
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
           <Route path="wyniki" element={<Wyniki />} />

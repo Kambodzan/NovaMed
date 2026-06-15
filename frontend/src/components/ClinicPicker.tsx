@@ -6,7 +6,14 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { Select } from './Select'
 
-export interface ClinicLite { clinic_id: string; clinic_name: string }
+export interface ClinicLite {
+  clinic_id: string; clinic_name: string
+  // ustawienia placówki (zwracane przez /clinics) — używane m.in. w Kalendarzu rejestracji
+  slot_interval_min: number
+  earlier_notice_min_hours: number
+  confirmation_required: boolean
+  confirmation_hours: number
+}
 
 export function useClinicSelection() {
   const { data: clinics } = useQuery({ queryKey: ['clinics'], queryFn: () => api<ClinicLite[]>('/clinics') })
