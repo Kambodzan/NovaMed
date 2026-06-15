@@ -74,6 +74,15 @@ export interface SharedDocsOut {
   notes: SharedNote[]
 }
 
+export interface AuditEntry {
+  created_at: string
+  actor_name: string | null
+  actor_role: string
+  action: string
+  patient_name: string | null
+  detail: string | null
+}
+
 export interface AdminUser {
   user_id: string
   username: string

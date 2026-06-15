@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.family import allowed_patient_ids
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
+from app.domain.audit import log_access
 from app.models import Appointment, AppUser, ClinicalNote, NoteAddendum, NoteEvent
 
 router = APIRouter(tags=["notes"])
@@ -116,6 +117,8 @@ def get_note(
     if note is None or (is_patient and note.status != "SIGNED"):
         # pacjent nie widzi szkicu; brak noty = pusty placeholder
         return NoteOut(appointment_id=appointment_id, status="EMPTY", content="")
+    if role != "pacjent":
+        log_access(db, actor=user, action="VIEW_NOTE", patient_id=a.patient_id)
     return note_out(db, note, with_events=is_doctor or role in ("kierownik", "administrator"))
 
 

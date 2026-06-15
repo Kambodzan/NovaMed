@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, Star, Users } from 'lucide-react'
+import { Activity, BarChart3, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, KeyRound as KeyIcon, Plug, ShieldCheck, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { PowrotDoWizyty } from './components/PowrotDoWizyty'
@@ -35,6 +35,7 @@ import { Raporty } from './pages/poradnia/Raporty'
 import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
 import { AdminIntegracje } from './pages/admin/Integracje'
 import { AdminMonitoring } from './pages/admin/Monitoring'
+import { DziennikRodo } from './pages/admin/DziennikRodo'
 
 function LekarzLayout() {
   return (
@@ -79,6 +80,7 @@ function AdminLayout() {
         { to: '/', label: 'Użytkownicy', icon: Users, end: true },
         { to: '/integracje', label: 'Integracje', icon: Plug },
         { to: '/monitoring', label: 'Monitoring', icon: Activity },
+        { to: '/rodo', label: 'Dziennik RODO', icon: ShieldCheck },
       ]}
     >
       <Outlet />
@@ -180,6 +182,7 @@ export default function App() {
           <Route index element={<AdminUzytkownicy />} />
           <Route path="integracje" element={<AdminIntegracje />} />
           <Route path="monitoring" element={<AdminMonitoring />} />
+          <Route path="rodo" element={<DziennikRodo />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}

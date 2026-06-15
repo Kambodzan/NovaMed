@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
 from app.core.db import get_db
+from app.domain.audit import log_access
 from app.api.documents import DocumentOut, document_out
 from app.models import Appointment, AppUser, ClinicalNote, DocumentShare, MedicalDocument, Patient
 
@@ -132,7 +133,7 @@ def revoke_share(
 @router.post("/access", response_model=SharedDocsOut)
 def access_by_code(
     body: AccessIn,
-    _: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
+    user: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
     db: Session = Depends(get_db),
 ):
     """Personel otwiera dokumentację kodem od pacjenta (podgląd w zakresie kodu)."""
@@ -147,6 +148,9 @@ def access_by_code(
     if share.expires_at <= datetime.now():
         raise HTTPException(status_code=status.HTTP_410_GONE,
                             detail=f"Ten kod wygasł {share.expires_at.strftime('%d.%m.%Y %H:%M')} — poproś pacjenta o nowy.")
+
+    log_access(db, actor=user, action="ACCESS_SHARE", patient_id=share.patient_id,
+               detail=f"kod {share.access_code} ({share.scope})")
 
     q = select(MedicalDocument).where(MedicalDocument.patient_id == share.patient_id)
     if share.scope in ("PRESCRIPTION", "LAB_RESULT"):

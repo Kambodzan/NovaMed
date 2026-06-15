@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.family import allowed_patient_ids, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
+from app.domain.audit import log_access
 from app.domain.documents import DocumentStatus, DocumentType, ReferralType
 from app.domain.notify import notify
 from app.domain.pdf import render_document_pdf
@@ -461,13 +462,14 @@ def patient_info_out(db: Session, p: Patient) -> PatientInfoOut:
 @router.get("/patients/{patient_id}", response_model=PatientInfoOut)
 def patient_info(
     patient_id: UUID,
-    _: AppUser = Depends(require_roles(*STAFF_ROLES)),
+    user: AppUser = Depends(require_roles(*STAFF_ROLES)),
     db: Session = Depends(get_db),
 ):
     """Nagłówek karty pacjenta dla personelu (UC-L1, UC-N1)."""
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id)
     return patient_info_out(db, p)
 
 
@@ -530,6 +532,8 @@ def patient_documents(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do dokumentacji innego pacjenta.")
     if user.role.role_name != "pacjent" and user.role.role_name not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
+    if user.role.role_name != "pacjent":
+        log_access(db, actor=user, action="VIEW_DOCUMENTS", patient_id=patient_id)
     rows = db.scalars(
         select(MedicalDocument)
         .where(MedicalDocument.patient_id == patient_id)
@@ -584,6 +588,9 @@ def document_pdf(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak dostępu do dokumentu innego pacjenta.")
     elif role not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
+    if role != "pacjent":
+        log_access(db, actor=user, action="DOWNLOAD_PDF", patient_id=doc.patient_id,
+                   detail=DOC_LABELS.get(doc.document_type, doc.document_type))
 
     out = document_out(db, doc)
     patient = db.get(Patient, doc.patient_id)

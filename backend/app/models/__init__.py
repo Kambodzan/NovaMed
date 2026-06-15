@@ -11,6 +11,7 @@ from app.models.dictionaries import Icd10Entry, MedicationEntry
 from app.models.notification import Notification
 from app.models.waitlist import WaitingListEntry
 from app.models.clinical_note import ClinicalNote, NoteAddendum, NoteEvent
+from app.models.audit import AuditLog
 
 __all__ = [
     "Role", "AppUser", "Administrator", "Doctor", "Nurse", "Patient",
@@ -20,4 +21,5 @@ __all__ = [
     "NursingProcedure", "Payment", "Review", "Notification", "WaitingListEntry",
     "DocumentShare", "Icd10Entry", "MedicationEntry",
     "ClinicalNote", "NoteAddendum", "NoteEvent",
+    "AuditLog",
 ]

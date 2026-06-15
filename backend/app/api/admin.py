@@ -11,7 +11,10 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_roles
 from app.core.config import settings
 from app.core.db import get_db
-from app.models import Appointment, AppUser, MedicalDocument, NursingProcedure, Payment, Role
+from app.domain.audit import log_access
+from app.models import (
+    Appointment, AppUser, AuditLog, MedicalDocument, NursingProcedure, Patient, Payment, Role,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -71,6 +74,62 @@ def toggle_active(
         user_id=user.user_id, username=user.username, email=user.email,
         role=user.role.role_name, active_account=user.active_account, created_at=user.created_at,
     )
+
+
+# ---------- RODO: dziennik dostępu + prawo do bycia zapomnianym (NFR 8.2) ----------
+
+class AuditEntryOut(BaseModel):
+    created_at: datetime
+    actor_name: str | None
+    actor_role: str
+    action: str
+    patient_name: str | None
+    detail: str | None
+
+
+@router.get("/audit", response_model=list[AuditEntryOut])
+def audit_log(
+    limit: int = 200,
+    _: AppUser = Depends(require_roles(*ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """Dziennik dostępu personelu do danych medycznych (RODO)."""
+    rows = db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(limit, 500))).all()
+    out = []
+    for r in rows:
+        actor = db.get(AppUser, r.actor_id) if r.actor_id else None
+        pat = db.get(Patient, r.patient_id) if r.patient_id else None
+        out.append(AuditEntryOut(
+            created_at=r.created_at, actor_name=actor.username if actor else None,
+            actor_role=r.actor_role, action=r.action,
+            patient_name=f"{pat.first_name} {pat.last_name}" if pat else None, detail=r.detail,
+        ))
+    return out
+
+
+@router.post("/patients/{patient_id}/anonymize")
+def anonymize_patient(
+    patient_id: UUID,
+    admin: AppUser = Depends(require_roles(*ADMIN)),
+    db: Session = Depends(get_db),
+):
+    """RODO „prawo do bycia zapomnianym": usuwa dane osobowe pacjenta, ale
+    ZACHOWUJE wizyty/dokumenty (zanonimizowane) — integralność medyczno-prawna
+    i statystyki. Konto dezaktywowane."""
+    p = db.get(Patient, patient_id)
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    user = db.get(AppUser, patient_id)
+    p.first_name, p.last_name, p.pesel = "Dane", "zanonimizowane", "00000000000"
+    if user:
+        user.username = "Pacjent zanonimizowany"
+        user.email = f"anon-{str(patient_id)[:8]}@anon.invalid"
+        user.phone_number = None
+        user.active_account = False
+    db.commit()
+    log_access(db, actor=admin, action="ANONYMIZE", patient_id=patient_id,
+               detail="prawo do bycia zapomnianym (RODO)")
+    return {"status": "anonymized"}
 
 
 # ---------- integracje (UC-A2) ----------

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Lock, LockOpen } from 'lucide-react'
+import { Lock, LockOpen, UserX } from 'lucide-react'
 import { Badge, Button, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import type { AdminUser } from '../../lib/types'
@@ -21,8 +21,15 @@ export function AdminUzytkownicy() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Operacja nie powiodła się.'),
   })
 
+  // RODO: prawo do bycia zapomnianym — anonimizacja danych pacjenta
+  const anonymize = useMutation({
+    mutationFn: (id: string) => api(`/admin/patients/${id}/anonymize`, { method: 'POST' }),
+    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['admin-users'] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Anonimizacja nie powiodła się.'),
+  })
+
   const filtered = (users ?? []).filter(u =>
-    `${u.username}${u.email}${u.role}`.toLowerCase().includes(q.toLowerCase()))
+    `${u.username} ${u.email} ${u.role}`.toLowerCase().includes(q.toLowerCase()))
 
   return (
     <div className="space-y-6">
@@ -62,14 +69,27 @@ export function AdminUzytkownicy() {
                   {u.active_account ? <Badge tone="success">aktywne</Badge> : <Badge tone="error">zablokowane</Badge>}
                 </td>
                 <td className="border-t border-gray-100 px-4 py-3.5 text-right">
-                  <Button size="sm" variant={u.active_account ? 'ghost' : 'secondary'} disabled={toggle.isPending}
-                    onClick={() => {
-                      if (!u.active_account || window.confirm(`Zablokować konto ${u.username}? Użytkownik straci dostęp do systemu do czasu odblokowania.`)) {
-                        toggle.mutate(u.user_id)
-                      }
-                    }}>
-                    {u.active_account ? <><Lock size={14} /> Zablokuj</> : <><LockOpen size={14} /> Odblokuj</>}
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    {u.role === 'pacjent' && (
+                      <Button size="sm" variant="ghost" disabled={anonymize.isPending}
+                        title="RODO: prawo do bycia zapomnianym"
+                        onClick={() => {
+                          if (window.confirm(`Zanonimizować dane pacjenta ${u.username}? Dane osobowe (imię, nazwisko, PESEL, kontakt) zostaną trwale usunięte. Wizyty i dokumenty zostaną zachowane bez danych osobowych. Tej operacji NIE można cofnąć.`)) {
+                            anonymize.mutate(u.user_id)
+                          }
+                        }}>
+                        <UserX size={14} /> Anonimizuj
+                      </Button>
+                    )}
+                    <Button size="sm" variant={u.active_account ? 'ghost' : 'secondary'} disabled={toggle.isPending}
+                      onClick={() => {
+                        if (!u.active_account || window.confirm(`Zablokować konto ${u.username}? Użytkownik straci dostęp do systemu do czasu odblokowania.`)) {
+                          toggle.mutate(u.user_id)
+                        }
+                      }}>
+                      {u.active_account ? <><Lock size={14} /> Zablokuj</> : <><LockOpen size={14} /> Odblokuj</>}
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
