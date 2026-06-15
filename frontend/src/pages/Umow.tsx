@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, FileSignature, LocateFixed, MapPin, Star, Trash2, CalendarDays, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, FileSignature, LocateFixed, MapPin, Star, Trash2, CalendarDays, Video, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { useSecondsLeft, mmss } from '../components/Countdown'
 import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
@@ -158,13 +158,18 @@ function DoctorCard({ d, multiClinic, onPick }: {
                     <button
                       key={s.appointment_id}
                       onClick={() => onPick(s)}
-                      title={s.clinic_name}
+                      title={s.appointment_type === 'ONLINE' ? `${s.clinic_name} · ${t('teleporada')}` : s.clinic_name}
                       className="cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm transition-colors hover:bg-primary hover:text-white"
                     >
-                      {formatTime(s.appointment_datetime)}
-                      {(s.price || multiClinic) && (
+                      <span className="flex items-center justify-center gap-1">
+                        {s.appointment_type === 'ONLINE' && <Video size={11} className="shrink-0" />}
+                        {formatTime(s.appointment_datetime)}
+                      </span>
+                      {(s.price || multiClinic || s.appointment_type === 'ONLINE') && (
                         <span className="block text-[9px] font-semibold opacity-70">
-                          {[multiClinic ? shortLoc(s.clinic_name) : null, s.price ? `${s.price} zł` : null]
+                          {[s.appointment_type === 'ONLINE' ? t('online') : null,
+                            multiClinic ? shortLoc(s.clinic_name) : null,
+                            s.price ? `${s.price} zł` : null]
                             .filter(Boolean).join(' · ')}
                         </span>
                       )}
@@ -792,6 +797,12 @@ export function Umow() {
                       {t('Wolę teleporadę (wideo) — bez przychodzenia do placówki')}
                     </span>
                   </label>
+                )}
+                {slot.appointment_type === 'ONLINE' && (
+                  <p className="flex items-start gap-2.5 rounded-2xl bg-primary-soft px-4 py-3 text-sm font-semibold text-primary">
+                    <Video size={16} className="mt-0.5 shrink-0" />
+                    {t('To jest termin teleporady (wideo) — wizyta odbędzie się online, bez przychodzenia do placówki.')}
+                  </p>
                 )}
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
                   <input

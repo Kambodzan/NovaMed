@@ -288,6 +288,9 @@ const EN: Record<string, string> = {
   'Wcześniejsze dni': 'Earlier days',
   'Kolejne dni': 'Later days',
   'Wolę teleporadę (wideo) — bez przychodzenia do placówki': 'I prefer a video visit — no need to come in',
+  'online': 'online',
+  'To jest termin teleporady (wideo) — wizyta odbędzie się online, bez przychodzenia do placówki.':
+    'This is a video appointment slot — the visit will take place online, without coming to the clinic.',
   'Spróbuj zmienić kryteria — albo daj znać, że czekasz:': 'Try different criteria — or let us know you are waiting:',
 
   // Rodzina
