@@ -393,6 +393,13 @@ export function Umow() {
     enabled: !!slot?.referral_required,
   })
 
+  // wejście „umów ze skierowania" (z zakładki Skierowania) — kontekst skierowania
+  const { data: refDocInfo } = useQuery({
+    queryKey: ['ref-doc', refDocId, activeId],
+    queryFn: async () => (await api<DocumentOut[]>(asPatient('/documents/my'))).find(d => d.document_id === refDocId) ?? null,
+    enabled: bookKind === 'exam' && !!refDocId,
+  })
+
   const pickSlot = (s: AppointmentOut) => {
     setSlot(s)
     setOnline(s.appointment_type === 'ONLINE')
@@ -566,6 +573,17 @@ export function Umow() {
                 <Button variant="ghost" size="sm" onClick={() => setShowAllDocs(true)}>
                   {t('Przeglądaj wszystkich lekarzy')} <ChevronRight size={14} />
                 </Button>
+              </div>
+            )}
+
+            {bookKind === 'exam' && refDocId && refDocInfo && (
+              <div className="flex items-start gap-2.5 rounded-2xl bg-primary-soft px-4 py-3">
+                <FileSignature size={16} className="mt-0.5 shrink-0 text-primary" />
+                <div className="min-w-0 text-sm">
+                  <p className="font-extrabold text-gray-900">{t('Umawiasz badanie ze skierowania')}</p>
+                  <p className="font-medium text-gray-600">{refDocInfo.details}{refDocInfo.code ? ` · ${refDocInfo.code}` : ''}</p>
+                  <p className="mt-0.5 text-xs font-medium text-gray-400">{t('Wybierz badanie i termin poniżej — skierowanie podepniemy automatycznie.')}</p>
+                </div>
               </div>
             )}
 

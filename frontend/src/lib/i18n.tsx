@@ -167,6 +167,8 @@ const EN: Record<string, string> = {
   'Uzupełnienie': 'Addendum',
   'Zaświadczenie': 'Medical certificate',
   'Nie udało się skopiować — przepisz kod ręcznie.': 'Could not copy — type the code manually.',
+  'Umawiasz badanie ze skierowania': 'Booking an exam from your referral',
+  'Wybierz badanie i termin poniżej — skierowanie podepniemy automatycznie.': 'Pick the exam and a time below — the referral will be attached automatically.',
   'Edytuj opinię': 'Edit review',
   'Zapisz zmiany': 'Save changes',
   'Minął czas na edycję tej opinii (14 dni).': 'The time to edit this review has passed (14 days).',
