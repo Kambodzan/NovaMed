@@ -53,6 +53,10 @@ class Appointment(Base):
     patient_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     # token do potwierdzenia/odwołania wizyty z linka SMS (bez logowania)
     confirmation_token: Mapped[str | None] = mapped_column(String(43), unique=True)
+    # „hold" terminu na czas wypełniania formularza rezerwacji (TEMP_LOCK bez
+    # płatności): do kiedy slot jest miękko zarezerwowany; po tym czasie pętla tła
+    # zwalnia go do puli. NULL = brak holdu.
+    lock_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")

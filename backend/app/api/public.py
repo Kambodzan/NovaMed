@@ -5,14 +5,14 @@
 # (auth.register_profile) razem z historią wizyt.
 from uuid import UUID
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.appointments import AppointmentOut, appointment_out, get_appointment_or_404, visit_label
+from app.api.appointments import AppointmentOut, appointment_out, visit_label
 from app.api.family import pesel_valid
 from app.core.config import settings
 from app.core.db import get_db
@@ -72,6 +72,7 @@ class GuestBookIn(BaseModel):
     email: EmailStr
     reason: str | None = Field(default=None, max_length=500)
     external_referral: bool = False
+    hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /public/slots/{id}/hold)
 
     @field_validator("pesel")
     @classmethod
@@ -101,6 +102,48 @@ def public_slots(db: Session = Depends(get_db)):
     return [appointment_out(db, a) for a in rows]
 
 
+class HoldOut(BaseModel):
+    hold_token: str
+    expires_at: datetime
+
+
+@router.post("/slots/{appointment_id}/hold", response_model=HoldOut)
+def hold_slot(appointment_id: UUID, db: Session = Depends(get_db)):
+    """Miękka rezerwacja terminu na czas wypełniania formularza: FREE→TEMP_LOCK
+    (jeszcze bez pacjenta i płatności). Pierwsza osoba, która wejdzie w slot, blokuje
+    go dla pozostałych; pętla tła zwalnia porzucone holdy po slot_hold_minutes.
+    Blokada wiersza (FOR UPDATE) serializuje równoczesne wejścia — drugi dostaje 409."""
+    a = db.get(Appointment, appointment_id, with_for_update=True)
+    if a is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Termin nie istnieje.")
+    if a.appointment_status != AppointmentStatus.FREE.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Ktoś właśnie zajął ten termin — wybierz inny.")
+    if a.appointment_datetime < datetime.now():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
+    a.appointment_status = AppointmentStatus.TEMP_LOCK.value
+    a.lock_expires_at = datetime.now() + timedelta(minutes=settings.slot_hold_minutes)
+    token = ensure_confirm_token(a)
+    db.commit()
+    return HoldOut(hold_token=token, expires_at=a.lock_expires_at)
+
+
+@router.post("/slots/{appointment_id}/release")
+def release_slot(appointment_id: UUID, hold_token: str = Query(...), db: Session = Depends(get_db)):
+    """Zwolnienie miękkiej rezerwacji (np. „Zmień termin"): TEMP_LOCK→FREE — ale
+    tylko gdy slot jest holdem bez pacjenta i token się zgadza (nie ruszamy cudzych)."""
+    a = db.get(Appointment, appointment_id, with_for_update=True)
+    released = False
+    if (a is not None and a.appointment_status == AppointmentStatus.TEMP_LOCK.value
+            and a.patient_id is None and a.confirmation_token == hold_token):
+        a.appointment_status = AppointmentStatus.FREE.value
+        a.lock_expires_at = None
+        a.confirmation_token = None
+        db.commit()
+        released = True
+    return {"released": released}
+
+
 class GuestPaymentOut(BaseModel):
     amount: float
     provider_ref: str
@@ -123,8 +166,19 @@ def guest_book(
     Wizyta płatna: FREE→TEMP_LOCK + płatność PENDING u operatora; gość opłaca ją
     online z linku (POST /public/visit/{token}/pay) — tak samo jak zalogowany pacjent,
     bez przymusu zakładania konta."""
-    a = get_appointment_or_404(body.appointment_id, db)
-    if a.appointment_status != AppointmentStatus.FREE.value:
+    # blokada wiersza — serializuje równoczesne rezerwacje tego samego slotu
+    a = db.get(Appointment, body.appointment_id, with_for_update=True)
+    if a is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Termin nie istnieje.")
+    # slot wolny ALBO trzymany przez TEGO klienta (hold z otwartego formularza)
+    held_by_me = (
+        a.appointment_status == AppointmentStatus.TEMP_LOCK.value
+        and a.patient_id is None
+        and a.confirmation_token is not None
+        and a.confirmation_token == body.hold_token
+        and (a.lock_expires_at is None or a.lock_expires_at > datetime.now())
+    )
+    if a.appointment_status != AppointmentStatus.FREE.value and not held_by_me:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
@@ -160,6 +214,7 @@ def guest_book(
     # telefon (anty-spam; potwierdzenia/przypomnienia trafią pod realny numer)
     require_verified_phone(db, body.phone_number, "BOOKING")
     a.patient_id = guest.user_id
+    a.lock_expires_at = None  # hold zamienia się w realną rezerwację (płatność/CONFIRMED)
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]
     if a.referral_required:
@@ -316,6 +371,8 @@ def public_pay(
     pid = a.patient_id
     a.appointment_status = AppointmentStatus.FREE.value
     a.patient_id = None
+    a.confirmation_token = None
+    a.lock_expires_at = None
     notify(db, pid, "Płatność odrzucona",
            "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
     db.commit()

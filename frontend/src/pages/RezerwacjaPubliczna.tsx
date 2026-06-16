@@ -4,7 +4,7 @@
 // zakładania konta). Konto można założyć później tym samym e-mailem (przejęcie historii).
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
@@ -26,14 +26,37 @@ export function RezerwacjaPubliczna() {
   const [consent, setConsent] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [pending, setPending] = useState<{ appt: AppointmentOut; amount: number; payToken: string } | null>(null)
+  const [holdToken, setHoldToken] = useState<string | null>(null)
   const [form, setForm] = useState({
     first_name: '', last_name: '', pesel: '', birth_date: '', phone_number: '', email: '', reason: '',
   })
+  const qc = useQueryClient()
 
   const { data: slots } = useQuery({
     queryKey: ['public-slots'],
     queryFn: () => api<AppointmentOut[]>('/public/slots'),
   })
+
+  // miękka rezerwacja slotu na czas wypełniania formularza — kto pierwszy, ten blokuje
+  const hold = useMutation({
+    mutationFn: (s: AppointmentOut) => api<{ hold_token: string; expires_at: string }>(
+      `/public/slots/${s.appointment_id}/hold`, { method: 'POST' }),
+    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setExternalRef(false); setError(null) },
+    onError: (e) => {
+      setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć rezerwacji terminu.')
+      void qc.invalidateQueries({ queryKey: ['public-slots'] })  // ktoś zajął — odśwież listę
+    },
+  })
+
+  // zwolnienie holdu (np. „Zmień termin") — best-effort
+  const releaseHold = () => {
+    if (slot && holdToken) {
+      void api(`/public/slots/${slot.appointment_id}/release?hold_token=${encodeURIComponent(holdToken)}`,
+        { method: 'POST' }).catch(() => {})
+    }
+    setHoldToken(null)
+    void qc.invalidateQueries({ queryKey: ['public-slots'] })
+  }
 
   // goście widzą terminy bezpłatne (NFZ) i prywatne (płatne) — te drugie opłaca się online
   const cards = useMemo(() => {
@@ -66,10 +89,12 @@ export function RezerwacjaPubliczna() {
         ...form,
         reason: form.reason.trim() || null,
         external_referral: externalRef,
+        hold_token: holdToken,
       },
     }),
     onSuccess: (res) => {
       setError(null)
+      setHoldToken(null)  // hold zamienił się w rezerwację
       // wizyta płatna → przejdź do opłacenia online; bezpłatna → od razu potwierdzona
       if (res.payment?.payment_status === 'PENDING' && res.payment.pay_token) {
         setPending({ appt: res.appointment, amount: res.payment.amount, payToken: res.payment.pay_token })
@@ -150,11 +175,14 @@ export function RezerwacjaPubliczna() {
         <Tile delay={60}>
           <TileHeader
             title="Twoje dane"
-            action={<Button variant="ghost" size="sm" onClick={() => setSlot(null)}>Zmień termin</Button>}
+            action={<Button variant="ghost" size="sm" onClick={() => { releaseHold(); setSlot(null) }}>Zmień termin</Button>}
           />
-          <p className="mb-4 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
+          <p className="mb-2 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
             {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)} · {slot.clinic_name}
             {slot.price != null && <span className="text-primary"> · {slot.price} zł</span>}
+          </p>
+          <p className="mb-4 text-xs font-semibold text-gray-400">
+            Ten termin jest teraz zarezerwowany dla Ciebie — dokończ rezerwację w ciągu kilku minut.
           </p>
           <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified) book.mutate() }}>
             <div className="grid grid-cols-2 gap-3">
@@ -211,10 +239,11 @@ export function RezerwacjaPubliczna() {
                 </button>
               ))}
             </div>
+            {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
             {cards.length === 0 ? (
               <EmptyState icon={<HeartPulse size={28} strokeWidth={1.5} />} title="Brak wolnych terminów"
                 hint="Wróć później — terminy pojawiają się na bieżąco." />
-            ) : cards.map(c => <PublicCard key={c.key} c={c} onPick={s => { setSlot(s); setExternalRef(false) }} />)}
+            ) : cards.map(c => <PublicCard key={c.key} c={c} disabled={hold.isPending} onPick={s => hold.mutate(s)} />)}
             <p className="text-center text-xs font-semibold text-gray-400">
               Terminy bez ceny są na NFZ; terminy z ceną to wizyty prywatne — opłacasz je online przy rezerwacji.
             </p>
@@ -225,9 +254,10 @@ export function RezerwacjaPubliczna() {
   )
 }
 
-function PublicCard({ c, onPick }: {
+function PublicCard({ c, onPick, disabled }: {
   c: { name: string; sub: string | null; ref: boolean; days: ReadonlyArray<readonly [string, AppointmentOut[]]> }
   onPick: (s: AppointmentOut) => void
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const nearest = c.days[0][1][0]
@@ -258,8 +288,8 @@ function PublicCard({ c, onPick }: {
               </p>
               <div className="flex flex-col gap-1">
                 {list.slice(0, 5).map(s => (
-                  <button key={s.appointment_id} onClick={() => onPick(s)}
-                    className="group cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white">
+                  <button key={s.appointment_id} onClick={() => onPick(s)} disabled={disabled}
+                    className="group cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
                     {formatTime(s.appointment_datetime)}
                     {s.price != null && <span className="block text-[10px] font-bold text-gray-400 group-hover:text-white/80">{s.price} zł</span>}
                   </button>

@@ -54,6 +54,9 @@ class Settings(BaseSettings):
 
     # Po ilu minutach porzucona płatność (TEMP_LOCK) zwalnia termin z powrotem do puli
     temp_lock_minutes: int = 15
+    # Po ilu minutach „hold" terminu (otwarty formularz rezerwacji, jeszcze bez
+    # płatności) wygasa i termin wraca do puli — krócej niż okno płatności
+    slot_hold_minutes: int = 10
 
     @model_validator(mode="after")
     def _production_guards(self):

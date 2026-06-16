@@ -105,5 +105,22 @@ def release_expired_temp_locks(db: Session) -> int:
                    f"Płatność za wizytę ({label}) nie została dokończona w {settings.temp_lock_minutes} min "
                    "— termin wrócił do puli. Jeśli nadal chcesz, zarezerwuj go ponownie.")
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+
+    # porzucone HOLD-y: ktoś otworzył formularz rezerwacji i nie dokończył (TEMP_LOCK
+    # bez pacjenta i bez płatności) — po lock_expires_at slot wraca do puli
+    holds = db.scalars(
+        select(Appointment).where(
+            Appointment.appointment_status == AppointmentStatus.TEMP_LOCK.value,
+            Appointment.patient_id.is_(None),
+            Appointment.lock_expires_at.is_not(None),
+            Appointment.lock_expires_at < datetime.now(),
+        )
+    ).all()
+    for a in holds:
+        a.appointment_status = AppointmentStatus.FREE.value
+        a.lock_expires_at = None
+        a.confirmation_token = None
+        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+
     db.commit()
-    return len(rows)
+    return len(rows) + len(holds)

@@ -100,6 +100,55 @@ def test_gosc_platny_odmowa_zwalnia_termin(client, setup):
     assert pay.json()["payment"]["payment_status"] == "FAILED"
 
 
+def test_hold_blokuje_termin_i_release_zwalnia(client, setup):
+    slot = make_slot(client, setup, hour=15)
+    sid = slot["appointment_id"]
+    h = client.post(f"/public/slots/{sid}/hold")
+    assert h.status_code == 200
+    token = h.json()["hold_token"]
+    # zablokowany — znika z publicznej puli
+    assert all(s["appointment_id"] != sid for s in client.get("/public/slots").json())
+    # druga osoba nie zaholduje już zajętego
+    assert client.post(f"/public/slots/{sid}/hold").status_code == 409
+    # release swoim tokenem → wraca do puli
+    assert client.post(f"/public/slots/{sid}/release?hold_token={token}").json()["released"] is True
+    assert any(s["appointment_id"] == sid for s in client.get("/public/slots").json())
+
+
+def test_book_na_wlasnym_holdzie(client, setup):
+    slot = make_slot(client, setup, hour=16)
+    sid = slot["appointment_id"]
+    token = client.post(f"/public/slots/{sid}/hold").json()["hold_token"]
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
+    r = client.post("/public/book", json={**GUEST, "appointment_id": sid, "hold_token": token})
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
+
+
+def test_book_na_cudzym_holdzie_409(client, setup):
+    slot = make_slot(client, setup, hour=17)
+    sid = slot["appointment_id"]
+    client.post(f"/public/slots/{sid}/hold")  # trzyma ktoś inny (inny token)
+    r = client.post("/public/book", json={**GUEST, "appointment_id": sid, "hold_token": "nie-moj-token"})
+    assert r.status_code == 409
+
+
+def test_porzucony_hold_wraca_do_puli(client, setup, db_session):
+    from datetime import datetime, timedelta
+    import uuid as _uuid
+    from app.models import Appointment
+    from app.domain.reminders import release_expired_temp_locks
+    slot = make_slot(client, setup, hour=18)
+    sid = slot["appointment_id"]
+    client.post(f"/public/slots/{sid}/hold")
+    a = db_session.get(Appointment, _uuid.UUID(sid))
+    a.lock_expires_at = datetime.now() - timedelta(minutes=1)  # hold wygasł
+    db_session.commit()
+    assert release_expired_temp_locks(db_session) >= 1
+    a2 = db_session.get(Appointment, _uuid.UUID(sid))
+    assert a2.appointment_status == "FREE" and a2.lock_expires_at is None
+
+
 def test_gosc_pesel_aktywnego_pacjenta(client, setup, factory, db_session):
     patient_user, _ = factory.patient()
     from app.models import Patient
