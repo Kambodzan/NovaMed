@@ -9,7 +9,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.appointments import AppointmentOut, appointment_out, visit_label
@@ -23,7 +23,7 @@ from app.domain.notify import notify
 from app.domain.otp import require_verified_phone, send_otp, verify_otp
 from app.integrations.base import IntegrationError
 from app.integrations.payments import PaymentsClient, get_payments_client
-from app.models import Appointment, AppUser, Clinic, Patient, Payment, Role
+from app.models import Appointment, AppUser, Clinic, Patient, Payment, Review, Role
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -101,6 +101,20 @@ def public_slots(db: Session = Depends(get_db)):
         .order_by(Appointment.appointment_datetime)
     )
     return [appointment_out(db, a) for a in rows]
+
+
+class DoctorRatingOut(BaseModel):
+    average: float | None
+    count: int
+
+
+@router.get("/doctors/{doctor_id}/rating", response_model=DoctorRatingOut)
+def public_doctor_rating(doctor_id: UUID, db: Session = Depends(get_db)):
+    """Średnia ocena lekarza (bez logowania) — do pokazania na publicznej rezerwacji.
+    Zwraca tylko agregat (średnia + liczba), bez treści opinii."""
+    avg = db.scalar(select(func.avg(Review.rating)).where(Review.doctor_id == doctor_id))
+    count = db.scalar(select(func.count()).select_from(Review).where(Review.doctor_id == doctor_id)) or 0
+    return DoctorRatingOut(average=round(float(avg), 2) if avg is not None else None, count=count)
 
 
 class HoldOut(BaseModel):

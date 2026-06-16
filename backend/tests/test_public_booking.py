@@ -37,6 +37,20 @@ def test_publiczne_sloty_bez_logowania(client, setup):
     assert client.get("/public/clinics").status_code == 200
 
 
+def test_publiczna_ocena_lekarza(client, setup, factory, db_session):
+    """Średnia ocena lekarza dostępna bez logowania (do publicznej rezerwacji)."""
+    from app.models import Review
+    did = setup["doctor"].user_id
+    # bez opinii — endpoint publiczny, zwraca pustą ocenę
+    assert client.get(f"/public/doctors/{did}/rating").json() == {"average": None, "count": 0}
+    reviewer, _ = factory.patient()
+    db_session.add(Review(user_id=reviewer.user_id, doctor_id=did, rating=5))
+    db_session.add(Review(user_id=reviewer.user_id, doctor_id=did, rating=4))
+    db_session.commit()
+    r = client.get(f"/public/doctors/{did}/rating").json()
+    assert r["count"] == 2 and r["average"] == 4.5
+
+
 def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
     slot = make_slot(client, setup, hour=11)
     verify_phone(client, GUEST["phone_number"], "BOOKING")

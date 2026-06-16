@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
+import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse, Star } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { peselValid } from '../lib/pesel'
@@ -60,11 +60,12 @@ export function RezerwacjaPubliczna() {
 
   // goście widzą terminy bezpłatne (NFZ) i prywatne (płatne) — te drugie opłaca się online
   const cards = useMemo(() => {
-    const map = new Map<string, { name: string; sub: string | null; ref: boolean; days: Map<string, AppointmentOut[]> }>()
+    const map = new Map<string, { id: string | null; name: string; sub: string | null; ref: boolean; days: Map<string, AppointmentOut[]> }>()
     for (const s of slots ?? []) {
       if (kind === 'visit' ? s.service_name != null : s.service_name == null) continue
       const key = kind === 'visit' ? `d${s.doctor_id}` : s.service_name!
       const cur = map.get(key) ?? {
+        id: kind === 'visit' ? s.doctor_id : null,
         name: kind === 'visit' ? s.doctor_name : s.service_name!,
         sub: kind === 'visit' ? (s.specializations.join(' · ') || null) : null,
         ref: s.referral_required, days: new Map<string, AppointmentOut[]>(),
@@ -255,12 +256,18 @@ export function RezerwacjaPubliczna() {
 }
 
 function PublicCard({ c, onPick, disabled }: {
-  c: { name: string; sub: string | null; ref: boolean; days: ReadonlyArray<readonly [string, AppointmentOut[]]> }
+  c: { id: string | null; name: string; sub: string | null; ref: boolean; days: ReadonlyArray<readonly [string, AppointmentOut[]]> }
   onPick: (s: AppointmentOut) => void
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const nearest = c.days[0][1][0]
+  const { data: rating } = useQuery({
+    queryKey: ['public-doctor-rating', c.id],
+    queryFn: () => api<{ average: number | null; count: number }>(`/public/doctors/${c.id}/rating`),
+    enabled: c.id != null,  // badania (pracownia) nie mają ocen lekarza
+    staleTime: 300_000,
+  })
   return (
     <div className="rounded-2xl bg-gray-50">
       <button onClick={() => setOpen(o => !o)} className="flex w-full cursor-pointer items-center gap-3 p-4 text-left">
@@ -268,6 +275,13 @@ function PublicCard({ c, onPick, disabled }: {
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-900">
             {c.name}
+            {rating && rating.count > 0 && rating.average != null && (
+              <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
+                <Star size={12} className="fill-amber-400 text-amber-400" />
+                {rating.average.toFixed(1)}
+                <span className="font-semibold text-gray-400">({rating.count})</span>
+              </span>
+            )}
             {c.ref && (
               <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">
                 <FileSignature size={11} /> wymaga skierowania
