@@ -14,12 +14,39 @@ from sqlalchemy.orm import Session
 
 from app.api.appointments import AppointmentOut, appointment_out, get_appointment_or_404, visit_label
 from app.api.family import pesel_valid
+from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
 from app.domain.notify import notify
+from app.domain.otp import require_verified_phone, send_otp, verify_otp
 from app.models import Appointment, AppUser, Clinic, Patient, Payment, Role
 
 router = APIRouter(prefix="/public", tags=["public"])
+
+
+class OtpSendIn(BaseModel):
+    phone_number: str = Field(min_length=7, max_length=20)
+    purpose: str = Field(pattern="^(BOOKING|REGISTRATION)$")
+
+
+class OtpVerifyIn(OtpSendIn):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+@router.post("/otp/send")
+def otp_send(body: OtpSendIn, db: Session = Depends(get_db)):
+    """Wysyła kod SMS na podany numer (rezerwacja publiczna / rejestracja).
+    W DEV zwraca kod też w odpowiedzi — Twilio trial dostarcza tylko na numer
+    zweryfikowany, więc demo z dowolnym numerem korzysta z tego fallbacku."""
+    code = send_otp(db, body.phone_number, body.purpose)
+    return {"sent": True, "dev_code": code if settings.dev_mode else None}
+
+
+@router.post("/otp/verify")
+def otp_verify(body: OtpVerifyIn, db: Session = Depends(get_db)):
+    """Potwierdza kod — numer staje się „zweryfikowany" na czas dokończenia akcji."""
+    verify_otp(db, body.phone_number, body.code, body.purpose)
+    return {"verified": True}
 
 
 class PublicClinicOut(BaseModel):
@@ -109,6 +136,9 @@ def guest_book(body: GuestBookIn, db: Session = Depends(get_db)):
             pesel=body.pesel, birth_date=body.birth_date,
         ))
 
+    # numer musi być potwierdzony kodem SMS — dowód, że rezerwujący kontroluje
+    # telefon (anty-spam; potwierdzenia/przypomnienia trafią pod realny numer)
+    require_verified_phone(db, body.phone_number, "BOOKING")
     a.patient_id = guest.user_id
     a.appointment_status = AppointmentStatus.CONFIRMED.value
     if body.reason:

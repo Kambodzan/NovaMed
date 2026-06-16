@@ -12,6 +12,7 @@ from app.models.notification import Notification
 from app.models.waitlist import WaitingListEntry
 from app.models.clinical_note import ClinicalNote, NoteAddendum, NoteEvent
 from app.models.audit import AuditLog
+from app.models.phone_verification import PhoneVerification
 
 __all__ = [
     "Role", "AppUser", "Administrator", "Doctor", "DoctorSpecialization", "Nurse", "Patient",
@@ -22,4 +23,5 @@ __all__ = [
     "DocumentShare", "Icd10Entry", "MedicationEntry",
     "ClinicalNote", "NoteAddendum", "NoteEvent",
     "AuditLog",
+    "PhoneVerification",
 ]

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user, get_token_claims, require_roles
 from app.core.config import settings
 from app.core.db import get_db
+from app.domain.otp import require_verified_phone
 from app.models import AppUser, Patient, Role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -90,6 +91,12 @@ def register_profile(
 
     if db.scalar(select(AppUser).where(AppUser.supabase_uid == supabase_uid)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Profil już istnieje.")
+
+    # Telefon (opcjonalny) musi być potwierdzony kodem SMS — żeby przypomnienia
+    # realnie dochodziły, a wpięcie do kartoteki gościa po PESEL (niżej) wymagało
+    # KONTROLI nad numerem, nie tylko jego znajomości (wzmocnienie anty-takeover).
+    if body.phone_number:
+        require_verified_phone(db, body.phone_number, "REGISTRATION")
 
     # PRZEJĘCIE konta gościa: pacjent założony bez konta — rezerwacja publiczna
     # (M8.6) albo przez rejestrację telefonicznie/w okienku (UC-PP1). Dopasowanie

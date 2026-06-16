@@ -1,6 +1,6 @@
 import uuid
 
-from tests.conftest import auth_header, make_token
+from tests.conftest import auth_header, make_token, verify_phone
 
 PROFILE = {
     "first_name": "Janina",
@@ -30,6 +30,7 @@ def test_rejestracja_profilu_i_me(client):
     sub = str(uuid.uuid4())
     token = make_token(sub=sub)
 
+    verify_phone(client, PROFILE["phone_number"])  # telefon podany → wymaga potwierdzenia SMS
     resp = client.post("/auth/register-profile", json=PROFILE, headers=auth_header(token))
     assert resp.status_code == 201, resp.text
     body = resp.json()
@@ -43,7 +44,9 @@ def test_rejestracja_profilu_i_me(client):
 
 def test_podwojna_rejestracja_409(client):
     token = make_token()
+    verify_phone(client, PROFILE["phone_number"])
     assert client.post("/auth/register-profile", json=PROFILE, headers=auth_header(token)).status_code == 201
+    # druga próba tym samym kontem → 409 zanim dojdzie do weryfikacji telefonu
     assert client.post("/auth/register-profile", json=PROFILE, headers=auth_header(token)).status_code == 409
 
 

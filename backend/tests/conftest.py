@@ -140,6 +140,14 @@ def auth_header(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def verify_phone(client, phone: str, purpose: str = "REGISTRATION") -> None:
+    """Przeprowadza weryfikację OTP (wyślij→potwierdź) tak, jak zrobiłby to front:
+    w DEV kod wraca w odpowiedzi `dev_code`, więc test nie potrzebuje bramki SMS."""
+    code = client.post("/public/otp/send", json={"phone_number": phone, "purpose": purpose}).json()["dev_code"]
+    r = client.post("/public/otp/verify", json={"phone_number": phone, "code": code, "purpose": purpose})
+    assert r.status_code == 200, r.text
+
+
 @pytest.fixture()
 def factory(db_session):
     """Fabryka encji domenowych do testów — tworzy użytkowników z tokenami."""

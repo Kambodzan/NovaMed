@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from tests.conftest import auth_header, make_token
+from tests.conftest import auth_header, make_token, verify_phone
 
 GUEST = {
     "first_name": "Marek", "last_name": "Goscinny",
@@ -39,6 +39,7 @@ def test_publiczne_sloty_bez_logowania(client, setup):
 
 def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
     slot = make_slot(client, setup, hour=11)
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
     r = client.post("/public/book", json={**GUEST, "appointment_id": slot["appointment_id"],
                                           "reason": "ból gardła"})
     assert r.status_code == 200, r.text
@@ -48,6 +49,7 @@ def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
     # gość nie może się zalogować (konto nieaktywne) — ale rejestracja tym samym
     # e-mailem PRZEJMUJE konto z historią wizyt
     token = make_token(email=GUEST["email"])
+    verify_phone(client, GUEST["phone_number"], "REGISTRATION")
     reg = client.post("/auth/register-profile", headers=auth_header(token), json={
         "first_name": GUEST["first_name"], "last_name": GUEST["last_name"],
         "pesel": GUEST["pesel"], "birth_date": GUEST["birth_date"], "phone_number": GUEST["phone_number"],
@@ -66,6 +68,7 @@ def test_gosc_platny_slot_i_nfz_badanie(client, setup):
     exam = make_slot(client, setup, hour=8, service_name="RTG klatki piersiowej")
     deny2 = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"]})
     assert deny2.status_code == 409 and "skierowania" in deny2.json()["detail"]
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
     ok = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"],
                                            "external_referral": True})
     assert ok.status_code == 200
@@ -100,6 +103,7 @@ def test_przejecie_po_pesel_gosc_z_recepcji(client, setup, db_session):
 
     # pacjent zakłada konto z INNYM e-mailem, ten sam PESEL → przejęcie po PESEL
     token = make_token(email="ewa.prywatna@example.com")
+    verify_phone(client, "603999888", "REGISTRATION")
     rp = client.post("/auth/register-profile", headers=auth_header(token), json={
         "first_name": "Ewa", "last_name": "Telefoniczna", "pesel": "44051401359",
         "birth_date": "1944-05-14", "phone_number": "603999888",
@@ -123,7 +127,9 @@ def test_pesel_zly_telefon_nie_przejmuje(client, setup, db_session):
     pid = r.json()["patient_id"]
 
     # napastnik zna PESEL, ale podaje inny telefon → nie wpina się do cudzej kartoteki
+    # (musi przy tym potwierdzić SWÓJ numer — kontroluje 111000111, nie 603999888)
     token = make_token(email="napastnik@example.com")
+    verify_phone(client, "111000111", "REGISTRATION")
     rp = client.post("/auth/register-profile", headers=auth_header(token), json={
         "first_name": "Jan", "last_name": "Cichy", "pesel": "44051401359",
         "birth_date": "1944-05-14", "phone_number": "111000111",

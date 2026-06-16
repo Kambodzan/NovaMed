@@ -8,6 +8,7 @@ import { DEV_MODE, useAuth } from '../lib/auth'
 import { api } from '../lib/api'
 import { peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
+import { PhoneOtp } from '../components/PhoneOtp'
 
 const STEPS = ['Konto', 'Twoje dane', 'Kontakt i zgody', 'Podsumowanie']
 
@@ -38,6 +39,7 @@ export function Rejestracja() {
   })
   const [consentRodo, setConsentRodo] = useState(false)
   const [consentTerms, setConsentTerms] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
 
   const set = (key: keyof typeof profile) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -54,6 +56,8 @@ export function Rejestracja() {
 
   const peselBad = profile.pesel.length === 11 && !peselValid(profile.pesel)
   const passMismatch = !DEV_MODE && password2.length > 0 && password !== password2
+  // telefon jest opcjonalny, ale gdy podany — musi być potwierdzony kodem SMS
+  const phoneNeedsVerify = !!profile.phone_number.trim() && !phoneVerified
 
   const submitAccount = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -173,10 +177,14 @@ export function Rejestracja() {
         )}
 
         {step === 3 && (
-          <form className="space-y-4" onSubmit={e => { e.preventDefault(); setStep(4) }}>
-            <Field label="Telefon (opcjonalnie)" hint="na ten numer wyślemy SMS-y z przypomnieniami o wizytach">
-              <input className={inputCls} value={profile.phone_number} onChange={set('phone_number')} placeholder="601 234 567" />
+          <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (!phoneNeedsVerify) setStep(4) }}>
+            <Field label="Telefon (opcjonalnie)" hint="na ten numer wyślemy SMS-y z przypomnieniami — potwierdzamy go kodem">
+              <input className={inputCls} value={profile.phone_number} placeholder="601 234 567"
+                onChange={e => { setProfile(p => ({ ...p, phone_number: e.target.value })); setPhoneVerified(false) }} />
             </Field>
+            {profile.phone_number.trim() && (
+              <PhoneOtp phone={profile.phone_number} purpose="REGISTRATION" verified={phoneVerified} onVerified={() => setPhoneVerified(true)} />
+            )}
             <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
               <input type="checkbox" required className="mt-0.5 h-4 w-4 accent-(--color-primary)"
                 checked={consentRodo} onChange={e => setConsentRodo(e.target.checked)} />
@@ -194,7 +202,7 @@ export function Rejestracja() {
             </label>
             <div className="flex gap-2">
               <Button variant="secondary" className="flex-1" type="button" onClick={() => setStep(2)}>Wstecz</Button>
-              <Button size="lg" className="flex-1" disabled={!consentRodo || !consentTerms} type="submit">Dalej</Button>
+              <Button size="lg" className="flex-1" disabled={!consentRodo || !consentTerms || phoneNeedsVerify} type="submit">Dalej</Button>
             </div>
           </form>
         )}

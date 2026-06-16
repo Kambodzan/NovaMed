@@ -9,6 +9,7 @@ import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } fro
 import { api, ApiError } from '../lib/api'
 import { peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
+import { PhoneOtp } from '../components/PhoneOtp'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
 import type { AppointmentOut } from '../lib/types'
 
@@ -19,6 +20,7 @@ export function RezerwacjaPubliczna() {
   const [error, setError] = useState<string | null>(null)
   const [externalRef, setExternalRef] = useState(false)
   const [consent, setConsent] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
   const [form, setForm] = useState({
     first_name: '', last_name: '', pesel: '', birth_date: '', phone_number: '', email: '', reason: '',
   })
@@ -106,7 +108,7 @@ export function RezerwacjaPubliczna() {
           <p className="mb-4 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
             {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)} · {slot.clinic_name}
           </p>
-          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad) book.mutate() }}>
+          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified) book.mutate() }}>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Imię"><input className={inputCls} required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} /></Field>
               <Field label="Nazwisko"><input className={inputCls} required value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></Field>
@@ -119,9 +121,10 @@ export function RezerwacjaPubliczna() {
               <Field label="Data urodzenia"><DatePicker required value={form.birth_date} max={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, birth_date: v }))} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Telefon" hint="tu wyślemy potwierdzenie SMS"><input className={inputCls} required minLength={7} value={form.phone_number} onChange={e => setForm(f => ({ ...f, phone_number: e.target.value }))} /></Field>
+              <Field label="Telefon" hint="tu wyślemy kod potwierdzający"><input className={inputCls} required minLength={7} value={form.phone_number} onChange={e => { setForm(f => ({ ...f, phone_number: e.target.value })); setPhoneVerified(false) }} /></Field>
               <Field label="E-mail"><input type="email" className={inputCls} required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
             </div>
+            <PhoneOtp phone={form.phone_number} purpose="BOOKING" verified={phoneVerified} onVerified={() => setPhoneVerified(true)} />
             <Field label="Co Ci dolega? (opcjonalnie)">
               <textarea className={cx(inputCls, 'h-16 py-2')} maxLength={500} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
             </Field>
@@ -142,8 +145,8 @@ export function RezerwacjaPubliczna() {
               </span>
             </label>
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-            <Button size="lg" className="w-full" disabled={book.isPending || peselBad} type="submit">
-              {book.isPending ? 'Rezerwowanie…' : 'Rezerwuję termin'}
+            <Button size="lg" className="w-full" disabled={book.isPending || peselBad || !phoneVerified} type="submit">
+              {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu' : 'Rezerwuję termin'}
             </Button>
           </form>
         </Tile>
