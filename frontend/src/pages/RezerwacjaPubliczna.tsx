@@ -1,10 +1,11 @@
 // M8.6: publiczne umawianie BEZ konta — strona wystawiana przez klinikę.
-// Gość wybiera termin (NFZ; płatne po zalogowaniu), podaje dane → rezerwacja
-// + SMS; konto można założyć później tym samym e-mailem (przejęcie historii).
+// Gość wybiera termin (NFZ lub prywatny płatny), podaje dane, potwierdza telefon
+// kodem SMS → rezerwacja; wizytę płatną opłaca od razu online (mock bramki, bez
+// zakładania konta). Konto można założyć później tym samym e-mailem (przejęcie historii).
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Check, ChevronDown, FileSignature, HeartPulse } from 'lucide-react'
+import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { peselValid } from '../lib/pesel'
@@ -12,6 +13,9 @@ import { DatePicker } from '../components/DatePicker'
 import { PhoneOtp } from '../components/PhoneOtp'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
 import type { AppointmentOut } from '../lib/types'
+
+type GuestPayment = { amount: number; provider_ref: string; pay_token: string | null; payment_status: string }
+type GuestBookResult = { appointment: AppointmentOut; payment: GuestPayment | null }
 
 export function RezerwacjaPubliczna() {
   const [kind, setKind] = useState<'visit' | 'exam'>('visit')
@@ -21,6 +25,7 @@ export function RezerwacjaPubliczna() {
   const [externalRef, setExternalRef] = useState(false)
   const [consent, setConsent] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
+  const [pending, setPending] = useState<{ appt: AppointmentOut; amount: number; payToken: string } | null>(null)
   const [form, setForm] = useState({
     first_name: '', last_name: '', pesel: '', birth_date: '', phone_number: '', email: '', reason: '',
   })
@@ -30,11 +35,10 @@ export function RezerwacjaPubliczna() {
     queryFn: () => api<AppointmentOut[]>('/public/slots'),
   })
 
-  // goście rezerwują terminy bezpłatne (NFZ); płatne — po zalogowaniu
+  // goście widzą terminy bezpłatne (NFZ) i prywatne (płatne) — te drugie opłaca się online
   const cards = useMemo(() => {
     const map = new Map<string, { name: string; sub: string | null; ref: boolean; days: Map<string, AppointmentOut[]> }>()
     for (const s of slots ?? []) {
-      if (s.price != null) continue
       if (kind === 'visit' ? s.service_name != null : s.service_name == null) continue
       const key = kind === 'visit' ? `d${s.doctor_id}` : s.service_name!
       const cur = map.get(key) ?? {
@@ -55,7 +59,7 @@ export function RezerwacjaPubliczna() {
   }, [slots, kind])
 
   const book = useMutation({
-    mutationFn: () => api<AppointmentOut>('/public/book', {
+    mutationFn: () => api<GuestBookResult>('/public/book', {
       method: 'POST',
       body: {
         appointment_id: slot!.appointment_id,
@@ -64,8 +68,26 @@ export function RezerwacjaPubliczna() {
         external_referral: externalRef,
       },
     }),
-    onSuccess: (a) => { setDone(a); setError(null) },
+    onSuccess: (res) => {
+      setError(null)
+      // wizyta płatna → przejdź do opłacenia online; bezpłatna → od razu potwierdzona
+      if (res.payment?.payment_status === 'PENDING' && res.payment.pay_token) {
+        setPending({ appt: res.appointment, amount: res.payment.amount, payToken: res.payment.pay_token })
+      } else {
+        setDone(res.appointment)
+      }
+    },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zarezerwować terminu.'),
+  })
+
+  const pay = useMutation({
+    mutationFn: (outcome: 'success' | 'failure') => api<GuestBookResult>(
+      `/public/visit/${pending!.payToken}/pay`, { method: 'POST', body: { outcome } }),
+    onSuccess: (res) => {
+      if (res.payment?.payment_status === 'PAID') { setDone(res.appointment); setPending(null); setError(null) }
+      else { setPending(null); setSlot(null); setError('Płatność odrzucona — termin wrócił do puli. Wybierz inny termin.') }
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Płatność nie powiodła się.'),
   })
 
   const peselBad = form.pesel.length === 11 && !peselValid(form.pesel)
@@ -99,6 +121,31 @@ export function RezerwacjaPubliczna() {
             <Link to="/rejestracja"><Button size="lg">Załóż konto</Button></Link>
           </div>
         </Tile>
+      ) : pending ? (
+        <Tile delay={60}>
+          <div className="space-y-3">
+            <p className="text-lg font-extrabold text-gray-900">Opłać wizytę</p>
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
+              Termin jest zablokowany do czasu opłacenia. Do zapłaty: <span className="text-gray-900">{pending.amount} zł</span>.
+            </p>
+            <p className="text-sm font-medium text-gray-600">
+              {pending.appt.service_name ?? pending.appt.doctor_name} — {formatDatePL(pending.appt.appointment_datetime)}, {formatTime(pending.appt.appointment_datetime)}
+              <br />{pending.appt.clinic_name}
+            </p>
+            <p className="text-sm font-medium text-gray-500">
+              Operator płatności jest symulowany — wybierz wynik autoryzacji.
+            </p>
+            {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button size="lg" disabled={pay.isPending} onClick={() => pay.mutate('success')}>
+                <CreditCard size={17} /> Zapłać kartą (symulacja)
+              </Button>
+              <Button size="lg" variant="secondary" disabled={pay.isPending} onClick={() => pay.mutate('failure')}>
+                Symuluj odmowę płatności
+              </Button>
+            </div>
+          </div>
+        </Tile>
       ) : slot ? (
         <Tile delay={60}>
           <TileHeader
@@ -107,6 +154,7 @@ export function RezerwacjaPubliczna() {
           />
           <p className="mb-4 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
             {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)} · {slot.clinic_name}
+            {slot.price != null && <span className="text-primary"> · {slot.price} zł</span>}
           </p>
           <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified) book.mutate() }}>
             <div className="grid grid-cols-2 gap-3">
@@ -146,7 +194,8 @@ export function RezerwacjaPubliczna() {
             </label>
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
             <Button size="lg" className="w-full" disabled={book.isPending || peselBad || !phoneVerified} type="submit">
-              {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu' : 'Rezerwuję termin'}
+              {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu'
+                : slot.price != null ? `Rezerwuję i płacę (${slot.price} zł)` : 'Rezerwuję termin'}
             </Button>
           </form>
         </Tile>
@@ -167,7 +216,7 @@ export function RezerwacjaPubliczna() {
                 hint="Wróć później — terminy pojawiają się na bieżąco." />
             ) : cards.map(c => <PublicCard key={c.key} c={c} onPick={s => { setSlot(s); setExternalRef(false) }} />)}
             <p className="text-center text-xs font-semibold text-gray-400">
-              Terminy prywatne (płatne) dostępne po <Link to="/login" className="text-primary hover:underline">zalogowaniu</Link>.
+              Terminy bez ceny są na NFZ; terminy z ceną to wizyty prywatne — opłacasz je online przy rezerwacji.
             </p>
           </div>
         </Tile>
@@ -210,8 +259,9 @@ function PublicCard({ c, onPick }: {
               <div className="flex flex-col gap-1">
                 {list.slice(0, 5).map(s => (
                   <button key={s.appointment_id} onClick={() => onPick(s)}
-                    className="cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white">
+                    className="group cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white">
                     {formatTime(s.appointment_datetime)}
+                    {s.price != null && <span className="block text-[10px] font-bold text-gray-400 group-hover:text-white/80">{s.price} zł</span>}
                   </button>
                 ))}
               </div>

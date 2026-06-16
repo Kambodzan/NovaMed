@@ -49,7 +49,7 @@ def test_rezerwacja_bez_potwierdzenia_400(client, slot):
 def test_rezerwacja_po_potwierdzeniu_200(client, slot):
     verify_phone(client, GUEST["phone_number"], "BOOKING")
     r = client.post("/public/book", json={**GUEST, "appointment_id": slot["appointment_id"]})
-    assert r.status_code == 200 and r.json()["appointment_status"] == "CONFIRMED"
+    assert r.status_code == 200 and r.json()["appointment"]["appointment_status"] == "CONFIRMED"
 
 
 def test_potwierdzenie_jest_jednorazowe(client, slots):

@@ -43,8 +43,8 @@ def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
     r = client.post("/public/book", json={**GUEST, "appointment_id": slot["appointment_id"],
                                           "reason": "ból gardła"})
     assert r.status_code == 200, r.text
-    assert r.json()["appointment_status"] == "CONFIRMED"
-    assert r.json()["notes"] == "ból gardła"
+    assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert r.json()["appointment"]["notes"] == "ból gardła"
 
     # gość nie może się zalogować (konto nieaktywne) — ale rejestracja tym samym
     # e-mailem PRZEJMUJE konto z historią wizyt
@@ -60,18 +60,44 @@ def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
     assert any(v["appointment_id"] == slot["appointment_id"] for v in mine.json())
 
 
-def test_gosc_platny_slot_i_nfz_badanie(client, setup):
-    paid = make_slot(client, setup, hour=12, price=200)
-    deny = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"]})
-    assert deny.status_code == 409 and "zalogowaniu" in deny.json()["detail"]
-
+def test_gosc_nfz_badanie_wymaga_skierowania(client, setup):
     exam = make_slot(client, setup, hour=8, service_name="RTG klatki piersiowej")
-    deny2 = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"]})
-    assert deny2.status_code == 409 and "skierowania" in deny2.json()["detail"]
+    deny = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"]})
+    assert deny.status_code == 409 and "skierowania" in deny.json()["detail"]
     verify_phone(client, GUEST["phone_number"], "BOOKING")
     ok = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"],
                                            "external_referral": True})
     assert ok.status_code == 200
+    assert ok.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert ok.json()["payment"] is None  # NFZ — bez płatności
+
+
+def test_gosc_platny_slot_oplaca_online(client, setup):
+    """Gość bez logowania rezerwuje wizytę prywatną i opłaca ją online (mock bramki)."""
+    paid = make_slot(client, setup, hour=12, price=200)
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
+    r = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"]})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["appointment"]["appointment_status"] == "TEMP_LOCK"  # zablokowany do opłacenia
+    assert body["payment"]["payment_status"] == "PENDING" and body["payment"]["amount"] == 200
+    token = body["payment"]["pay_token"]
+    assert token
+
+    pay = client.post(f"/public/visit/{token}/pay", json={"outcome": "success"})
+    assert pay.status_code == 200, pay.text
+    assert pay.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert pay.json()["payment"]["payment_status"] == "PAID"
+
+
+def test_gosc_platny_odmowa_zwalnia_termin(client, setup):
+    paid = make_slot(client, setup, hour=13, price=150)
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
+    token = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"]}).json()["payment"]["pay_token"]
+    pay = client.post(f"/public/visit/{token}/pay", json={"outcome": "failure"})
+    assert pay.status_code == 200
+    assert pay.json()["appointment"]["appointment_status"] == "FREE"   # termin wraca do puli
+    assert pay.json()["payment"]["payment_status"] == "FAILED"
 
 
 def test_gosc_pesel_aktywnego_pacjenta(client, setup, factory, db_session):

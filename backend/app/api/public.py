@@ -17,8 +17,11 @@ from app.api.family import pesel_valid
 from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
+from app.domain.confirm import ensure_confirm_token
 from app.domain.notify import notify
 from app.domain.otp import require_verified_phone, send_otp, verify_otp
+from app.integrations.base import IntegrationError
+from app.integrations.payments import PaymentsClient, get_payments_client
 from app.models import Appointment, AppUser, Clinic, Patient, Payment, Role
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -98,16 +101,33 @@ def public_slots(db: Session = Depends(get_db)):
     return [appointment_out(db, a) for a in rows]
 
 
-@router.post("/book", response_model=AppointmentOut)
-def guest_book(body: GuestBookIn, db: Session = Depends(get_db)):
+class GuestPaymentOut(BaseModel):
+    amount: float
+    provider_ref: str
+    pay_token: str | None = None          # token do opłacenia z linku (przy rezerwacji płatnej)
+    payment_status: str = "PENDING"       # PENDING / PAID / FAILED
+
+
+class GuestBookOut(BaseModel):
+    appointment: AppointmentOut
+    payment: GuestPaymentOut | None = None  # ustawione dla wizyt płatnych — do opłacenia online
+
+
+@router.post("/book", response_model=GuestBookOut)
+def guest_book(
+    body: GuestBookIn,
+    db: Session = Depends(get_db),
+    payments: PaymentsClient = Depends(get_payments_client),
+):
+    """Rezerwacja bez logowania. Wizyta bezpłatna (NFZ): FREE→CONFIRMED od razu.
+    Wizyta płatna: FREE→TEMP_LOCK + płatność PENDING u operatora; gość opłaca ją
+    online z linku (POST /public/visit/{token}/pay) — tak samo jak zalogowany pacjent,
+    bez przymusu zakładania konta."""
     a = get_appointment_or_404(body.appointment_id, db)
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
-    if a.price is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail="Terminy płatne rezerwuje się po zalogowaniu (płatność online). Załóż konto.")
     if a.referral_required and not body.external_referral:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail=f"Badanie „{a.service_name}” na NFZ wymaga skierowania — zaznacz oświadczenie.")
@@ -140,16 +160,39 @@ def guest_book(body: GuestBookIn, db: Session = Depends(get_db)):
     # telefon (anty-spam; potwierdzenia/przypomnienia trafią pod realny numer)
     require_verified_phone(db, body.phone_number, "BOOKING")
     a.patient_id = guest.user_id
-    a.appointment_status = AppointmentStatus.CONFIRMED.value
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]
     if a.referral_required:
         a.external_referral = True
-    notify(db, guest.user_id, "Wizyta potwierdzona",
-           f"Twoja rezerwacja: {visit_label(db, a)}. Załóż konto w NovaMed e-mailem {guest.email}, "
-           "aby zarządzać wizytą online.")
+
+    if a.price is None:
+        a.appointment_status = AppointmentStatus.CONFIRMED.value
+        notify(db, guest.user_id, "Wizyta potwierdzona",
+               f"Twoja rezerwacja: {visit_label(db, a)}. Załóż konto w NovaMed e-mailem {guest.email}, "
+               "aby zarządzać wizytą online.")
+        db.commit()
+        return GuestBookOut(appointment=appointment_out(db, a))
+
+    # wizyta płatna — slot zablokowany do czasu opłacenia (jak TEMP_LOCK pacjenta)
+    a.appointment_status = AppointmentStatus.TEMP_LOCK.value
+    token = ensure_confirm_token(a)
+    try:
+        provider_ref = payments.create_payment(
+            amount=float(a.price), reference=f"appointment-{a.appointment_id}")
+    except IntegrationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    db.add(Payment(
+        appointment_id=a.appointment_id, amount=a.price, payment_status="PENDING",
+        provider_ref=provider_ref, created_at=datetime.now(),
+    ))
+    notify(db, guest.user_id, "Rezerwacja oczekuje na płatność",
+           f"Zarezerwowaliśmy: {visit_label(db, a)}. Dokończ płatność {float(a.price):.2f} zł, aby potwierdzić wizytę.")
     db.commit()
-    return appointment_out(db, a)
+    return GuestBookOut(
+        appointment=appointment_out(db, a),
+        payment=GuestPaymentOut(amount=float(a.price), provider_ref=provider_ref, pay_token=token),
+    )
 
 
 # ---- potwierdzanie/odwołanie wizyty z linka SMS (bez logowania) ----
@@ -229,3 +272,54 @@ def public_cancel(token: str, db: Session = Depends(get_db)):
            f"Odwołałeś wizytę: {label}." + (" Zwrot opłaty nastąpi tą samą metodą." if refunded else ""))
     db.commit()
     return public_visit(token, db)
+
+
+class GuestPayIn(BaseModel):
+    outcome: str = Field(pattern="^(success|failure)$")
+
+
+@router.post("/visit/{token}/pay", response_model=GuestBookOut)
+def public_pay(
+    token: str,
+    body: GuestPayIn,
+    db: Session = Depends(get_db),
+    payments: PaymentsClient = Depends(get_payments_client),
+):
+    """Opłacenie rezerwacji gościa z linku (mock bramki: success/fail), bez logowania.
+    Sukces: TEMP_LOCK→CONFIRMED. Odmowa: TEMP_LOCK→FREE — termin wraca do puli."""
+    a = _by_token(token, db)
+    if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta nie oczekuje na płatność.")
+    payment = db.scalar(select(Payment).where(
+        Payment.appointment_id == a.appointment_id, Payment.payment_status == "PENDING"))
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Brak oczekującej płatności dla tej wizyty.")
+    try:
+        payments.confirm(provider_ref=payment.provider_ref, outcome=body.outcome)
+        final = payments.get_status(provider_ref=payment.provider_ref)
+    except IntegrationError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+
+    if final == "PAID":
+        payment.payment_status = "PAID"
+        payment.paid_at = datetime.now()
+        a.appointment_status = AppointmentStatus.CONFIRMED.value
+        notify(db, a.patient_id, "Wizyta opłacona i potwierdzona",
+               f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}.")
+        db.commit()
+        return GuestBookOut(
+            appointment=appointment_out(db, a),
+            payment=GuestPaymentOut(amount=float(payment.amount), provider_ref=payment.provider_ref, payment_status="PAID"),
+        )
+
+    payment.payment_status = "FAILED"
+    pid = a.patient_id
+    a.appointment_status = AppointmentStatus.FREE.value
+    a.patient_id = None
+    notify(db, pid, "Płatność odrzucona",
+           "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
+    db.commit()
+    return GuestBookOut(
+        appointment=appointment_out(db, a),
+        payment=GuestPaymentOut(amount=float(payment.amount), provider_ref=payment.provider_ref, payment_status="FAILED"),
+    )
