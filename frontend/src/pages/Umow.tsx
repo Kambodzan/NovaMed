@@ -229,6 +229,7 @@ export function Umow() {
   }
   const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
+  const [holdToken, setHoldToken] = useState<string | null>(null)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
   const lockLeft = useSecondsLeft(booked?.appointment.locked_until)
@@ -409,18 +410,34 @@ export function Umow() {
     enabled: bookKind === 'exam' && !!refDocId,
   })
 
-  const pickSlot = (s: AppointmentOut) => {
-    setSlot(s)
-    setOnline(s.appointment_type === 'ONLINE')
-    setStep(2)
-    setError(null)
-    setBooked(null)
-    setPayPhase('idle')
-  }
-
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
     void queryClient.invalidateQueries({ queryKey: ['slots'] })
+  }
+
+  // miękka rezerwacja slotu na czas wypełniania formularza
+  const hold = useMutation({
+    mutationFn: (s: AppointmentOut) => api<{ hold_token: string; expires_at: string }>(
+      `/appointments/${s.appointment_id}/hold`, { method: 'POST' }),
+    onSuccess: (res, s) => {
+      setHoldToken(res.hold_token)
+      setSlot(s); setOnline(s.appointment_type === 'ONLINE'); setStep(2)
+      setError(null); setBooked(null); setPayPhase('idle')
+    },
+    onError: (e) => {
+      setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć rezerwacji terminu.')
+      invalidate()  // ktoś zajął — odśwież listę
+    },
+  })
+
+  const pickSlot = (s: AppointmentOut) => { if (!hold.isPending) hold.mutate(s) }
+
+  const releaseHold = () => {
+    if (slot && holdToken) {
+      void api(`/appointments/${slot.appointment_id}/release?hold_token=${encodeURIComponent(holdToken)}`,
+        { method: 'POST' }).catch(() => {})
+    }
+    setHoldToken(null)
   }
 
   const book = useMutation({
@@ -430,10 +447,12 @@ export function Umow() {
         reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
         referral_document_id: slot?.referral_required && !externalRef ? refDocId : null,
         external_referral: !!slot?.referral_required && externalRef,
+        hold_token: holdToken,
       },
     }),
     onSuccess: (data) => {
       setBooked(data)
+      setHoldToken(null)  // hold zamienił się w rezerwację
       setPayPhase(data.payment ? 'awaiting' : 'success')
       setError(null)
       invalidate()
@@ -453,6 +472,7 @@ export function Umow() {
   })
 
   const resetToSlots = () => {
+    releaseHold()  // zwolnij miękką rezerwację przy powrocie do listy
     setBooked(null)
     setPayPhase('idle')
     setError(null)

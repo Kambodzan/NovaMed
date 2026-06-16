@@ -55,6 +55,49 @@ def test_konflikt_terminow_409(client, setup):
     assert resp.status_code == 409
 
 
+def test_pacjent_hold_i_rezerwacja(client, setup):
+    """Hold w panelu pacjenta: slot blokuje się przy wejściu w formularz, a rezerwacja
+    swoim tokenem przechodzi."""
+    sid = make_slot(client, setup, hour=11)
+    pt = auth_header(setup["patient_token"])
+    h = client.post(f"/appointments/{sid}/hold", headers=pt)
+    assert h.status_code == 200
+    token = h.json()["hold_token"]
+    r = client.post(f"/appointments/{sid}/book", json={"hold_token": token}, headers=pt)
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
+
+
+def test_hold_blokuje_innego_uzytkownika(client, setup, factory):
+    sid = make_slot(client, setup, hour=12)
+    client.post(f"/appointments/{sid}/hold", headers=auth_header(setup["patient_token"]))
+    _, other = factory.user("pacjent")
+    # drugi nie zaholduje zajętego terminu
+    assert client.post(f"/appointments/{sid}/hold", headers=auth_header(other)).status_code == 409
+    # ani nie zarezerwuje cudzym/żadnym tokenem
+    assert client.post(f"/appointments/{sid}/book", json={"hold_token": "nie-moj"},
+                       headers=auth_header(other)).status_code == 409
+
+
+def test_rejestracja_hold_i_book_for(client, setup):
+    sid = make_slot(client, setup, hour=13)
+    reg = auth_header(setup["reg_token"])
+    token = client.post(f"/appointments/{sid}/hold", headers=reg).json()["hold_token"]
+    r = client.post(f"/appointments/{sid}/book-for",
+                    json={"patient_id": str(setup["patient"].user_id), "hold_token": token}, headers=reg)
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment_status"] == "CONFIRMED"
+
+
+def test_release_zwalnia_hold(client, setup):
+    sid = make_slot(client, setup, hour=14)
+    pt = auth_header(setup["patient_token"])
+    token = client.post(f"/appointments/{sid}/hold", headers=pt).json()["hold_token"]
+    assert client.post(f"/appointments/{sid}/release?hold_token={token}", headers=pt).json()["released"] is True
+    # po zwolnieniu znów można zaholdować
+    assert client.post(f"/appointments/{sid}/hold", headers=pt).status_code == 200
+
+
 def test_wyszukiwanie_po_specjalizacji(client, setup, factory):
     make_slot(client, setup)
     resp = client.get("/slots?specialization=Kardiolog", headers=auth_header(setup["patient_token"]))

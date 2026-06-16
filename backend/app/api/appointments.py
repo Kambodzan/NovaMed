@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
 from app.domain.confirm import confirm_link, ensure_confirm_token
+from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain.tenancy import assert_staff_can_access_patient, assert_staff_in_clinic
 from app.core.config import settings
 from app.core.db import get_db
@@ -173,6 +174,7 @@ class BookIn(BaseModel):
     # badania ze skierowaniem: nasze skierowanie z apki LUB oświadczenie o zewnętrznym
     referral_document_id: UUID | None = None
     external_referral: bool = False
+    hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /appointments/{id}/hold)
 
 
 class RescheduleIn(BaseModel):
@@ -370,6 +372,38 @@ def search_slots(
     return [appointment_out(db, a) for a in db.scalars(q)]
 
 
+class HoldOut(BaseModel):
+    hold_token: str
+    expires_at: datetime
+
+
+@router.post("/appointments/{appointment_id}/hold", response_model=HoldOut)
+def hold_appointment(
+    appointment_id: UUID,
+    _: AppUser = Depends(require_roles("pacjent", *RECEPTION_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Miękka rezerwacja slotu na czas wypełniania formularza (panel pacjenta /
+    rejestracja): FREE→TEMP_LOCK, blokada wiersza — drugi chętny dostaje 409.
+    Porzucony hold zwalnia pętla tła po slot_hold_minutes."""
+    a = acquire_hold(db, appointment_id)
+    db.commit()
+    return HoldOut(hold_token=a.confirmation_token, expires_at=a.lock_expires_at)
+
+
+@router.post("/appointments/{appointment_id}/release")
+def release_appointment_hold(
+    appointment_id: UUID,
+    hold_token: str = Query(...),
+    _: AppUser = Depends(require_roles("pacjent", *RECEPTION_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Zwolnienie miękkiej rezerwacji (np. zmiana terminu / wyjście z formularza)."""
+    released = release_hold(db, appointment_id, hold_token)
+    db.commit()
+    return {"released": released}
+
+
 @router.post("/appointments/{appointment_id}/book", response_model=BookOut)
 def book_appointment(
     appointment_id: UUID,
@@ -385,8 +419,11 @@ def book_appointment(
     finalizacja przez /appointments/{id}/pay (diagramie stanów wizyty).
     Przy rezerwacji system weryfikuje ubezpieczenie w eWUŚ (best-effort)."""
     patient_id = resolve_patient_id(db, user, as_patient)
-    a = get_appointment_or_404(appointment_id, db)
-    if a.appointment_status != AppointmentStatus.FREE.value:
+    # blokada wiersza + akceptacja slotu wolnego ALBO trzymanego MOIM holdem
+    a = db.get(Appointment, appointment_id, with_for_update=True)
+    if a is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Termin nie istnieje.")
+    if a.appointment_status != AppointmentStatus.FREE.value and not held_by(a, body.hold_token if body else None):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
@@ -430,17 +467,21 @@ def book_appointment(
         pass
 
     if a.price is None:
-        assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
+        assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)  # TEMP_LOCK(hold)→CONFIRMED też dozwolone
         a.patient_id = patient_id
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        a.lock_expires_at = None
         notify(db, patient_id, "Wizyta potwierdzona",
                f"Twoja wizyta: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
 
-    assert_transition(a.appointment_status, AppointmentStatus.TEMP_LOCK)
+    # slot trzymany holdem jest już TEMP_LOCK — przejście TEMP_LOCK→TEMP_LOCK pomijamy
+    if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:
+        assert_transition(a.appointment_status, AppointmentStatus.TEMP_LOCK)
     a.patient_id = patient_id
     a.appointment_status = AppointmentStatus.TEMP_LOCK.value
+    a.lock_expires_at = None  # hold zamienia się w blokadę płatności (steruje nią Payment.created_at)
     try:
         provider_ref = payments.create_payment(
             amount=float(a.price), reference=f"appointment-{a.appointment_id}",
@@ -540,6 +581,7 @@ class BookForIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
     external_referral: bool = False
     referral_document_id: UUID | None = None  # e-skierowanie z NovaMed (badanie NFZ)
+    hold_token: str | None = None  # token miękkiej rezerwacji slotu
 
 
 @router.post("/appointments/{appointment_id}/book-for", response_model=AppointmentOut)
@@ -553,8 +595,10 @@ def book_for_patient(
     """Rezerwacja przez rejestrację w imieniu pacjenta (telefon/okienko) — UC-PP1.
     Termin FREE→CONFIRMED od razu (bez TEMP_LOCK): płatność za wizytę płatną
     rozlicza recepcja na miejscu, więc zapisujemy ją jako opłaconą."""
-    a = get_appointment_or_404(appointment_id, db)
-    if a.appointment_status != AppointmentStatus.FREE.value:
+    a = db.get(Appointment, appointment_id, with_for_update=True)
+    if a is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Termin nie istnieje.")
+    if a.appointment_status != AppointmentStatus.FREE.value and not held_by(a, body.hold_token):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
@@ -584,9 +628,10 @@ def book_for_patient(
     except IntegrationError:
         pass
 
-    assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
+    assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)  # FREE/TEMP_LOCK(hold)→CONFIRMED
     a.patient_id = body.patient_id
     a.appointment_status = AppointmentStatus.CONFIRMED.value
+    a.lock_expires_at = None
     if a.price is not None:
         db.add(Payment(
             appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",

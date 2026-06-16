@@ -57,6 +57,7 @@ export function UmowWizyte() {
   const [query, setQuery] = useState('')
   const [dayFilter, setDayFilter] = useState('')
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
+  const [holdToken, setHoldToken] = useState<string | null>(null)
   // wejście z Kalendarza: { slot } = konkretny wybrany termin; { doctorId, day } = preselekcja filtra
   const navState = useLocation().state as { slot?: AppointmentOut; doctorId?: string | null; day?: string } | null
   useEffect(() => { if (navState?.slot) setSlot(navState.slot) }, [navState?.slot])
@@ -112,7 +113,27 @@ export function UmowWizyte() {
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [slots, query, dayFilter])
 
-  const resetAll = () => { setPicked(null); setNewForm(NEW_PATIENT); setQ(''); setMode('existing'); setSlot(null); setReason(''); setReferralChoice('') }
+  const resetAll = () => { setPicked(null); setNewForm(NEW_PATIENT); setQ(''); setMode('existing'); setSlot(null); setHoldToken(null); setReason(''); setReferralChoice('') }
+
+  // miękka rezerwacja slotu przy wyborze — blokuje termin dla
+  // innej rejestracji/pacjenta, dopóki nie dokończymy umawiania
+  const hold = useMutation({
+    mutationFn: (s: AppointmentOut) => api<{ hold_token: string; expires_at: string }>(
+      `/appointments/${s.appointment_id}/hold`, { method: 'POST' }),
+    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setError(null) },
+    onError: (e) => {
+      setError(e instanceof ApiError ? e.message : 'Nie udało się zarezerwować terminu.')
+      void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] })
+    },
+  })
+  const pickSlot = (s: AppointmentOut) => { if (!hold.isPending) hold.mutate(s) }
+  const releaseHold = () => {
+    if (slot && holdToken) {
+      void api(`/appointments/${slot.appointment_id}/release?hold_token=${encodeURIComponent(holdToken)}`,
+        { method: 'POST' }).catch(() => {})
+    }
+    setHoldToken(null)
+  }
 
   const register = useMutation({
     mutationFn: () => api<PickedPatient & { existing: boolean; first_name: string; last_name: string }>('/patients/register', {
@@ -130,6 +151,7 @@ export function UmowWizyte() {
         patient_id: picked!.patient_id, reason: reason.trim() || undefined,
         external_referral: needsReferral && referralChoice === 'external',
         referral_document_id: needsReferral && referralChoice && referralChoice !== 'external' ? referralChoice : undefined,
+        hold_token: holdToken,
       },
     }),
     onSuccess: (a) => {
@@ -215,7 +237,7 @@ export function UmowWizyte() {
       <Tile className={cx('p-5', !picked && 'pointer-events-none opacity-50')} delay={90}>
         <StepHead n={2} title="Wolny termin" done={!!slot}
           summary={slot ? `${formatDatePL(slot.appointment_datetime)}, ${formatTime(slot.appointment_datetime)} · ${slot.doctor_name}` : undefined}
-          onEdit={() => setSlot(null)} />
+          onEdit={() => { releaseHold(); setSlot(null) }} />
         {picked && !slot && (
           <div className="mt-3">
             <div className="mb-3 flex flex-wrap gap-2">
@@ -241,7 +263,7 @@ export function UmowWizyte() {
                         const online = s.appointment_type === 'ONLINE'
                         return (
                           <li key={s.appointment_id}>
-                            <button onClick={() => setSlot(s)} className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-gray-50 px-4 py-2.5 text-left hover:bg-primary-soft">
+                            <button onClick={() => pickSlot(s)} disabled={hold.isPending} className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-gray-50 px-4 py-2.5 text-left hover:bg-primary-soft disabled:opacity-50">
                               <span className="shrink-0 text-base font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{formatTime(s.appointment_datetime)}</span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-bold text-gray-900">{s.doctor_id ? s.doctor_name : s.service_name}</span>

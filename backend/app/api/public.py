@@ -5,7 +5,7 @@
 # (auth.register_profile) razem z historią wizyt.
 from uuid import UUID
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
 from app.domain.confirm import ensure_confirm_token
+from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain.notify import notify
 from app.domain.otp import require_verified_phone, send_otp, verify_otp
 from app.integrations.base import IntegrationError
@@ -109,38 +110,19 @@ class HoldOut(BaseModel):
 
 @router.post("/slots/{appointment_id}/hold", response_model=HoldOut)
 def hold_slot(appointment_id: UUID, db: Session = Depends(get_db)):
-    """Miękka rezerwacja terminu na czas wypełniania formularza: FREE→TEMP_LOCK
-    (jeszcze bez pacjenta i płatności). Pierwsza osoba, która wejdzie w slot, blokuje
-    go dla pozostałych; pętla tła zwalnia porzucone holdy po slot_hold_minutes.
-    Blokada wiersza (FOR UPDATE) serializuje równoczesne wejścia — drugi dostaje 409."""
-    a = db.get(Appointment, appointment_id, with_for_update=True)
-    if a is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Termin nie istnieje.")
-    if a.appointment_status != AppointmentStatus.FREE.value:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail="Ktoś właśnie zajął ten termin — wybierz inny.")
-    if a.appointment_datetime < datetime.now():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
-    a.appointment_status = AppointmentStatus.TEMP_LOCK.value
-    a.lock_expires_at = datetime.now() + timedelta(minutes=settings.slot_hold_minutes)
-    token = ensure_confirm_token(a)
+    """Miękka rezerwacja terminu na czas wypełniania formularza (bez logowania).
+    Pierwsza osoba, która wejdzie w slot, blokuje go dla pozostałych; pętla tła
+    zwalnia porzucone holdy po slot_hold_minutes."""
+    a = acquire_hold(db, appointment_id)
     db.commit()
-    return HoldOut(hold_token=token, expires_at=a.lock_expires_at)
+    return HoldOut(hold_token=a.confirmation_token, expires_at=a.lock_expires_at)
 
 
 @router.post("/slots/{appointment_id}/release")
 def release_slot(appointment_id: UUID, hold_token: str = Query(...), db: Session = Depends(get_db)):
-    """Zwolnienie miękkiej rezerwacji (np. „Zmień termin"): TEMP_LOCK→FREE — ale
-    tylko gdy slot jest holdem bez pacjenta i token się zgadza (nie ruszamy cudzych)."""
-    a = db.get(Appointment, appointment_id, with_for_update=True)
-    released = False
-    if (a is not None and a.appointment_status == AppointmentStatus.TEMP_LOCK.value
-            and a.patient_id is None and a.confirmation_token == hold_token):
-        a.appointment_status = AppointmentStatus.FREE.value
-        a.lock_expires_at = None
-        a.confirmation_token = None
-        db.commit()
-        released = True
+    """Zwolnienie miękkiej rezerwacji (np. „Zmień termin")."""
+    released = release_hold(db, appointment_id, hold_token)
+    db.commit()
     return {"released": released}
 
 
@@ -171,14 +153,7 @@ def guest_book(
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Termin nie istnieje.")
     # slot wolny ALBO trzymany przez TEGO klienta (hold z otwartego formularza)
-    held_by_me = (
-        a.appointment_status == AppointmentStatus.TEMP_LOCK.value
-        and a.patient_id is None
-        and a.confirmation_token is not None
-        and a.confirmation_token == body.hold_token
-        and (a.lock_expires_at is None or a.lock_expires_at > datetime.now())
-    )
-    if a.appointment_status != AppointmentStatus.FREE.value and not held_by_me:
+    if a.appointment_status != AppointmentStatus.FREE.value and not held_by(a, body.hold_token):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
