@@ -18,7 +18,9 @@ from app.models import Appointment, AppUser, Clinic
 
 router = APIRouter(tags=["reports"])
 
-REPORT_ROLES = ("rejestracja", "kierownik", "administrator")
+# Statystyki/eksporty placówki to wgląd zarządczy — kierownik SWOJEJ placówki i admin
+# (build_report dodatkowo zawęża zakres przez assert_staff_in_clinic). Rejestracja nie.
+REPORT_ROLES = ("kierownik", "administrator")
 
 
 class DoctorLoadOut(BaseModel):

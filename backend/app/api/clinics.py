@@ -14,7 +14,10 @@ from app.models import AppUser, Clinic, Doctor, Patient, PatientClinic, StaffCli
 
 router = APIRouter(prefix="/clinics", tags=["clinics"])
 
-STAFF_MANAGERS = ("rejestracja", "kierownik", "administrator")
+# Obsługa pacjenta przy ladzie (front-desk) — rejestracja i wyżej.
+RECEPTION = ("rejestracja", "kierownik", "administrator")
+# Zarządzanie placówką (personel, polityka) — tylko kierownik SWOJEJ placówki i admin.
+CLINIC_MANAGERS = ("kierownik", "administrator")
 
 
 class ClinicIn(BaseModel):
@@ -139,11 +142,14 @@ def update_clinic_settings(
 def assign_staff(
     clinic_id: UUID,
     body: StaffAssignIn,
-    _: AppUser = Depends(require_roles(*STAFF_MANAGERS)),
+    user: AppUser = Depends(require_roles(*CLINIC_MANAGERS)),
     db: Session = Depends(get_db),
 ):
-    """UC-PP1: przypisanie pracownika (lekarz/pielęgniarka/rejestracja) do placówki."""
+    """UC-PP1: przypisanie pracownika (lekarz/pielęgniarka/rejestracja) do placówki.
+    Decyzja kadrowa — tylko kierownik SWOJEJ placówki albo administrator (admin bez
+    ograniczeń; on zakłada pierwszego kierownika nowej placówki)."""
     get_clinic_or_404(clinic_id, db)
+    assert_staff_in_clinic(db, user, clinic_id)
     if db.get(AppUser, body.user_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Użytkownik nie istnieje.")
     exists = db.scalar(select(StaffClinic).where(
@@ -184,7 +190,7 @@ def list_clinic_doctors(
 def assign_patient(
     clinic_id: UUID,
     body: PatientAssignIn,
-    _: AppUser = Depends(require_roles(*STAFF_MANAGERS)),
+    _: AppUser = Depends(require_roles(*RECEPTION)),
     db: Session = Depends(get_db),
 ):
     """UC-PP3: przypisanie pacjenta do placówki."""
@@ -204,7 +210,7 @@ def assign_patient(
 @router.get("/{clinic_id}/patients", response_model=list[PatientOut])
 def list_clinic_patients(
     clinic_id: UUID,
-    user: AppUser = Depends(require_roles(*STAFF_MANAGERS, "lekarz", "pielegniarka")),
+    user: AppUser = Depends(require_roles(*RECEPTION, "lekarz", "pielegniarka")),
     db: Session = Depends(get_db),
 ):
     get_clinic_or_404(clinic_id, db)

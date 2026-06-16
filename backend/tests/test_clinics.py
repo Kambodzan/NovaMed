@@ -18,21 +18,30 @@ def test_tworzenie_kliniki_tylko_admin(client, factory):
 
 
 def test_personel_i_lekarze_placowki(client, factory):
+    kier_user, kier_token = factory.user("kierownik")
     _, reg_token = factory.user("rejestracja")
     doctor_user, _ = factory.doctor(specialization="Endokrynolog")
     clinic = factory.clinic()
+    factory.employ(clinic, kier_user.user_id)  # kierownik zarządza SWOJĄ placówką
+
+    # rejestracja NIE zarządza kadrami (decyzja kierownicza)
+    assert client.post(
+        f"/clinics/{clinic.clinic_id}/staff",
+        json={"user_id": str(doctor_user.user_id)},
+        headers=auth_header(reg_token),
+    ).status_code == 403
 
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/staff",
         json={"user_id": str(doctor_user.user_id)},
-        headers=auth_header(reg_token),
+        headers=auth_header(kier_token),
     )
     assert resp.status_code == 201
     # podwójne przypisanie
     resp = client.post(
         f"/clinics/{clinic.clinic_id}/staff",
         json={"user_id": str(doctor_user.user_id)},
-        headers=auth_header(reg_token),
+        headers=auth_header(kier_token),
     )
     assert resp.status_code == 409
 

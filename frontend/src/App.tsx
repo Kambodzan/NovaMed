@@ -96,6 +96,9 @@ function AdminLayout() {
 }
 
 function PoradniaLayout() {
+  const { me } = useAuth()
+  // Raporty/statystyki to wgląd zarządczy — widzi je kierownik, nie rejestracja.
+  const canManage = me?.role === 'kierownik' || me?.role === 'administrator'
   return (
     <ProShell
       brand="Panel Poradni"
@@ -105,7 +108,7 @@ function PoradniaLayout() {
         { to: '/umow', label: 'Umów wizytę', icon: CalendarCheck },
         { to: '/pacjenci', label: 'Pacjenci', icon: Users },
         { to: '/wyniki', label: 'Wyniki badań', icon: FlaskConical },
-        { to: '/raporty', label: 'Raporty', icon: BarChart3 },
+        ...(canManage ? [{ to: '/raporty', label: 'Raporty', icon: BarChart3 }] : []),
       ]}
     >
       <Outlet />
@@ -189,7 +192,7 @@ export default function App() {
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
           <Route path="wyniki" element={<Wyniki />} />
-          <Route path="raporty" element={<Raporty />} />
+          {role === 'kierownik' && <Route path="raporty" element={<Raporty />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       )}

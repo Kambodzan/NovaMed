@@ -7,12 +7,13 @@ from tests.conftest import auth_header
 
 
 def test_raport_z_badaniem_nie_wywala(client, factory, db_session):
-    reg_user, reg = factory.user("rejestracja")
+    kier_user, kier = factory.user("kierownik")
+    _, reg = factory.user("rejestracja")
     doctor_user, _ = factory.doctor()
     patient_user, _ = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
-    factory.employ(clinic, reg_user.user_id)
+    factory.employ(clinic, kier_user.user_id)
 
     when = datetime.now().replace(day=15, hour=10, minute=0, second=0, microsecond=0)
     # wizyta lekarska + badanie (pracownia, bez lekarza)
@@ -26,25 +27,28 @@ def test_raport_z_badaniem_nie_wywala(client, factory, db_session):
     db_session.commit()
 
     month = when.strftime("%Y-%m")
-    resp = client.get(f"/clinics/{clinic.clinic_id}/reports?month={month}", headers=auth_header(reg))
+    # rejestracja nie ma wglądu w statystyki placówki
+    assert client.get(f"/clinics/{clinic.clinic_id}/reports?month={month}",
+                      headers=auth_header(reg)).status_code == 403
+    resp = client.get(f"/clinics/{clinic.clinic_id}/reports?month={month}", headers=auth_header(kier))
     assert resp.status_code == 200, resp.text
     r = resp.json()
     assert r["total_booked"] == 2          # wizyta + badanie w obłożeniu placówki
     assert len(r["per_doctor"]) == 1       # ale per-lekarz tylko wizyta lekarska
     # CSV też nie wywala
     assert client.get(f"/clinics/{clinic.clinic_id}/reports/csv?month={month}",
-                      headers=auth_header(reg)).status_code == 200
+                      headers=auth_header(kier)).status_code == 200
 
 
 def test_raport_zakres_dat(client, factory):
     """Raport poradni przyjmuje dowolny zakres dat (from/to), nie tylko miesiąc."""
-    reg_user, reg = factory.user("rejestracja")
+    kier_user, kier = factory.user("kierownik")
     clinic = factory.clinic()
-    factory.employ(clinic, reg_user.user_id)
+    factory.employ(clinic, kier_user.user_id)
     cid = clinic.clinic_id
-    r = client.get(f"/clinics/{cid}/reports?from=2026-06-01&to=2026-06-30", headers=auth_header(reg))
+    r = client.get(f"/clinics/{cid}/reports?from=2026-06-01&to=2026-06-30", headers=auth_header(kier))
     assert r.status_code == 200, r.text
     assert r.json()["month"] == "2026-06-01 — 2026-06-30"
     # błędny zakres (do < od) → 422
     assert client.get(f"/clinics/{cid}/reports?from=2026-06-30&to=2026-06-01",
-                      headers=auth_header(reg)).status_code == 422
+                      headers=auth_header(kier)).status_code == 422

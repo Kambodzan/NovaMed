@@ -13,12 +13,14 @@ def nursing_setup(client, factory):
     """Wizyta + skierowanie NURSING + pielęgniarka."""
     app.dependency_overrides[get_p1_client] = lambda: FakeP1()
     reg_user, reg_token = factory.user("rejestracja")
+    kier_user, kier_token = factory.user("kierownik")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     nurse_user, nurse_token = factory.user("pielegniarka")
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
     factory.employ(clinic, reg_user.user_id)
+    factory.employ(clinic, kier_user.user_id)
     factory.employ(clinic, nurse_user.user_id)
 
     dt = (datetime.now() + timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
@@ -40,7 +42,8 @@ def nursing_setup(client, factory):
 
     return {
         "referral": referral, "nurse_token": nurse_token, "doctor_token": doctor_token,
-        "patient_token": patient_token, "reg_token": reg_token, "clinic": clinic,
+        "patient_token": patient_token, "reg_token": reg_token, "kier_token": kier_token,
+        "clinic": clinic,
     }
 
 
@@ -146,7 +149,7 @@ def test_raport_poradni_i_csv(client, nursing_setup):
     client.post(f"/appointments/{vid}/status", json={"new_status": "IN_PROGRESS"}, headers=auth_header(s["doctor_token"]))
     client.post(f"/appointments/{vid}/status", json={"new_status": "COMPLETED"}, headers=auth_header(s["doctor_token"]))
 
-    resp = client.get(f"/clinics/{clinic_id}/reports?month={month}", headers=auth_header(s["reg_token"]))
+    resp = client.get(f"/clinics/{clinic_id}/reports?month={month}", headers=auth_header(s["kier_token"]))
     assert resp.status_code == 200
     report = resp.json()
     assert report["total_booked"] == 1
@@ -154,10 +157,11 @@ def test_raport_poradni_i_csv(client, nursing_setup):
     assert len(report["per_doctor"]) == 1
     assert report["per_doctor"][0]["completed"] == 1
 
-    # pacjent nie ma dostępu do raportów
+    # ani pacjent, ani rejestracja nie mają dostępu do raportów (to wgląd kierowniczy)
     assert client.get(f"/clinics/{clinic_id}/reports?month={month}", headers=auth_header(s["patient_token"])).status_code == 403
+    assert client.get(f"/clinics/{clinic_id}/reports?month={month}", headers=auth_header(s["reg_token"])).status_code == 403
 
-    resp = client.get(f"/clinics/{clinic_id}/reports/csv?month={month}", headers=auth_header(s["reg_token"]))
+    resp = client.get(f"/clinics/{clinic_id}/reports/csv?month={month}", headers=auth_header(s["kier_token"]))
     assert resp.status_code == 200
     assert "Lekarz;Wizyty;Zako" in resp.text
 
