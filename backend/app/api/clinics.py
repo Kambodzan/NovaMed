@@ -59,6 +59,12 @@ class DoctorOut(BaseModel):
     name: str
     specializations: list[str] = []
     academic_title: str | None
+    slot_duration_min: int | None = None  # długość wizyty [min]; None = siatka placówki
+
+
+class DoctorVisitLengthIn(BaseModel):
+    # None = przywróć domyślną siatkę placówki; inaczej własna długość wizyty lekarza
+    slot_duration_min: int | None = Field(default=None, ge=5, le=120)
 
 
 class PatientAssignIn(BaseModel):
@@ -181,9 +187,36 @@ def list_clinic_doctors(
         DoctorOut(
             doctor_id=d.doctor_id, name=u.username,
             specializations=list(d.specialization_names), academic_title=d.academic_title,
+            slot_duration_min=d.slot_duration_min,
         )
         for d, u in rows
     ]
+
+
+@router.patch("/{clinic_id}/doctors/{doctor_id}/visit-length")
+def set_doctor_visit_length(
+    clinic_id: UUID,
+    doctor_id: UUID,
+    body: DoctorVisitLengthIn,
+    user: AppUser = Depends(require_roles("kierownik", "administrator")),
+    db: Session = Depends(get_db),
+):
+    """Długość wizyty (krok siatki terminów) konkretnego lekarza — np. jeden przyjmuje
+    co 15 min, inny co 30. Ustawia kierownik SWOJEJ placówki albo administrator;
+    lekarz musi być w niej zatrudniony. None = powrót do siatki placówki."""
+    get_clinic_or_404(clinic_id, db)
+    assert_staff_in_clinic(db, user, clinic_id)
+    doctor = db.get(Doctor, doctor_id)
+    if doctor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lekarz nie istnieje.")
+    works_here = db.scalar(select(StaffClinic).where(
+        StaffClinic.clinic_id == clinic_id, StaffClinic.user_id == doctor_id, StaffClinic.end_date.is_(None),
+    ))
+    if not works_here:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
+    doctor.slot_duration_min = body.slot_duration_min
+    db.commit()
+    return {"doctor_id": str(doctor_id), "slot_duration_min": doctor.slot_duration_min}
 
 
 @router.post("/{clinic_id}/patients", status_code=status.HTTP_201_CREATED)

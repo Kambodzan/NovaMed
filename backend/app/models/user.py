@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +57,9 @@ class Doctor(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     license_number: Mapped[str] = mapped_column(String(50))
     academic_title: Mapped[str | None] = mapped_column(String(100))
+    # długość wizyty lekarza [min] = jego krok siatki terminów; NULL = siatka placówki
+    # (clinic.slot_interval_min). Ustawiana przez kierownika.
+    slot_duration_min: Mapped[int | None] = mapped_column(Integer)
 
     user: Mapped["AppUser"] = relationship()
     # lekarz może mieć wiele specjalizacji (np. internista + kardiolog)

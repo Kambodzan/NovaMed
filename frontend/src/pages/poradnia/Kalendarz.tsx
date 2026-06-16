@@ -23,7 +23,7 @@ const todayIso = () => isoLocal(new Date())
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
-interface DoctorRow { doctor_id: string; name: string; specializations: string[] }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null }
 
 export function Kalendarz() {
   const queryClient = useQueryClient()
@@ -290,6 +290,9 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
     queryFn: () => api<DoctorRow[]>(`/clinics/${clinicId}/doctors`),
   })
   const doctorId = form.doctor_id || String(doctors?.[0]?.doctor_id ?? '')
+  const selectedDoctor = doctors?.find(d => String(d.doctor_id) === doctorId)
+  // krok siatki = długość wizyty lekarza (jeśli ustawiona) albo siatka placówki
+  const effInterval = form.kind === 'visit' && selectedDoctor?.slot_duration_min ? selectedDoctor.slot_duration_min : interval
 
   const add = useMutation({
     mutationFn: () => {
@@ -344,8 +347,8 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
           </Field>
         )}
         <Field label="Data"><DatePicker value={form.date} min={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, date: v }))} /></Field>
-        <Field label="Godzina" hint={`siatka co ${interval} min`}>
-          <input type="time" className={inputCls} value={form.time} step={interval * 60} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+        <Field label="Godzina" hint={form.kind === 'visit' && selectedDoctor?.slot_duration_min ? `wizyty co ${effInterval} min (ustawienie lekarza)` : `siatka co ${effInterval} min`}>
+          <input type="time" className={inputCls} value={form.time} step={effInterval * 60} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
         </Field>
         <Field label="Forma">
           <Select value={form.modality} onChange={v => setForm(f => ({ ...f, modality: v }))}
@@ -387,6 +390,18 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać ustawień.'),
   })
 
+  // długość wizyt per lekarz (krok siatki danego lekarza) — zapis natychmiast po edycji
+  const { data: docs } = useQuery({
+    queryKey: ['clinic-doctors', clinic.clinic_id],
+    queryFn: () => api<DoctorRow[]>(`/clinics/${clinic.clinic_id}/doctors`),
+  })
+  const setLen = useMutation({
+    mutationFn: ({ id, val }: { id: string; val: number | null }) =>
+      api(`/clinics/${clinic.clinic_id}/doctors/${id}/visit-length`, { method: 'PATCH', body: { slot_duration_min: val } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać długości wizyty.'),
+  })
+
   return (
     <Modal title="Ustawienia placówki" onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Anuluj</Button><Button disabled={save.isPending} onClick={() => save.mutate()}>Zapisz</Button></>}>
@@ -411,6 +426,31 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
           </Field>
         )}
       </div>
+
+      {docs && docs.length > 0 && (
+        <div className="mt-5">
+          <p className="text-sm font-extrabold text-gray-900">Długość wizyt per lekarz</p>
+          <p className="mb-2 text-xs font-medium text-gray-400">
+            Puste = siatka placówki ({intervalMin} min). Zmiana zapisuje się po wyjściu z pola.
+          </p>
+          <div className="space-y-1.5">
+            {docs.map(d => (
+              <div key={`${d.doctor_id}:${d.slot_duration_min ?? ''}`} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3.5 py-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{d.name}</span>
+                <input type="number" min="5" max="120" step="5" defaultValue={d.slot_duration_min ?? ''}
+                  placeholder={String(intervalMin)} className={`${inputCls} w-24 text-center`}
+                  onBlur={e => {
+                    const v = e.target.value.trim()
+                    const num = v === '' ? null : Number(v)
+                    if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
+                  }} />
+                <span className="text-xs font-bold text-gray-400">min</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
     </Modal>
   )

@@ -244,19 +244,14 @@ def create_slots(
     clinic = db.get(Clinic, clinic_id)
     if clinic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placówka nie istnieje.")
-    interval = clinic.slot_interval_min or 15
-    for dt in body.datetimes:
-        if dt.minute % interval != 0 or dt.second != 0:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Godzina {dt.strftime('%H:%M')} nie leży na siatce terminów placówki (co {interval} min).",
-            )
     # wizyta lekarska XOR badanie diagnostyczne
     if (body.doctor_id is None) == (body.service_name is None):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="Podaj doctor_id (wizyta) ALBO service_name (badanie).")
+    doctor = None
     if body.doctor_id is not None:
-        if db.get(Doctor, body.doctor_id) is None:
+        doctor = db.get(Doctor, body.doctor_id)
+        if doctor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lekarz nie istnieje.")
         # lekarz może dodawać terminy tylko sobie
         if user.role.role_name == "lekarz" and user.user_id != body.doctor_id:
@@ -268,6 +263,14 @@ def create_slots(
         ))
         if not works_here:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
+    # siatka terminów = długość wizyty lekarza (jeśli ustawiona) albo siatka placówki
+    interval = (doctor.slot_duration_min if doctor and doctor.slot_duration_min else clinic.slot_interval_min) or 15
+    for dt in body.datetimes:
+        if dt.minute % interval != 0 or dt.second != 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Godzina {dt.strftime('%H:%M')} nie leży na siatce terminów (co {interval} min).",
+            )
 
     created: list[Appointment] = []
     for dt in body.datetimes:
@@ -317,7 +320,6 @@ def create_slots(
                                 slot_dts=[a.appointment_datetime for a in created])
 
     # lista oczekujących (UC-P3 A1): powiadom zapisanych na tę specjalizację
-    doctor = db.get(Doctor, body.doctor_id) if body.doctor_id else None
     if doctor:
         notify_waitlist(db, list(doctor.specialization_names))
 
