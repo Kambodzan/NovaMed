@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { Activity, BarChart3, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, FlaskConical, KeyRound as KeyIcon, LayoutDashboard, Plug, ShieldCheck, Star, Users } from 'lucide-react'
+import { Activity, BarChart3, Building2, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, FlaskConical, KeyRound as KeyIcon, LayoutDashboard, Plug, ShieldCheck, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { PowrotDoWizyty } from './components/PowrotDoWizyty'
@@ -40,6 +40,7 @@ import { Raporty } from './pages/poradnia/Raporty'
 import { Pulpit } from './pages/poradnia/Pulpit'
 import { Wyniki } from './pages/poradnia/Wyniki'
 import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
+import { AdminPlacowki } from './pages/admin/Placowki'
 import { AdminIntegracje } from './pages/admin/Integracje'
 import { AdminMonitoring } from './pages/admin/Monitoring'
 import { DziennikRodo } from './pages/admin/DziennikRodo'
@@ -85,6 +86,7 @@ function AdminLayout() {
       brand="Panel Administratora"
       nav={[
         { to: '/', label: 'Użytkownicy', icon: Users, end: true },
+        { to: '/placowki', label: 'Placówki', icon: Building2 },
         { to: '/integracje', label: 'Integracje', icon: Plug },
         { to: '/monitoring', label: 'Monitoring', icon: Activity },
         { to: '/rodo', label: 'Dziennik RODO', icon: ShieldCheck },
@@ -200,6 +202,7 @@ export default function App() {
       {token && me && role === 'administrator' && (
         <Route path="/" element={<AdminLayout />}>
           <Route index element={<AdminUzytkownicy />} />
+          <Route path="placowki" element={<AdminPlacowki />} />
           <Route path="integracje" element={<AdminIntegracje />} />
           <Route path="monitoring" element={<AdminMonitoring />} />
           <Route path="rodo" element={<DziennikRodo />} />

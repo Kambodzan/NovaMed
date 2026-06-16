@@ -87,6 +87,11 @@ def test_dlugosc_wizyty_per_lekarz(client, factory):
                         json={"slot_duration_min": None}, headers=auth_header(kier)).status_code == 200
     assert mk(45) == 201   # 45 % 15 == 0
 
+    # administrator też może (globalny override — bez zatrudnienia w placówce)
+    _, adm = factory.user("administrator")
+    assert client.patch(f"/clinics/{cid}/doctors/{did}/visit-length",
+                        json={"slot_duration_min": 20}, headers=auth_header(adm)).status_code == 200
+
 
 def test_pacjenci_placowki_rbac(client, factory):
     reg_user, reg_token = factory.user("rejestracja")
