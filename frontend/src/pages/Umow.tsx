@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, FileSignature, LocateFixed, MapPin, Star, Trash2, CalendarDays, Video, X, XCircle } from 'lucide-react'
+import { BellPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, FileSignature, LocateFixed, MapPin, Trash2, CalendarDays, Video, X, XCircle } from 'lucide-react'
 import { Typeahead, type TypeaheadItem } from '../components/Typeahead'
 import { useSecondsLeft, mmss } from '../components/Countdown'
 import { ClinicMap, distanceKm, type GeoArea, type MapClinic } from '../components/ClinicMap'
+import { RatingBadge, DoctorReviewsModal } from '../components/DoctorReviews'
 
 const parseGeo = (filter: string | null): (GeoArea & { name: string | null }) | null => {
   if (!filter?.startsWith('geo:')) return null
@@ -71,6 +72,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
 }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
+  const [showReviews, setShowReviews] = useState(false)
   const [offset, setOffset] = useState(0)
   const [showAll, setShowAll] = useState(false)
   const visible = d.days.slice(offset, offset + 3)
@@ -101,11 +103,7 @@ function DoctorCard({ d, multiClinic, onPick }: {
           <span className="flex flex-wrap items-center gap-2 font-bold text-gray-900">
             {d.name}
             {rating && rating.count > 0 && rating.average != null && (
-              <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
-                <Star size={12} className="fill-amber-400 text-amber-400" />
-                {rating.average.toFixed(1)}
-                <span className="font-semibold text-gray-400">({rating.count})</span>
-              </span>
+              <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
             )}
             {d.referralRequired && (
               <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">
@@ -187,6 +185,9 @@ function DoctorCard({ d, multiClinic, onPick }: {
           </div>
         </div>
       )}
+      {showReviews && (
+        <DoctorReviewsModal name={d.name} endpoint={`/reviews/doctor/${d.id}`} onClose={() => setShowReviews(false)} />
+      )}
     </div>
   )
 }
@@ -230,6 +231,7 @@ export function Umow() {
   const [online, setOnline] = useState(false)
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [holdToken, setHoldToken] = useState<string | null>(null)
+  const [showSlotReviews, setShowSlotReviews] = useState(false)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
   const lockLeft = useSecondsLeft(booked?.appointment.locked_until)
@@ -742,13 +744,12 @@ export function Umow() {
               <p className="flex items-center gap-2 font-extrabold text-gray-900">
                 {slot.doctor_name}
                 {slotRating && slotRating.count > 0 && slotRating.average != null && (
-                  <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
-                    <Star size={12} className="fill-amber-400 text-amber-400" />
-                    {slotRating.average.toFixed(1)}
-                    <span className="font-semibold text-gray-400">({slotRating.count})</span>
-                  </span>
+                  <RatingBadge average={slotRating.average} count={slotRating.count} onOpen={() => setShowSlotReviews(true)} />
                 )}
               </p>
+              {showSlotReviews && slot.doctor_id && (
+                <DoctorReviewsModal name={slot.doctor_name} endpoint={`/reviews/doctor/${slot.doctor_id}`} onClose={() => setShowSlotReviews(false)} />
+              )}
               <p className="text-sm font-semibold text-gray-500">
                 {slot.specializations.join(' · ')} · {online
                   ? t('teleporada')

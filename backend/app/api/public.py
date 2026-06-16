@@ -110,11 +110,38 @@ class DoctorRatingOut(BaseModel):
 
 @router.get("/doctors/{doctor_id}/rating", response_model=DoctorRatingOut)
 def public_doctor_rating(doctor_id: UUID, db: Session = Depends(get_db)):
-    """Średnia ocena lekarza (bez logowania) — do pokazania na publicznej rezerwacji.
-    Zwraca tylko agregat (średnia + liczba), bez treści opinii."""
+    """Średnia ocena lekarza (bez logowania) — lekki agregat do gwiazdki na karcie.
+    Treść opinii pod /public/doctors/{id}/reviews (ładowane dopiero po rozwinięciu)."""
     avg = db.scalar(select(func.avg(Review.rating)).where(Review.doctor_id == doctor_id))
     count = db.scalar(select(func.count()).select_from(Review).where(Review.doctor_id == doctor_id)) or 0
     return DoctorRatingOut(average=round(float(avg), 2) if avg is not None else None, count=count)
+
+
+class PublicReviewItem(BaseModel):
+    rating: int
+    comment: str | None
+    created_at: datetime
+
+
+class DoctorReviewsPublicOut(BaseModel):
+    average: float | None
+    count: int
+    items: list[PublicReviewItem]
+
+
+@router.get("/doctors/{doctor_id}/reviews", response_model=DoctorReviewsPublicOut)
+def public_doctor_reviews(doctor_id: UUID, db: Session = Depends(get_db)):
+    """Opinie o lekarzu (bez logowania) — ocena + treść, bez tożsamości oceniających.
+    Najnowsze pierwsze. Karmi rozwijaną listę opinii na publicznej rezerwacji."""
+    rows = db.scalars(
+        select(Review).where(Review.doctor_id == doctor_id).order_by(Review.created_at.desc())
+    ).all()
+    avg = db.scalar(select(func.avg(Review.rating)).where(Review.doctor_id == doctor_id))
+    return DoctorReviewsPublicOut(
+        average=round(float(avg), 2) if avg is not None else None,
+        count=len(rows),
+        items=[PublicReviewItem(rating=r.rating, comment=r.comment, created_at=r.created_at) for r in rows],
+    )
 
 
 class HoldOut(BaseModel):

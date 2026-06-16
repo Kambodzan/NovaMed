@@ -5,12 +5,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse, Star } from 'lucide-react'
+import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
 import { PhoneOtp } from '../components/PhoneOtp'
+import { RatingBadge, DoctorReviewsModal } from '../components/DoctorReviews'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
 import type { AppointmentOut } from '../lib/types'
 
@@ -261,6 +262,7 @@ function PublicCard({ c, onPick, disabled }: {
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [showReviews, setShowReviews] = useState(false)
   const nearest = c.days[0][1][0]
   const { data: rating } = useQuery({
     queryKey: ['public-doctor-rating', c.id],
@@ -276,11 +278,7 @@ function PublicCard({ c, onPick, disabled }: {
           <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-900">
             {c.name}
             {rating && rating.count > 0 && rating.average != null && (
-              <span className="flex items-center gap-0.5 text-xs font-extrabold text-amber-600">
-                <Star size={12} className="fill-amber-400 text-amber-400" />
-                {rating.average.toFixed(1)}
-                <span className="font-semibold text-gray-400">({rating.count})</span>
-              </span>
+              <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
             )}
             {c.ref && (
               <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">
@@ -312,6 +310,9 @@ function PublicCard({ c, onPick, disabled }: {
             </div>
           ))}
         </div>
+      )}
+      {showReviews && c.id && (
+        <DoctorReviewsModal name={c.name} endpoint={`/public/doctors/${c.id}/reviews`} onClose={() => setShowReviews(false)} />
       )}
     </div>
   )

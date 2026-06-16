@@ -44,11 +44,15 @@ def test_publiczna_ocena_lekarza(client, setup, factory, db_session):
     # bez opinii — endpoint publiczny, zwraca pustą ocenę
     assert client.get(f"/public/doctors/{did}/rating").json() == {"average": None, "count": 0}
     reviewer, _ = factory.patient()
-    db_session.add(Review(user_id=reviewer.user_id, doctor_id=did, rating=5))
-    db_session.add(Review(user_id=reviewer.user_id, doctor_id=did, rating=4))
+    db_session.add(Review(user_id=reviewer.user_id, doctor_id=did, rating=5, comment="Bardzo dobry lekarz."))
+    db_session.add(Review(user_id=reviewer.user_id, doctor_id=did, rating=4))  # tylko gwiazdki
     db_session.commit()
     r = client.get(f"/public/doctors/{did}/rating").json()
     assert r["count"] == 2 and r["average"] == 4.5
+    # treść opinii też publicznie (do rozwijanej listy)
+    rev = client.get(f"/public/doctors/{did}/reviews").json()
+    assert rev["count"] == 2 and len(rev["items"]) == 2
+    assert any(it["comment"] == "Bardzo dobry lekarz." for it in rev["items"])
 
 
 def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
