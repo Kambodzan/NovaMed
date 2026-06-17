@@ -143,6 +143,40 @@ def test_skierowanie_nursing_wewnetrzne(client, visit, fakes, factory):
     assert client.get("/referrals/nursing", headers=auth_header(visit["patient_token"])).status_code == 403
 
 
+def test_skierowanie_specjalisty_realizuje_sie_przy_rezerwacji(client, factory, fakes):
+    """Skierowanie SPECIALIST realizuje się, gdy pacjent umówi z niego wizytę."""
+    reg_user, reg_token = factory.user("rejestracja")
+    doctor_user, doctor_token = factory.doctor()
+    patient_user, patient_token = factory.patient()
+    clinic = factory.clinic()
+    factory.employ(clinic, doctor_user.user_id)
+    factory.employ(clinic, reg_user.user_id)
+
+    def make_slot(hour):
+        dt = (datetime.now() + timedelta(days=2)).replace(hour=hour, minute=0, second=0, microsecond=0)
+        return client.post(f"/clinics/{clinic.clinic_id}/slots",
+                           json={"doctor_id": str(doctor_user.user_id), "datetimes": [dt.isoformat()]},
+                           headers=auth_header(reg_token)).json()[0]["appointment_id"]
+
+    # wizyta, na której lekarz wystawia skierowanie do specjalisty
+    base = make_slot(9)
+    client.post(f"/appointments/{base}/book", headers=auth_header(patient_token))
+    assert client.post(f"/patients/{patient_user.user_id}/referrals", headers=auth_header(doctor_token),
+                       json={"appointment_id": base, "referral_type": "SPECIALIST",
+                             "icd10": "I10", "notes": "do kardiologa"}).status_code == 201
+    doc_id = next(d["document_id"] for d in client.get("/documents/my", headers=auth_header(patient_token)).json()
+                  if d["document_type"] == "REFERRAL")
+
+    # pacjent umawia wizytę ZE skierowania → skierowanie REALIZED
+    target = make_slot(11)
+    booked = client.post(f"/appointments/{target}/book", headers=auth_header(patient_token),
+                         json={"referral_document_id": doc_id})
+    assert booked.status_code == 200, booked.text
+    ref_doc = next(d for d in client.get("/documents/my", headers=auth_header(patient_token)).json()
+                   if d["document_id"] == doc_id)
+    assert ref_doc["document_status"] == "REALIZED"
+
+
 def test_skierowanie_lab_przez_p1(client, visit, fakes):
     body = {"appointment_id": visit["appointment_id"], "referral_type": "LAB", "icd10": "E78.0"}
     resp = client.post(

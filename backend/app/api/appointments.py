@@ -449,6 +449,19 @@ def book_appointment(
         else:
             a.external_referral = True
 
+    # skierowanie do specjalisty (SPECIALIST): rezerwacja WIZYTY (nie badania) realizuje
+    # skierowanie — inaczej zostaje „do umówienia" na zawsze (LAB realizuje wynik, NURSING zabieg)
+    elif body and body.referral_document_id is not None and a.service_name is None:
+        from app.models import MedicalDocument, Referral  # import lokalny — unika cyklu
+        from app.domain.documents import DocumentStatus
+        ref = db.get(MedicalDocument, body.referral_document_id)
+        sref = db.scalar(select(Referral).where(Referral.document_id == body.referral_document_id)) if ref else None
+        if (ref is not None and ref.patient_id == patient_id and ref.document_type == "REFERRAL"
+                and sref is not None and sref.referral_type == "SPECIALIST"
+                and ref.document_status not in (DocumentStatus.REALIZED.value, DocumentStatus.REVOKED.value)):
+            a.referral_document_id = ref.document_id
+            ref.document_status = DocumentStatus.REALIZED.value
+
     # powód wizyty i opcje rezerwacji (opcjonalne body)
     if body:
         if body.reason:

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CalendarPlus, Check, ClipboardList, Clock, MapPin, Star, Video } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
@@ -42,6 +42,25 @@ export function Wizyty() {
     queryFn: () => api<AppointmentOut[]>(asPatient('/appointments/my')),
   })
 
+  // wejście z „Do zrobienia" na pulpicie: deep-link prosto do akcji danej wizyty
+  const [params, setParams] = useSearchParams()
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!visits) return
+    const find = (k: string) => { const id = params.get(k); return id ? visits.find(v => v.appointment_id === id) : undefined }
+    const pay = find('pay'), review = find('review'), confirm = find('confirm')
+    if (pay && pay.appointment_status === 'TEMP_LOCK') setPayFor(pay)
+    else if (review && review.appointment_status === 'COMPLETED') setReviewFor(review)
+    else if (confirm) setHighlightId(confirm.appointment_id)
+    if (params.get('pay') || params.get('review') || params.get('confirm')) {
+      params.delete('pay'); params.delete('review'); params.delete('confirm')
+      setParams(params, { replace: true })
+    }
+  }, [visits])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (highlightId) document.getElementById(`visit-${highlightId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightId])
+
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
     void queryClient.invalidateQueries({ queryKey: ['slots'] })
@@ -66,6 +85,7 @@ export function Wizyty() {
   const past = (visits ?? []).filter(v => !upcoming.includes(v))
 
   const Row = ({ v, actions }: { v: AppointmentOut; actions?: boolean }) => (
+    <div id={`visit-${v.appointment_id}`} className={cx('rounded-[20px] transition-shadow', highlightId === v.appointment_id && 'ring-2 ring-amber-400')}>
     <Tile className="p-4">
       <div className="flex flex-wrap items-center gap-4">
         <DateChip month={monthShort(v.appointment_datetime)} day={dayNo(v.appointment_datetime)} time={formatTime(v.appointment_datetime)} />
@@ -135,6 +155,7 @@ export function Wizyty() {
         )}
       </div>
     </Tile>
+    </div>
   )
 
   return (

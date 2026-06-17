@@ -17,7 +17,8 @@ const docMeta: Record<string, { icon: typeof FileText; label: string }> = {
 }
 
 export function Dokumentacja() {
-  const [filter, setFilter] = useState<string>('ALL')
+  // wejście z „Do zrobienia" (np. /dokumentacja?type=LAB_RESULT) ustawia filtr
+  const [filter, setFilter] = useState<string>(() => new URLSearchParams(window.location.search).get('type') || 'ALL')
   const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()

@@ -31,19 +31,19 @@ export function Start() {
       || (v.appointment_status === 'CONFIRMED' && isFuture(v.appointment_datetime)))
     .sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))[0]
 
-  // „Do zrobienia": akcje wymagające reakcji pacjenta, zebrane w jednym miejscu
-  const count = (arr: unknown[] | undefined) => arr?.length ?? 0
-  const unpaid = count(visits?.filter(v => v.appointment_status === 'TEMP_LOCK'))
-  const toConfirm = count(visits?.filter(v => v.appointment_status === 'CONFIRMED' && v.confirmation_requested && !v.patient_confirmed))
-  const newResults = count(docs?.filter(d => d.document_type === 'LAB_RESULT' && d.document_status === 'READY'))
-  const toBook = count(docs?.filter(d => d.document_type === 'REFERRAL' && d.referral_type === 'SPECIALIST' && !['REALIZED', 'REVOKED'].includes(d.document_status)))
-  const toReview = count(visits?.filter(v => v.appointment_status === 'COMPLETED' && v.doctor_id && !v.reviewed))
+  // „Do zrobienia": akcje wymagające reakcji pacjenta — kafel prowadzi PROSTO do
+  // właściwej akcji (modal płatności/oceny, picker skierowania, filtr wyników)
+  const unpaid = visits?.filter(v => v.appointment_status === 'TEMP_LOCK') ?? []
+  const toConfirm = visits?.filter(v => v.appointment_status === 'CONFIRMED' && v.confirmation_requested && !v.patient_confirmed) ?? []
+  const newResults = docs?.filter(d => d.document_type === 'LAB_RESULT' && d.document_status === 'READY') ?? []
+  const toBook = docs?.filter(d => d.document_type === 'REFERRAL' && d.referral_type === 'SPECIALIST' && !['REALIZED', 'REVOKED'].includes(d.document_status)) ?? []
+  const toReview = visits?.filter(v => v.appointment_status === 'COMPLETED' && v.doctor_id && !v.reviewed) ?? []
   const todos = [
-    unpaid && { icon: CreditCard, label: `${t('Dokończ płatność')} (${unpaid})`, to: '/wizyty', danger: true },
-    toConfirm && { icon: Check, label: `${t('Potwierdź obecność')} (${toConfirm})`, to: '/wizyty' },
-    newResults && { icon: FlaskConical, label: `${t('Nowe wyniki badań')} (${newResults})`, to: '/dokumentacja' },
-    toBook && { icon: FileText, label: `${t('Skierowanie do umówienia')} (${toBook})`, to: '/umow' },
-    toReview && { icon: Star, label: `${t('Oceń wizytę')} (${toReview})`, to: '/wizyty' },
+    unpaid[0] && { icon: CreditCard, label: `${t('Dokończ płatność')} (${unpaid.length})`, to: `/wizyty?pay=${unpaid[0].appointment_id}`, danger: true },
+    toConfirm[0] && { icon: Check, label: `${t('Potwierdź obecność')} (${toConfirm.length})`, to: `/wizyty?confirm=${toConfirm[0].appointment_id}` },
+    newResults[0] && { icon: FlaskConical, label: `${t('Nowe wyniki badań')} (${newResults.length})`, to: '/dokumentacja?type=LAB_RESULT' },
+    toBook[0] && { icon: FileText, label: `${t('Skierowanie do umówienia')} (${toBook.length})`, to: `/skierowania?umow=${toBook[0].document_id}` },
+    toReview[0] && { icon: Star, label: `${t('Oceń wizytę')} (${toReview.length})`, to: `/wizyty?review=${toReview[0].appointment_id}` },
   ].filter(Boolean) as { icon: typeof Check; label: string; to: string; danger?: boolean }[]
 
   return (
