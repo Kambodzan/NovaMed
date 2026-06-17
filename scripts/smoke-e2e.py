@@ -307,7 +307,9 @@ def main() -> None:
           r.text[:100])
     tele_id = online_slot["appointment_id"]
     info = api("GET", f"/patients/{dep_id}", kow).json()
-    check("lekarz widzi opiekuna podopiecznego", info["guardian_name"] and info["guardian_phone"] == "601234567")
+    # opiekun widoczny dla lekarza: nazwisko + jakiś telefon (numer zależy od środowiska
+    # — np. zweryfikowany numer Twilio przy testach realnego SMS, nie sztywne 601234567)
+    check("lekarz widzi opiekuna podopiecznego", bool(info.get("guardian_name")) and bool(info.get("guardian_phone")))
     up = api("POST", f"/telemed/{tele_id}/attachments", jan,
              files={"file": ("wyniki.txt", b"morfologia w normie", "text/plain")})
     check("załącznik telewizyty (opiekun)", up.status_code == 201, up.text[:100])
@@ -336,9 +338,10 @@ def main() -> None:
     # główna), nie bieżący wg zegara — sloty są BASE_DAYS w przód, więc bieżący
     # miesiąc bywa pusty (przechodziło wcześniej tylko dzięki nazbieranym danym)
     month = at(3, 10).strftime("%Y-%m")
-    rep = api("GET", f"/clinics/{clinic_id}/reports?month={month}", reg)
+    # raporty to wgląd kierowniczy/administracyjny — nie rejestracja
+    rep = api("GET", f"/clinics/{clinic_id}/reports?month={month}", adm)
     check("raport miesiąca", rep.status_code == 200 and rep.json()["total_booked"] >= 1, rep.text[:100])
-    csv = api("GET", f"/clinics/{clinic_id}/reports/csv?month={month}", reg)
+    csv = api("GET", f"/clinics/{clinic_id}/reports/csv?month={month}", adm)
     check("raport CSV", csv.status_code == 200 and ";" in csv.text or "," in csv.text)
     users = api("GET", "/admin/users", adm).json()
     check("admin: lista użytkowników", len(users) >= 8, str(len(users)))
