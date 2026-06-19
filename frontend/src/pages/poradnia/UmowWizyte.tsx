@@ -270,7 +270,10 @@ export function UmowWizyte() {
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-bold text-gray-900">{s.doctor_id ? s.doctor_name : s.service_name}</span>
                                 <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-500">
-                                  {online ? <><Video size={12} /> teleporada</> : <><MapPin size={12} /> stacjonarna</>}{s.specializations.length ? ` · ${s.specializations.join(' · ')}` : ''}
+                                  {online ? <><Video size={12} /> teleporada</> : <><MapPin size={12} /> stacjonarna</>}
+                                  {/* lekarz z kilkoma usługami: pokaż usługę, by recepcja wiedziała, co bukuje */}
+                                  {s.doctor_id && s.service_name ? ` · ${s.service_name}` : (s.specializations.length ? ` · ${s.specializations.join(' · ')}` : '')}
+                                  {s.referral_required && <span className="font-bold text-amber-700"> · skierowanie</span>}
                                 </span>
                               </span>
                               <span className={cx('shrink-0 text-xs font-extrabold', s.price ? 'text-gray-900' : 'text-emerald-700')}>{s.price ? `${s.price} zł` : 'NFZ'}</span>

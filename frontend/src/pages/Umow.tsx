@@ -833,7 +833,7 @@ export function Umow() {
                 </Field>
                 {slot.referral_required && (
                   <div className="space-y-2 rounded-2xl bg-amber-50 px-4 py-3">
-                    <p className="text-sm font-extrabold text-amber-800">{t('To badanie wymaga skierowania')}</p>
+                    <p className="text-sm font-extrabold text-amber-800">{slot.doctor_id ? t('Ta wizyta wymaga skierowania') : t('To badanie wymaga skierowania')}</p>
                     {(myReferrals ?? []).map(r => (
                       <label key={r.document_id} className="flex cursor-pointer items-start gap-2.5">
                         <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
