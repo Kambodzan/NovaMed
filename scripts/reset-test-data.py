@@ -36,6 +36,8 @@ TRANSACTIONAL = [
     "prescription", "referral", "lab_result", "sick_leave", "certificate", "payment",
     "review", "nursing_procedure", "notification", "audit_log", "document_share",
     "waiting_list",
+    # katalog usług / typy wizyt + weryfikacje OTP
+    "service", "doctor_service", "phone_verification",
 ]
 
 
