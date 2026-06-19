@@ -139,6 +139,8 @@ export default function App() {
       {/* publiczna strona rezerwacji (M8.6) — bez logowania */}
       <Route path="/rezerwacja" element={<RezerwacjaPubliczna />} />
       <Route path="/potwierdz/:token" element={<PotwierdzWizyte />} />
+      {/* teleporada gościa (bez logowania) — wejście z linka „Zarządzaj wizytą", ?vt=<token> */}
+      <Route path="/teleporada/:id" element={<Telewizyta />} />
       <Route path="/reset-hasla" element={<ResetHasla />} />
 
       {!token && <Route path="*" element={<Navigate to="/login" replace />} />}

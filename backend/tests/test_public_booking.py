@@ -78,6 +78,29 @@ def test_rezerwacja_goscia_i_przejecie_konta(client, setup, db_session):
     assert any(v["appointment_id"] == slot["appointment_id"] for v in mine.json())
 
 
+def test_gosc_przeklada_wizyte_z_linka(client, setup, db_session):
+    import uuid
+    from app.models import Appointment
+    slot = make_slot(client, setup, days_ahead=5, hour=10)
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
+    assert client.post("/public/book", json={**GUEST, "appointment_id": slot["appointment_id"]}).status_code == 200
+    db_session.expire_all()
+    token = db_session.get(Appointment, uuid.UUID(slot["appointment_id"])).confirmation_token
+    assert token
+
+    new = make_slot(client, setup, days_ahead=6, hour=11)
+    slots = client.get(f"/public/visit/{token}/slots").json()
+    assert any(s["appointment_id"] == new["appointment_id"] for s in slots)
+
+    r = client.post(f"/public/visit/{token}/reschedule", json={"new_appointment_id": new["appointment_id"]})
+    assert r.status_code == 200, r.text
+    # ten sam link działa dalej i wskazuje NOWY termin (godz. 11)
+    v = client.get(f"/public/visit/{token}").json()
+    assert "T11:" in v["appointment_datetime"]
+    # stary termin wrócił do puli jako wolny
+    assert db_session.get(Appointment, uuid.UUID(slot["appointment_id"])).appointment_status == "CANCELLED"
+
+
 def test_gosc_nfz_badanie_wymaga_skierowania(client, setup):
     exam = make_slot(client, setup, hour=8, service_name="RTG klatki piersiowej")
     deny = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"]})

@@ -872,58 +872,28 @@ def cancel_appointment(
     return appointment_out(db, a)
 
 
-@router.post("/appointments/{appointment_id}/reschedule", response_model=AppointmentOut)
-def reschedule_appointment(
-    appointment_id: UUID,
-    body: RescheduleIn,
-    user: AppUser = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """UC-P9: przełożenie = nowy slot + zwolnienie starego. Pacjent: tylko swoje
-    wizyty i polityka 24 h. Rejestracja/kierownik/administrator: dowolna wizyta,
-    bez limitu 24 h (obsługa telefoniczna). Opłacona wizyta przenosi się WRAZ
-    z płatnością na nowy termin tej samej ceny — bez ponownej zapłaty."""
-    role = user.role.role_name
-    is_patient = role == "pacjent"
-    if not is_patient and role not in RECEPTION_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień do przełożenia wizyty.")
-
-    old = get_appointment_or_404(appointment_id, db)
-    if is_patient and old.patient_id not in allowed_patient_ids(db, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
-    if old.appointment_status != AppointmentStatus.CONFIRMED.value:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Przełożyć można tylko zarezerwowaną wizytę.")
-
-    new = get_appointment_or_404(body.new_appointment_id, db)
+def perform_reschedule(db: Session, old: Appointment, new: Appointment) -> Appointment:
+    """Rdzeń przełożenia: walidacja nowego terminu + przeniesienie rezerwacji
+    (zwrot starego do puli, transfer płatności, współrezerwacja, powiadomienie).
+    Zakłada, że `old` jest CONFIRMED (sprawdza wywołujący). Bez commita — woła go
+    wywołujący. Używany przez pacjenta/recepcję (authed) i gościa (link z SMS)."""
     if new.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wybrany nowy termin nie jest już dostępny.")
     if new.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nowy termin już minął — wybierz inny.")
-    # przełożenie tylko na ten sam rodzaj (ten sam lekarz / to samo badanie) — bez
-    # przenoszenia wizyty u kardiologa na slot innego lekarza czy na badanie
+    # przełożenie tylko na ten sam rodzaj (ten sam lekarz / to samo badanie)
     if new.doctor_id != old.doctor_id or new.service_name != old.service_name:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Nowy termin musi dotyczyć tego samego lekarza/badania co obecna wizyta.",
-        )
-    # ta sama cena = przeniesienie bez dopłaty/zwrotu; różnica kwoty wymaga osobnego rozliczenia
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Nowy termin musi dotyczyć tego samego lekarza/badania co obecna wizyta.")
+    # ta sama cena = przeniesienie bez dopłaty/zwrotu
     if (new.price or 0) != (old.price or 0):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Nowy termin ma inną cenę niż obecna wizyta — anuluj i zarezerwuj osobno.",
-        )
-
-    hours_left = (old.appointment_datetime - datetime.now()).total_seconds() / 3600
-    if is_patient and hours_left < CANCEL_MIN_HOURS:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Wizyty nie można przełożyć na mniej niż {CANCEL_MIN_HOURS} h przed terminem. Skontaktuj się z rejestracją.",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Nowy termin ma inną cenę niż obecna wizyta — anuluj i zarezerwuj osobno.")
 
     assert_transition(old.appointment_status, AppointmentStatus.CANCELLED)
     old.appointment_status = AppointmentStatus.CANCELLED.value
     restore_blocked(db, old)
-    # zwrot starego terminu do puli tylko, jeśli jeszcze przed czasem (bez przeszłych „wolnych")
+    # zwrot starego terminu do puli tylko, jeśli jeszcze przed czasem
     if old.appointment_datetime > datetime.now():
         db.add(Appointment(
             patient_id=None,
@@ -955,11 +925,44 @@ def reschedule_appointment(
     block_overlapping(db, new)
     new.notify_earlier = old.notify_earlier      # preferencja wędruje z wizytą
     new.appointment_notes = old.appointment_notes  # powód wizyty też (lekarz nie traci wywiadu)
-    # każde przełożenie (pacjent/recepcja) → informacyjny SMS o nowym terminie,
-    # BEZ prośby o potwierdzenie (to tylko powiadomienie, nie confirm-link)
+    # każde przełożenie → informacyjny SMS o nowym terminie, BEZ confirm-linku
     if old.patient_id:
         notify(db, old.patient_id, "Wizyta przełożona",
                f"Nowy termin Twojej wizyty: {visit_label(db, new)}.")
+    return new
+
+
+@router.post("/appointments/{appointment_id}/reschedule", response_model=AppointmentOut)
+def reschedule_appointment(
+    appointment_id: UUID,
+    body: RescheduleIn,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """UC-P9: przełożenie = nowy slot + zwolnienie starego. Pacjent: tylko swoje
+    wizyty i polityka 24 h. Rejestracja/kierownik/administrator: dowolna wizyta,
+    bez limitu 24 h (obsługa telefoniczna). Opłacona wizyta przenosi się WRAZ
+    z płatnością na nowy termin tej samej ceny — bez ponownej zapłaty."""
+    role = user.role.role_name
+    is_patient = role == "pacjent"
+    if not is_patient and role not in RECEPTION_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień do przełożenia wizyty.")
+
+    old = get_appointment_or_404(appointment_id, db)
+    if is_patient and old.patient_id not in allowed_patient_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
+    if old.appointment_status != AppointmentStatus.CONFIRMED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Przełożyć można tylko zarezerwowaną wizytę.")
+
+    hours_left = (old.appointment_datetime - datetime.now()).total_seconds() / 3600
+    if is_patient and hours_left < CANCEL_MIN_HOURS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Wizyty nie można przełożyć na mniej niż {CANCEL_MIN_HOURS} h przed terminem. Skontaktuj się z rejestracją.",
+        )
+
+    new = get_appointment_or_404(body.new_appointment_id, db)
+    perform_reschedule(db, old, new)
     db.commit()
     return appointment_out(db, new)
 

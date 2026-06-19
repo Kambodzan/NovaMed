@@ -1,7 +1,7 @@
 // Telewizyta (UC-P5/UC-L3): wideo P2P (WebRTC + STUN), czat i załączniki
 // przez WebSocket pokoju wizyty. Lekarz inicjuje połączenie (offer).
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ClipboardPen, Mic, MicOff, Paperclip, PhoneOff, Send, Video as VideoIcon, VideoOff } from 'lucide-react'
 import { Button, Overline, Tile, cx, inputCls } from '../ui'
 import { API_URL, WS_URL, api, getAuthToken } from '../lib/api'
@@ -48,9 +48,12 @@ function watchSpeaking(stream: MediaStream, cb: (speaking: boolean) => void): ()
 
 export function Telewizyta() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const guestToken = searchParams.get('vt')   // gość z linka SMS (?vt=<token wizyty>)
+  const isGuest = !!guestToken
   const navigate = useNavigate()
   const { me } = useAuth()
-  const isDoctor = me?.role === 'lekarz'
+  const isDoctor = !isGuest && me?.role === 'lekarz'
 
   const wsRef = useRef<WebSocket | null>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -137,7 +140,8 @@ export function Telewizyta() {
         setMediaError(true)  // brak kamery/zgody — zostaje czat (UC-P5 A1)
       }
 
-      const ws = new WebSocket(`${WS_URL}/ws/telemed/${id}?token=${getAuthToken()}`)
+      const auth = isGuest ? `visit_token=${guestToken}` : `token=${getAuthToken()}`
+      const ws = new WebSocket(`${WS_URL}/ws/telemed/${id}?${auth}`)
       wsRef.current = ws
       // zerwane połączenie ≠ "rozmówca nie dołączył" — pokaż własny komunikat
       ws.onclose = () => { if (!intentionalCloseRef.current && !cancelled) setWsDown(true) }
@@ -242,6 +246,8 @@ export function Telewizyta() {
     if (isDoctor) {
       try { await api(`/appointments/${id}/status`, { method: 'POST', body: { new_status: 'COMPLETED' } }) } catch { /* np. już zakończona */ }
       navigate('/')
+    } else if (isGuest) {
+      navigate(`/potwierdz/${guestToken}`)
     } else {
       navigate('/wizyty')
     }
@@ -328,8 +334,8 @@ export function Telewizyta() {
                 <div key={i} className={cx('max-w-[85%] rounded-2xl px-3.5 py-2 text-sm font-medium',
                   m.mine ? 'ml-auto bg-primary text-white' : 'bg-gray-100 text-gray-800')}>
                   {m.kind === 'file' ? (
-                    <button onClick={() => m.url && m.name && void download(m.url, m.name)}
-                      className={cx('flex cursor-pointer items-center gap-1.5 font-bold underline-offset-2 hover:underline', m.mine ? 'text-white' : 'text-primary')}>
+                    <button onClick={() => { if (!isGuest && m.url && m.name) void download(m.url, m.name) }}
+                      className={cx('flex items-center gap-1.5 font-bold underline-offset-2', isGuest ? 'cursor-default' : 'cursor-pointer hover:underline', m.mine ? 'text-white' : 'text-primary')}>
                       <Paperclip size={14} /> {m.name}
                     </button>
                   ) : m.text}
@@ -343,10 +349,12 @@ export function Telewizyta() {
             )}
           </div>
           <div className="flex items-center gap-2 border-t border-gray-100 p-3">
-            <label className="cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-50 hover:text-primary">
-              <Paperclip size={17} />
-              <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = '' }} />
-            </label>
+            {!isGuest && (
+              <label className="cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-50 hover:text-primary">
+                <Paperclip size={17} />
+                <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = '' }} />
+              </label>
+            )}
             <input
               className={cx(inputCls, 'h-10')}
               placeholder="Napisz wiadomość…"

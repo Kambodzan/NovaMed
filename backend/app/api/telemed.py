@@ -78,43 +78,52 @@ async def telemed_ws(
     ws: WebSocket,
     appointment_id: UUID,
     token: str = "",
+    visit_token: str = "",
     db: Session = Depends(get_db),
 ):
-    """Autoryzacja tokenem w query (?token=...) — przeglądarka nie ustawia
-    nagłówków przy WebSocket. Wstęp tylko dla pacjenta/lekarza wizyty ONLINE."""
-    try:
-        claims = decode_supabase_token(token)
-    except HTTPException:
-        await ws.close(code=4401)
-        return
-    user = db.scalar(select(AppUser).where(AppUser.supabase_uid == uuid.UUID(claims["sub"])))
-    if user is None or not user.active_account:
-        await ws.close(code=4401)
-        return
+    """Autoryzacja tokenem w query (przeglądarka nie ustawia nagłówków przy WS):
+    zalogowany przez JWT (?token=...) albo GOŚĆ przez token wizyty z SMS
+    (?visit_token=...). Wstęp tylko dla uczestnika wizyty ONLINE."""
     a = db.get(Appointment, appointment_id)
-    if a is None or not is_participant(db, a, user):
+    if a is None:
         await ws.close(code=4403)
         return
+    if visit_token:  # gość z linka SMS — wchodzi jako pacjent (nieaktywne konto gościa)
+        if a.confirmation_token != visit_token or a.patient_id is None:
+            await ws.close(code=4401)
+            return
+        room_uid, role = a.patient_id, "patient"
+    else:
+        try:
+            claims = decode_supabase_token(token)
+        except HTTPException:
+            await ws.close(code=4401)
+            return
+        user = db.scalar(select(AppUser).where(AppUser.supabase_uid == uuid.UUID(claims["sub"])))
+        if user is None or not user.active_account or not is_participant(db, a, user):
+            await ws.close(code=4403)
+            return
+        room_uid = user.user_id
+        role = "doctor" if user.user_id == a.doctor_id else "patient"
     if a.appointment_type != "ONLINE" or a.appointment_status not in ALLOWED_VISIT_STATUSES:
         await ws.close(code=4409)
         return
 
-    role = "doctor" if user.user_id == a.doctor_id else "patient"
     await ws.accept()
-    await manager.join(appointment_id, user.user_id, ws)
-    await manager.relay(appointment_id, user.user_id, {"type": "peer-joined", "role": role})
+    await manager.join(appointment_id, room_uid, ws)
+    await manager.relay(appointment_id, room_uid, {"type": "peer-joined", "role": role})
     try:
         while True:
             message = await ws.receive_json()
             if not isinstance(message, dict) or "type" not in message:
                 continue
             message["sender_role"] = role
-            await manager.relay(appointment_id, user.user_id, message)
+            await manager.relay(appointment_id, room_uid, message)
     except WebSocketDisconnect:
         pass
     finally:
-        manager.leave(appointment_id, user.user_id)
-        await manager.relay(appointment_id, user.user_id, {"type": "peer-left", "role": role})
+        manager.leave(appointment_id, room_uid)
+        await manager.relay(appointment_id, room_uid, {"type": "peer-left", "role": role})
 
 
 # ---------- załączniki (UC-P5: przesyłanie zdjęć/skanów w trakcie wizyty) ----------

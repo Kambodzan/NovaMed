@@ -12,12 +12,12 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.appointments import AppointmentOut, appointment_out, visit_label
+from app.api.appointments import AppointmentOut, appointment_out, perform_reschedule, visit_label
 from app.api.family import pesel_valid
 from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
-from app.domain.confirm import ensure_confirm_token
+from app.domain.confirm import confirm_link, ensure_confirm_token
 from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain.notify import notify
@@ -240,9 +240,9 @@ def guest_book(
     if a.price is None:
         a.appointment_status = AppointmentStatus.CONFIRMED.value
         block_overlapping(db, a)
+        link = confirm_link(ensure_confirm_token(a))
         notify(db, guest.user_id, "Wizyta potwierdzona",
-               f"Twoja rezerwacja: {visit_label(db, a)}. Załóż konto w NovaMed e-mailem {guest.email}, "
-               "aby zarządzać wizytą online.")
+               f"Twoja rezerwacja: {visit_label(db, a)}. Zarządzaj wizytą (przełóż/odwołaj): {link}")
         db.commit()
         return GuestBookOut(appointment=appointment_out(db, a))
 
@@ -272,6 +272,7 @@ def guest_book(
 # ---- potwierdzanie/odwołanie wizyty z linka SMS (bez logowania) ----
 
 class VisitPublicOut(BaseModel):
+    appointment_id: UUID
     patient_name: str
     doctor_name: str
     clinic_name: str
@@ -298,6 +299,7 @@ def public_visit(token: str, db: Session = Depends(get_db)):
     clinic = db.get(Clinic, a.clinic_id)
     online = a.appointment_type == AppointmentType.ONLINE.value
     return VisitPublicOut(
+        appointment_id=a.appointment_id,
         patient_name=f"{patient.first_name} {patient.last_name}",
         doctor_name=doctor_user.username if doctor_user else (a.service_name or "Pracownia"),
         clinic_name=clinic.clinic_name,
@@ -346,6 +348,50 @@ def public_cancel(token: str, db: Session = Depends(get_db)):
         refunded = True
     notify(db, patient_id, "Wizyta odwołana",
            f"Odwołałeś wizytę: {label}." + (" Zwrot opłaty nastąpi tą samą metodą." if refunded else ""))
+    db.commit()
+    return public_visit(token, db)
+
+
+@router.get("/visit/{token}/slots", response_model=list[AppointmentOut])
+def public_visit_slots(token: str, db: Session = Depends(get_db)):
+    """Wolne terminy, na które gość może przełożyć wizytę z linka — ten sam
+    lekarz/badanie, ta sama usługa i cena (backend i tak to wymusza)."""
+    a = _by_token(token, db)
+    if a.appointment_status != AppointmentStatus.CONFIRMED.value:
+        return []
+    q = select(Appointment).where(
+        Appointment.appointment_status == AppointmentStatus.FREE.value,
+        Appointment.appointment_datetime > datetime.now(),
+        Appointment.appointment_id != a.appointment_id,
+        Appointment.service_name == a.service_name,
+    )
+    q = q.where(Appointment.doctor_id == a.doctor_id) if a.doctor_id is not None \
+        else q.where(Appointment.clinic_id == a.clinic_id, Appointment.doctor_id.is_(None))
+    slots = sorted((s for s in db.scalars(q).all() if (s.price or 0) == (a.price or 0)),
+                   key=lambda s: s.appointment_datetime)
+    return [appointment_out(db, s) for s in slots]
+
+
+class PublicRescheduleIn(BaseModel):
+    new_appointment_id: UUID
+
+
+@router.post("/visit/{token}/reschedule", response_model=VisitPublicOut)
+def public_reschedule(token: str, body: PublicRescheduleIn, db: Session = Depends(get_db)):
+    """Przełożenie wizyty z linka SMS (bez logowania). Link (token) wędruje na
+    nowy termin, żeby gość dalej mógł nim zarządzać."""
+    a = _by_token(token, db)
+    if a.appointment_status != AppointmentStatus.CONFIRMED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Tej wizyty nie można już przełożyć (odwołana lub odbyta).")
+    new = db.get(Appointment, body.new_appointment_id)
+    if new is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wybrany termin nie istnieje.")
+    tok = a.confirmation_token
+    a.confirmation_token = None
+    db.flush()                    # zwolnij token w DB przed nadaniem go nowemu (unikat)
+    perform_reschedule(db, a, new)
+    new.confirmation_token = tok  # ten sam link działa dalej, wskazuje nowy termin
     db.commit()
     return public_visit(token, db)
 
