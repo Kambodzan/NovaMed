@@ -66,6 +66,7 @@ export function UmowWizyte() {
   // krok 3
   const [reason, setReason] = useState('')
   const [referralChoice, setReferralChoice] = useState('')
+  const [p1Code, setP1Code] = useState('')   // kod e-skierowania z P1
 
   const { data: patients } = useQuery({
     queryKey: ['clinic-patients', clinic?.clinic_id],
@@ -150,7 +151,8 @@ export function UmowWizyte() {
       body: {
         patient_id: picked!.patient_id, reason: reason.trim() || undefined,
         external_referral: needsReferral && referralChoice === 'external',
-        referral_document_id: needsReferral && referralChoice && referralChoice !== 'external' ? referralChoice : undefined,
+        p1_referral_code: needsReferral && referralChoice === 'p1' && p1Code.trim() ? p1Code.trim() : undefined,
+        referral_document_id: needsReferral && referralChoice && referralChoice !== 'external' && referralChoice !== 'p1' ? referralChoice : undefined,
         hold_token: holdToken,
       },
     }),
@@ -164,7 +166,7 @@ export function UmowWizyte() {
   })
 
   const newValid = newForm.first_name.trim() && newForm.last_name.trim() && /^\d{11}$/.test(newForm.pesel.trim()) && newForm.birth_date && newForm.phone_number.trim().length >= 7
-  const referralBlocked = needsReferral && !referralChoice
+  const referralBlocked = needsReferral && (!referralChoice || (referralChoice === 'p1' && !p1Code.trim()))
   const canBook = picked && slot && !referralBlocked
 
   return (
@@ -293,9 +295,17 @@ export function UmowWizyte() {
             <input className={inputCls} value={reason} placeholder="np. kontrola, ból gardła…" onChange={e => setReason(e.target.value)} disabled={!slot} />
           </Field>
           {needsReferral && (
-            <Field label="Skierowanie" hint="to badanie NFZ wymaga skierowania">
+            <Field label="Skierowanie" hint="ta wizyta/badanie NFZ wymaga skierowania">
               <Select value={referralChoice} onChange={setReferralChoice} placeholder="Wybierz skierowanie…"
-                options={[...referrals.map(r => ({ value: r.document_id, label: `e-skierowanie${r.code ? ` ${r.code}` : ''}`, hint: r.details ?? undefined })), { value: 'external', label: 'Skierowanie zewnętrzne (papierowe)' }]} />
+                options={[
+                  ...referrals.map(r => ({ value: r.document_id, label: `e-skierowanie${r.code ? ` ${r.code}` : ''}`, hint: r.details ?? undefined })),
+                  { value: 'p1', label: 'E-skierowanie z P1 (kod)', hint: 'pacjent podaje kod e-skierowania' },
+                  { value: 'external', label: 'Skierowanie zewnętrzne (papierowe)' },
+                ]} />
+              {referralChoice === 'p1' && (
+                <input className={cx(inputCls, 'mt-2')} value={p1Code} maxLength={20}
+                  placeholder="Kod e-skierowania z P1 (np. 4821)" onChange={e => setP1Code(e.target.value)} />
+              )}
             </Field>
           )}
           <div className="flex flex-wrap items-center gap-3">

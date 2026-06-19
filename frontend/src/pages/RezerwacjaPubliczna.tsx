@@ -24,6 +24,7 @@ export function RezerwacjaPubliczna() {
   const [done, setDone] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [externalRef, setExternalRef] = useState(false)
+  const [p1Code, setP1Code] = useState('')   // kod e-skierowania z P1
   const [consent, setConsent] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [pending, setPending] = useState<{ appt: AppointmentOut; amount: number; payToken: string } | null>(null)
@@ -92,6 +93,7 @@ export function RezerwacjaPubliczna() {
         ...form,
         reason: form.reason.trim() || null,
         external_referral: externalRef,
+        p1_referral_code: p1Code.trim() || null,
         hold_token: holdToken,
       },
     }),
@@ -187,7 +189,7 @@ export function RezerwacjaPubliczna() {
           <p className="mb-4 text-xs font-semibold text-gray-500">
             Ten termin jest teraz zarezerwowany dla Ciebie — dokończ rezerwację w ciągu kilku minut.
           </p>
-          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified) book.mutate() }}>
+          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified && (!slot.referral_required || !!p1Code.trim() || externalRef)) book.mutate() }}>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Imię"><input className={inputCls} required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} /></Field>
               <Field label="Nazwisko"><input className={inputCls} required value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></Field>
@@ -208,13 +210,20 @@ export function RezerwacjaPubliczna() {
               <textarea className={cx(inputCls, 'h-16 py-2')} maxLength={500} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
             </Field>
             {slot.referral_required && (
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-amber-50 px-4 py-3">
-                <input type="checkbox" required checked={externalRef} onChange={e => setExternalRef(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-(--color-primary)" />
-                <span className="text-sm font-semibold text-amber-900">
-                  Badanie na NFZ — oświadczam, że mam skierowanie (okażę przed badaniem). <span className="text-red-600">*</span>
-                </span>
-              </label>
+              <div className="space-y-2 rounded-2xl bg-amber-50 px-4 py-3">
+                <p className="text-sm font-bold text-amber-900">Na NFZ wymagane jest skierowanie:</p>
+                <input className={cx(inputCls, 'bg-white')} value={p1Code} maxLength={20}
+                  placeholder="Kod e-skierowania z P1 (np. 4821)"
+                  onChange={e => { setP1Code(e.target.value); if (e.target.value.trim()) setExternalRef(false) }} />
+                <label className="flex cursor-pointer items-start gap-2.5">
+                  <input type="checkbox" checked={externalRef}
+                    onChange={e => { setExternalRef(e.target.checked); if (e.target.checked) setP1Code('') }}
+                    className="mt-0.5 h-4 w-4 accent-(--color-primary)" />
+                  <span className="text-sm font-semibold text-amber-900">
+                    …albo oświadczam, że mam skierowanie papierowe (okażę przed wizytą).
+                  </span>
+                </label>
+              </div>
             )}
             <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
               <input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)}
@@ -224,7 +233,8 @@ export function RezerwacjaPubliczna() {
               </span>
             </label>
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-            <Button size="lg" className="w-full" disabled={book.isPending || peselBad || !phoneVerified} type="submit">
+            <Button size="lg" className="w-full" type="submit"
+              disabled={book.isPending || peselBad || !phoneVerified || (slot.referral_required && !p1Code.trim() && !externalRef)}>
               {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu'
                 : slot.price != null ? `Rezerwuję i płacę (${slot.price} zł)` : 'Rezerwuję termin'}
             </Button>

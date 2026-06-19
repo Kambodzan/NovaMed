@@ -242,6 +242,8 @@ export function Umow() {
   const [refDocId, setRefDocId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get('refDoc'))
   const [externalRef, setExternalRef] = useState(false)
+  const [p1Mode, setP1Mode] = useState(false)   // e-skierowanie z P1 (kod)
+  const [p1Code, setP1Code] = useState('')
   const [locQuery, setLocQuery] = useState('')
   const [locError, setLocError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
@@ -488,8 +490,9 @@ export function Umow() {
         reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
         // skierowanie podpinamy i przy badaniu (referral_required), i przy wizycie
         // u specjalisty (SPECIALIST → backend oznaczy je REALIZED)
-        referral_document_id: refDocId && !externalRef ? refDocId : null,
+        referral_document_id: refDocId && !externalRef && !p1Mode ? refDocId : null,
         external_referral: !!slot?.referral_required && externalRef,
+        p1_referral_code: p1Mode && p1Code.trim() ? p1Code.trim() : null,
         hold_token: holdToken,
       },
     }),
@@ -834,8 +837,8 @@ export function Umow() {
                     {(myReferrals ?? []).map(r => (
                       <label key={r.document_id} className="flex cursor-pointer items-start gap-2.5">
                         <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
-                          checked={!externalRef && refDocId === r.document_id}
-                          onChange={() => { setRefDocId(r.document_id); setExternalRef(false) }} />
+                          checked={!externalRef && !p1Mode && refDocId === r.document_id}
+                          onChange={() => { setRefDocId(r.document_id); setExternalRef(false); setP1Mode(false) }} />
                         <span className="text-sm font-semibold text-gray-700">
                           {t('Skierowanie z NovaMed')}: {r.details ?? r.code ?? `#${r.document_id}`}
                           <span className="block text-xs font-medium text-gray-500">
@@ -844,10 +847,26 @@ export function Umow() {
                         </span>
                       </label>
                     ))}
+                    {/* e-skierowanie z P1 (np. od lekarza rodzinnego) — weryfikowane kodem */}
+                    <label className="flex cursor-pointer items-start gap-2.5">
+                      <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                        checked={p1Mode}
+                        onChange={() => { setP1Mode(true); setExternalRef(false); setRefDocId(null) }} />
+                      <span className="text-sm font-semibold text-gray-700">
+                        {t('Mam e-skierowanie (kod z P1)')}
+                      </span>
+                    </label>
+                    {p1Mode && (
+                      <input
+                        className={cx(inputCls, 'ml-7 w-[calc(100%-1.75rem)]')}
+                        value={p1Code} maxLength={20} autoFocus
+                        onChange={e => setP1Code(e.target.value)}
+                        placeholder={t('Kod e-skierowania, np. 4821')} />
+                    )}
                     <label className="flex cursor-pointer items-start gap-2.5">
                       <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
                         checked={externalRef}
-                        onChange={() => { setExternalRef(true); setRefDocId(null) }} />
+                        onChange={() => { setExternalRef(true); setRefDocId(null); setP1Mode(false) }} />
                       <span className="text-sm font-semibold text-gray-700">
                         {t('Oświadczam, że mam skierowanie zewnętrzne (okażę przed badaniem)')}
                       </span>
@@ -896,7 +915,7 @@ export function Umow() {
                     : t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}
                 </p>
                 <Button size="lg"
-                  disabled={book.isPending || (slot.referral_required && !externalRef && !refDocId)}
+                  disabled={book.isPending || (slot.referral_required && !externalRef && !refDocId && !(p1Mode && p1Code.trim()))}
                   onClick={() => book.mutate(slot.appointment_id)}>
                   {book.isPending ? t('Rezerwowanie…') : slot.price ? t('Rezerwuję i przechodzę do płatności') : t('Rezerwuję termin')}
                 </Button>

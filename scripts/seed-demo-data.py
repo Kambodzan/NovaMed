@@ -207,6 +207,21 @@ if nursing_ref:
 upcoming_visit(piastow, kow_id, jan_id, days_ahead=6, hour=9, service_id=KARD)
 upcoming_visit(piastow, kow_id, jan_id, days_ahead=20, hour=11, online=True, service_id=KARD)
 
+# --- e-skierowania zewnętrzne w P1 (od „lekarza rodzinnego") — do rezerwacji NFZ
+# u specjalisty kodem. Mock P1 trzyma je w pamięci; po jego
+# restarcie odpal seed ponownie. Janina może umówić kardiologa kodem SKIER-KARD.
+print("E-skierowania zewnętrzne w P1…")
+try:
+    jan_pesel = api("GET", f"/patients/{jan_id}", reg).json()["pesel"]
+    tom_pesel = api("GET", f"/patients/{tom_id}", reg).json()["pesel"]
+    for code, pesel, spec in [("SKIER-KARD", jan_pesel, "Kardiolog"),
+                              ("SKIER-INT", tom_pesel, "Internista")]:
+        r = httpx.post(f"{settings.p1_base_url.rstrip('/')}/api/v1/external-referrals",
+                       json={"code": code, "pesel": pesel, "specialization": spec}, timeout=10)
+        print(f"  {code} → {spec}: {r.status_code}")
+except (httpx.HTTPError, KeyError) as exc:
+    print(f"  ! pominięto (P1-mock niedostępny?): {exc}")
+
 # --- Tomasz: wizyta zakończona (Internista Zieliński, Piastów) ---------------
 print("Tomasz — wizyta, dokumenty, opinia…")
 t1 = completed_visit(piastow, ziel, ziel_id, tom_id, days_ago=9, note=(
