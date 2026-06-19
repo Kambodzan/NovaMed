@@ -259,6 +259,10 @@ def test_p1_skierowanie_pasujace_realizuje(client, setup, integration_fakes, db_
     assert r.status_code == 200, r.text
     assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
     assert integration_fakes.p1._docs["SKR1"]["used"] is True  # zużyte (jednorazowe)
+    # zrealizowane skierowanie zapisane w dokumentacji pacjenta (REALIZED, kod z P1)
+    docs = client.get("/documents/my", headers=auth_header(setup["patient_token"])).json()
+    ref = next((d for d in docs if d["document_type"] == "REFERRAL" and d["code"] == "SKR1"), None)
+    assert ref is not None and ref["document_status"] == "REALIZED"
 
 
 def test_p1_skierowanie_zla_specjalizacja_odrzucone(client, setup, integration_fakes, db_session):

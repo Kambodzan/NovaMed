@@ -157,7 +157,9 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         issued_at=doc.issued_at,
         patient_id=doc.patient_id,
         patient_name=f"{patient.first_name} {patient.last_name}",
-        doctor_name=doctor_user.username if doctor_user else "Rejestracja (wynik zewnętrzny)",
+        doctor_name=(doctor_user.username if doctor_user
+                     else "Skierowanie zewnętrzne (P1)" if doc.document_type == DocumentType.REFERRAL.value
+                     else "Rejestracja (wynik zewnętrzny)"),
         code=code,
         details=details,
         referral_type=referral_type,

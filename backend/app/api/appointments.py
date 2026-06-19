@@ -454,9 +454,24 @@ def apply_p1_referral(db: Session, p1: P1Client, a: Appointment, patient_id: UUI
         targets = list(doctor.specialization_names) if doctor else []
     if a.service_name:
         targets.append(a.service_name)
-    verify_p1_referral(p1, code, pesel=patient.pesel if patient else "", targets=targets)
+    doc_p1 = verify_p1_referral(p1, code, pesel=patient.pesel if patient else "", targets=targets)
     consume_p1_referral(p1, code)
     a.external_referral = True
+    # zapis zrealizowanego e-skierowania w dokumentacji pacjenta — żeby było widoczne
+    # w „Skierowaniach" jak skierowanie z NovaMed (status REALIZED = już wykorzystane)
+    from app.api.documents import new_document  # import lokalny — unika cyklu
+    from app.domain.documents import DocumentStatus, DocumentType
+    from app.models import Referral
+    spec = doc_p1.get("specialization") or a.service_name or "wizyta"
+    doc = new_document(None, patient_id, a.appointment_id, DocumentType.REFERRAL, DocumentStatus.REALIZED)
+    db.add(doc)
+    db.flush()
+    db.add(Referral(
+        document_id=doc.document_id, referral_code=code,
+        referral_type="SPECIALIST" if a.doctor_id is not None else "LAB",
+        notes=f"{spec} — e-skierowanie zewnętrzne z P1 (zrealizowane przy rezerwacji)",
+    ))
+    a.referral_document_id = doc.document_id
 
 
 @router.post("/appointments/{appointment_id}/book", response_model=BookOut)
