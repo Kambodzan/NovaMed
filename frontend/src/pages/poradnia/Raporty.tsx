@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Download, FileText } from 'lucide-react'
-import { Button, EmptyState, Loading, PageHeader, Tile, TileHeader, Overline, cx, inputCls } from '../../ui'
+import { Button, EmptyState, Loading, PageHeader, Tile, TileHeader, Overline, cx } from '../../ui'
 import { API_URL, api, apiText, getAuthToken } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
+import { MonthPicker } from '../../components/MonthPicker'
 import type { ReportOut } from '../../lib/types'
 
 const currentMonth = () => new Date().toISOString().slice(0, 7)
@@ -92,7 +93,7 @@ export function Raporty() {
               ))}
             </div>
             {mode === 'month' ? (
-              <input type="month" className={cx(inputCls, 'w-40')} value={month} onChange={e => setMonth(e.target.value)} />
+              <MonthPicker className="w-44" value={month} onChange={setMonth} />
             ) : (
               <div className="flex items-center gap-1.5">
                 <div className="w-36"><DatePicker value={from} max={to || undefined} onChange={setFrom} /></div>

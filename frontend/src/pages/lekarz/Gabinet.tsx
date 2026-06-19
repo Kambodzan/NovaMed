@@ -502,12 +502,6 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           ) : null}
 
           {/* wystawianie dokumentów — przez cały czas trwania wizyty (też po podpisie noty) */}
-          {active && patientId && (
-            <Tile className="p-5" delay={140}>
-              <TileHeader title="Wystaw dokument" />
-              <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} allergies={patient?.allergies} />
-            </Tile>
-          )}
         </div>
 
         {confirm === 'NO_SHOW' && (
@@ -583,6 +577,15 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           </Modal>
         )}
 
+        <div className="space-y-4">
+        {/* wystawianie dokumentów obok „Z tej wizyty" — formularz tuż przy efektach,
+            bez spychania go pod notę (gęstość lewej kolumny) */}
+        {active && patientId && (
+          <Tile className="p-5" delay={110}>
+            <TileHeader title="Wystaw dokument" />
+            <WystawDokument patientId={patientId} appointmentId={id!} hideKinds={['NOTE']} icd10={rozpoznanie} allergies={patient?.allergies} />
+          </Tile>
+        )}
         {/* dokumentacja: efekty TEJ wizyty na wierzchu, historia zwinięta
             (za dużo informacji w trakcie pracy = szum) */}
         <Tile className="p-5" delay={120}>
@@ -699,6 +702,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             </div>
           )}
         </Tile>
+        </div>
       </div>
     </div>
   )
