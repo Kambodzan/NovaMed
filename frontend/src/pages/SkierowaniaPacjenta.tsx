@@ -2,12 +2,11 @@
 // „Umów" otwiera modal z wolnymi terminami NFZ dopasowanymi do typu skierowania
 // (LAB → badania, SPECIALIST → wizyta u specjalisty) i rezerwuje z podpiętym
 // skierowaniem — bez przeskakiwania na duży ekran wyszukiwania.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarPlus, Check, FileSignature, MapPin, Video } from 'lucide-react'
-import { Button, DateChip, EmptyState, Loading, Modal, Overline, StatusBadge, Tile, cx } from '../ui'
-import { Select } from '../components/Select'
+import { CalendarPlus, Check, ChevronDown, FileSignature, FlaskConical } from 'lucide-react'
+import { Avatar, Button, EmptyState, Loading, Modal, Overline, StatusBadge, Tile, cx } from '../ui'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { api, ApiError } from '../lib/api'
 import { useFamily } from '../lib/family'
@@ -117,7 +116,6 @@ function UmowZeSkierowania({ doc, onClose, onBooked }: {
   const { asPatient } = useFamily()
   const isLab = doc.referral_type === 'LAB'
   const [spec, setSpec] = useState('')
-  const [showAll, setShowAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const { data: slots } = useQuery({
@@ -125,19 +123,36 @@ function UmowZeSkierowania({ doc, onClose, onBooked }: {
     queryFn: () => api<AppointmentOut[]>('/slots'),
   })
   // skierowanie = świadczenie NFZ (bezpłatne); LAB → badania, SPECIALIST → wizyty
-  const nfz = (slots ?? []).filter(s => s.price == null)
-  const specs = isLab ? [] : [...new Set(nfz.filter(s => s.service_name == null).flatMap(s => s.specializations))].sort()
-  const matched = nfz.filter(s =>
-    (isLab ? s.service_name != null : s.service_name == null)
-    && (isLab || !spec || s.specializations.includes(spec)),
-  ).sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))
+  const nfz = (slots ?? []).filter(s => s.price == null && (isLab ? s.service_name != null : s.service_name == null))
+  const specs = isLab ? [] : [...new Set(nfz.flatMap(s => s.specializations))].sort()
+  const filtered = nfz.filter(s => isLab || !spec || s.specializations.includes(spec))
+
+  // grupowanie po lekarzu (SPECIALIST) / badaniu (LAB) → dni → terminy
+  const groups = useMemo(() => {
+    const map = new Map<string, { key: string; name: string; sub: string | null; days: Map<string, AppointmentOut[]> }>()
+    for (const s of filtered) {
+      const key = (isLab ? s.service_name : s.doctor_id) ?? ''
+      const cur = map.get(key) ?? {
+        key, name: (isLab ? s.service_name : s.doctor_name) ?? '',
+        sub: isLab ? null : (s.specializations.join(' · ') || null),
+        days: new Map<string, AppointmentOut[]>(),
+      }
+      const day = s.appointment_datetime.slice(0, 10)
+      cur.days.set(day, [...(cur.days.get(day) ?? []), s])
+      map.set(key, cur)
+    }
+    return [...map.values()].map(g => ({
+      ...g,
+      days: [...g.days.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([d, l]) => [d, l.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
+    }))
+  }, [filtered, isLab])
 
   const book = useMutation({
-    mutationFn: (id: string) => api(asPatient(`/appointments/${id}/book`), {
+    mutationFn: (s: AppointmentOut) => api(asPatient(`/appointments/${s.appointment_id}/book`), {
       method: 'POST', body: { referral_document_id: doc.document_id },
     }),
-    onSuccess: (_d, id) => {
-      const s = matched.find(x => x.appointment_id === id)!
+    onSuccess: (_d, s) => {
       void queryClient.invalidateQueries({ queryKey: ['my-documents'] })
       void queryClient.invalidateQueries({ queryKey: ['my-appointments'] })
       void queryClient.invalidateQueries({ queryKey: ['slots'] })
@@ -148,46 +163,93 @@ function UmowZeSkierowania({ doc, onClose, onBooked }: {
 
   return (
     <Modal
+      wide
       overline={`${doc.doctor_name} · ${formatDatePL(doc.issued_at)}`}
       title={isLab ? t('Umów badanie ze skierowania') : t('Umów wizytę ze skierowania')}
       onClose={onClose}
     >
       <div className="space-y-3 pb-2">
-        <p className="rounded-2xl bg-primary-soft px-4 py-3 text-sm font-medium text-gray-700">{doc.details}</p>
+        <div className="flex items-start gap-2.5 rounded-2xl bg-primary-soft px-4 py-3">
+          <FileSignature size={16} className="mt-0.5 shrink-0 text-primary" />
+          <p className="text-sm font-medium text-gray-700">{doc.details}</p>
+        </div>
+
         {!isLab && specs.length > 1 && (
-          <Select value={spec} onChange={setSpec} ariaLabel={t('Specjalizacja')}
-            options={[{ value: '', label: t('Wszystkie specjalizacje') }, ...specs.map(s => ({ value: s, label: s }))]} />
-        )}
-        {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-        {slots === undefined ? <Loading /> : matched.length === 0 ? (
-          <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">
-            {t('Brak wolnych terminów NFZ dla tego skierowania. Wróć później — terminy pojawiają się na bieżąco.')}
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {matched.slice(0, showAll ? undefined : 8).map(s => (
-              <li key={s.appointment_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
-                <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-bold text-gray-900">{isLab ? s.service_name : s.doctor_name}</span>
-                  <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-gray-500">
-                    {!isLab && s.appointment_type === 'ONLINE' ? <><Video size={12} /> {t('teleporada')}</> : <><MapPin size={12} /> {s.clinic_name}</>}
-                    {!isLab && s.specializations.length ? ` · ${s.specializations.join(' · ')}` : ''}
-                  </span>
-                </span>
-                <Button size="sm" disabled={book.isPending} onClick={() => book.mutate(s.appointment_id)}>{t('Wybierz')}</Button>
-              </li>
+          <div className="flex flex-wrap gap-1.5">
+            {[{ v: '', l: t('Wszyscy') }, ...specs.map(s => ({ v: s, l: s }))].map(o => (
+              <button key={o.v} onClick={() => setSpec(o.v)}
+                className={cx('cursor-pointer rounded-full px-3 py-1.5 text-xs font-extrabold transition-colors',
+                  spec === o.v ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                {o.l}
+              </button>
             ))}
-            {!showAll && matched.length > 8 && (
-              <li className={cx('text-center')}>
-                <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
-                  {t('Pokaż więcej terminów')} ({matched.length - 8})
-                </Button>
-              </li>
-            )}
-          </ul>
+          </div>
+        )}
+
+        {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+
+        {slots === undefined ? <Loading /> : groups.length === 0 ? (
+          <EmptyState icon={<CalendarPlus size={26} strokeWidth={1.5} />} title={t('Brak wolnych terminów NFZ')}
+            hint={t('Wróć później — terminy pojawiają się na bieżąco.')} />
+        ) : (
+          <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+            {groups.map((g, i) => (
+              <ProviderSlots key={g.key} g={g} isLab={isLab} defaultOpen={groups.length === 1 || i === 0}
+                busy={book.isPending} onPick={s => book.mutate(s)} />
+            ))}
+          </div>
         )}
       </div>
     </Modal>
+  )
+}
+
+function ProviderSlots({ g, isLab, defaultOpen, busy, onPick }: {
+  g: { name: string; sub: string | null; days: ReadonlyArray<readonly [string, AppointmentOut[]]> }
+  isLab: boolean
+  defaultOpen: boolean
+  busy: boolean
+  onPick: (s: AppointmentOut) => void
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const nearest = g.days[0][1][0]
+  const initials = g.name.replace(/^(dr|lek\.)\s+/i, '').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+  return (
+    <div className="rounded-2xl bg-gray-50">
+      <button onClick={() => setOpen(o => !o)} className="flex w-full cursor-pointer items-center gap-3 p-3.5 text-left">
+        {isLab ? (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary"><FlaskConical size={16} /></span>
+        ) : (
+          <Avatar initials={initials} size="sm" />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-bold text-gray-900">{g.name}</span>
+          {g.sub && <span className="block truncate text-xs font-semibold text-gray-500">{g.sub}</span>}
+        </span>
+        <span className="shrink-0 text-xs font-extrabold text-primary">
+          {dayNo(nearest.appointment_datetime)} {monthShort(nearest.appointment_datetime)}, {formatTime(nearest.appointment_datetime)}
+        </span>
+        <ChevronDown size={15} className={cx('shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="grid grid-cols-3 gap-2 border-t border-gray-200/70 p-3.5 pt-3">
+          {g.days.slice(0, 3).map(([day, list]) => (
+            <div key={day} className="min-w-0">
+              <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
+                {dayNo(day + 'T00:00:00')} {monthShort(day + 'T00:00:00')}
+              </p>
+              <div className="flex flex-col gap-1">
+                {list.slice(0, 5).map(s => (
+                  <button key={s.appointment_id} disabled={busy} onClick={() => onPick(s)}
+                    className="cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
+                    {formatTime(s.appointment_datetime)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
