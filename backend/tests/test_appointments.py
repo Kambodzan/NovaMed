@@ -505,8 +505,9 @@ def test_reschedule_innego_lekarza_odrzucony(client, setup, factory):
     assert r.status_code == 409 and "lekarza" in r.json()["detail"].lower()
 
 
-def test_book_for_badanie_wymaga_skierowania(client, setup):
-    """Rejestracja umawia badanie NFZ: bez skierowania 409, z oświadczeniem zewn. 200."""
+def test_book_for_badanie_wymaga_skierowania(client, setup, integration_fakes):
+    """Rejestracja umawia badanie NFZ: bez skierowania 409; papierowe oświadczenie na
+    NFZ też 409 (refundacja tylko z realnym e-skierowaniem w P1); z kodem z P1 → 200."""
     reg = auth_header(setup["reg_token"])
     dt = (datetime.now() + timedelta(days=3)).replace(hour=8, minute=0, second=0, microsecond=0)
     slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots",
@@ -517,6 +518,11 @@ def test_book_for_badanie_wymaga_skierowania(client, setup):
     sid = slot["appointment_id"]
     # bez wskazania skierowania → 409
     assert client.post(f"/appointments/{sid}/book-for", json={"patient_id": pid}, headers=reg).status_code == 409
-    # z oświadczeniem o skierowaniu zewnętrznym → 200
-    r = client.post(f"/appointments/{sid}/book-for", json={"patient_id": pid, "external_referral": True}, headers=reg)
+    # papierowe oświadczenie na NFZ nie daje refundacji → 409
+    deny = client.post(f"/appointments/{sid}/book-for", json={"patient_id": pid, "external_referral": True}, headers=reg)
+    assert deny.status_code == 409 and "e-skierowanie" in deny.json()["detail"]
+    # z kodem e-skierowania z P1 → 200
+    code = integration_fakes.p1.issue_referral(pesel="90010112345", doctor_pwz="1234567",
+                                               icd10="I10", referral_type="LAB", notes="USG")
+    r = client.post(f"/appointments/{sid}/book-for", json={"patient_id": pid, "p1_referral_code": code}, headers=reg)
     assert r.status_code == 200 and r.json()["appointment_status"] == "CONFIRMED"

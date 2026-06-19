@@ -287,3 +287,32 @@ def test_p1_skierowanie_nieznany_kod_odrzucone(client, setup, integration_fakes,
     r = client.post(f"/appointments/{slot['appointment_id']}/book",
                     json={"p1_referral_code": "NICEMA"}, headers=auth_header(setup["patient_token"]))
     assert r.status_code == 409 and "Nie znaleziono" in r.json()["detail"]
+
+
+def test_nfz_odrzuca_papierowe_oswiadczenie(client, setup, db_session):
+    """NFZ (termin bez ceny) — papierowe oświadczenie nie daje refundacji; tylko kod P1."""
+    slot = _referral_slot(client, setup, db_session)  # usługa NFZ (price=None) ze skierowaniem
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"external_referral": True}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 409 and "e-skierowanie" in r.json()["detail"]
+
+
+def test_platne_dopuszcza_papierowe_oswiadczenie(client, setup, db_session):
+    """Płatne badanie ze skierowaniem (usługa z ceną) — papierowe oświadczenie jest OK
+    (brak refundacji NFZ → nie wymuszamy realnego e-skierowania z P1)."""
+    from app.models import DoctorService, Service
+    svc = Service(clinic_id=setup["clinic"].clinic_id, name="TK głowy (prywatnie)",
+                  duration_min=20, price=400, referral_required=True, active=True)
+    db_session.add(svc)
+    db_session.flush()
+    db_session.add(DoctorService(doctor_id=setup["doctor"].user_id, service_id=svc.service_id))
+    db_session.commit()
+    dt = (datetime.now() + timedelta(days=3)).replace(hour=10, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots",
+                       json={"doctor_id": str(setup["doctor"].user_id), "service_id": str(svc.service_id),
+                             "datetimes": [dt.isoformat()]},
+                       headers=auth_header(setup["reg_token"])).json()[0]
+    assert slot["referral_required"] is True and slot["price"] == 400
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"external_referral": True}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 200  # płatne — oświadczenie dopuszczalne (slot przechodzi do płatności)

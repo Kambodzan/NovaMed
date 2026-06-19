@@ -520,6 +520,14 @@ def book_appointment(
         elif p1_code:
             apply_p1_referral(db, p1, a, patient_id, p1_code)
         else:
+            # NFZ (termin bez ceny): refundacja przysługuje tylko z realnym e-skierowaniem
+            # w P1 — papierowe oświadczenie honorowe nie wystarcza.
+            if a.price is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Na NFZ wymagane jest e-skierowanie (podaj kod z P1) — "
+                           "papierowe oświadczenie nie daje refundacji.",
+                )
             a.external_referral = True
 
     # skierowanie do specjalisty (SPECIALIST): rezerwacja WIZYTY (nie badania) realizuje
@@ -716,6 +724,13 @@ def book_for_patient(
         elif p1_code:
             apply_p1_referral(db, p1, a, body.patient_id, p1_code)
         else:
+            # NFZ — papierowe oświadczenie nie daje refundacji; tylko e-skierowanie z P1.
+            if a.price is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Na NFZ wymagane jest e-skierowanie (podaj kod z P1) — "
+                           "papierowe oświadczenie nie daje refundacji.",
+                )
             a.external_referral = True
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]

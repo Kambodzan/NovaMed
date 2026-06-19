@@ -144,7 +144,7 @@ def test_slot_poza_siatka_odrzucony(client, setup):
     ).status_code == 201
 
 
-def test_badania_diagnostyczne_ze_skierowaniem(client, setup, factory):
+def test_badania_diagnostyczne_ze_skierowaniem(client, setup, factory, integration_fakes):
     dt = (datetime.now() + timedelta(days=4)).replace(hour=8, minute=0, second=0, microsecond=0)
     # slot badania: pracownia placówki (bez lekarza), RTG wymaga skierowania
     r = client.post(
@@ -163,9 +163,16 @@ def test_badania_diagnostyczne_ze_skierowaniem(client, setup, factory):
                        headers=auth_header(setup["patient_token"]))
     assert deny.status_code == 409 and "skierowania" in deny.json()["detail"]
 
-    # oświadczenie o zewnętrznym skierowaniu = OK
+    # papierowe oświadczenie na NFZ nie daje refundacji = 409 (tylko realne e-skierowanie z P1)
+    paper = client.post(f"/appointments/{rtg1['appointment_id']}/book",
+                        json={"external_referral": True}, headers=auth_header(setup["patient_token"]))
+    assert paper.status_code == 409 and "e-skierowanie" in paper.json()["detail"]
+
+    # kod e-skierowania z P1 = OK
+    code = integration_fakes.p1.issue_referral(pesel="90010112345", doctor_pwz="1234567",
+                                               icd10="J18", referral_type="LAB", notes="RTG")
     ok = client.post(f"/appointments/{rtg1['appointment_id']}/book",
-                     json={"external_referral": True}, headers=auth_header(setup["patient_token"]))
+                     json={"p1_referral_code": code}, headers=auth_header(setup["patient_token"]))
     assert ok.status_code == 200
     assert ok.json()["appointment"]["appointment_status"] == "CONFIRMED"
 

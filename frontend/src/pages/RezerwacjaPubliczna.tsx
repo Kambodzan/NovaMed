@@ -92,7 +92,8 @@ export function RezerwacjaPubliczna() {
         appointment_id: slot!.appointment_id,
         ...form,
         reason: form.reason.trim() || null,
-        external_referral: externalRef,
+        // NFZ (termin bez ceny) — papierowe oświadczenie nie daje refundacji; tylko kod P1.
+        external_referral: slot!.price != null && externalRef,
         p1_referral_code: p1Code.trim() || null,
         hold_token: holdToken,
       },
@@ -189,7 +190,7 @@ export function RezerwacjaPubliczna() {
           <p className="mb-4 text-xs font-semibold text-gray-500">
             Ten termin jest teraz zarezerwowany dla Ciebie — dokończ rezerwację w ciągu kilku minut.
           </p>
-          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified && (!slot.referral_required || !!p1Code.trim() || externalRef)) book.mutate() }}>
+          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified && (!slot.referral_required || (slot.price == null ? !!p1Code.trim() : (!!p1Code.trim() || externalRef)))) book.mutate() }}>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Imię"><input className={inputCls} required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} /></Field>
               <Field label="Nazwisko"><input className={inputCls} required value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></Field>
@@ -211,18 +212,32 @@ export function RezerwacjaPubliczna() {
             </Field>
             {slot.referral_required && (
               <div className="space-y-2 rounded-2xl bg-amber-50 px-4 py-3">
-                <p className="text-sm font-bold text-amber-900">Na NFZ wymagane jest skierowanie:</p>
-                <input className={cx(inputCls, 'bg-white')} value={p1Code} maxLength={20}
-                  placeholder="Kod e-skierowania z P1 (np. 4821)"
-                  onChange={e => { setP1Code(e.target.value); if (e.target.value.trim()) setExternalRef(false) }} />
-                <label className="flex cursor-pointer items-start gap-2.5">
-                  <input type="checkbox" checked={externalRef}
-                    onChange={e => { setExternalRef(e.target.checked); if (e.target.checked) setP1Code('') }}
-                    className="mt-0.5 h-4 w-4 accent-(--color-primary)" />
-                  <span className="text-sm font-semibold text-amber-900">
-                    …albo oświadczam, że mam skierowanie papierowe (okażę przed wizytą).
-                  </span>
-                </label>
+                {slot.price == null ? (
+                  // NFZ — refundacja tylko z e-skierowaniem w P1; oświadczenie papierowe nie wchodzi w grę.
+                  <>
+                    <p className="text-sm font-bold text-amber-900">Refundacja NFZ wymaga e-skierowania z P1:</p>
+                    <input className={cx(inputCls, 'bg-white')} value={p1Code} maxLength={20}
+                      placeholder="Kod e-skierowania z P1 (np. 4821)"
+                      onChange={e => setP1Code(e.target.value)} />
+                    <p className="text-xs font-medium text-amber-700">Kod otrzymasz od lekarza, który wystawił skierowanie (np. rodzinny).</p>
+                  </>
+                ) : (
+                  // Płatne — można podać kod P1 albo oświadczyć skierowanie papierowe.
+                  <>
+                    <p className="text-sm font-bold text-amber-900">To badanie wymaga skierowania:</p>
+                    <input className={cx(inputCls, 'bg-white')} value={p1Code} maxLength={20}
+                      placeholder="Kod e-skierowania z P1 (np. 4821)"
+                      onChange={e => { setP1Code(e.target.value); if (e.target.value.trim()) setExternalRef(false) }} />
+                    <label className="flex cursor-pointer items-start gap-2.5">
+                      <input type="checkbox" checked={externalRef}
+                        onChange={e => { setExternalRef(e.target.checked); if (e.target.checked) setP1Code('') }}
+                        className="mt-0.5 h-4 w-4 accent-(--color-primary)" />
+                      <span className="text-sm font-semibold text-amber-900">
+                        …albo oświadczam, że mam skierowanie papierowe (okażę przed wizytą).
+                      </span>
+                    </label>
+                  </>
+                )}
               </div>
             )}
             <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
@@ -234,7 +249,7 @@ export function RezerwacjaPubliczna() {
             </label>
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
             <Button size="lg" className="w-full" type="submit"
-              disabled={book.isPending || peselBad || !phoneVerified || (slot.referral_required && !p1Code.trim() && !externalRef)}>
+              disabled={book.isPending || peselBad || !phoneVerified || (slot.referral_required && (slot.price == null ? !p1Code.trim() : (!p1Code.trim() && !externalRef)))}>
               {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu'
                 : slot.price != null ? `Rezerwuję i płacę (${slot.price} zł)` : 'Rezerwuję termin'}
             </Button>
@@ -336,7 +351,9 @@ function PublicCard({ c, onPick, disabled }: {
           {sel?.referral && (
             <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
               <FileSignature size={13} className="mt-0.5 shrink-0" />
-              Ta usługa na NFZ wymaga skierowania — podasz je (kod e-skierowania lub oświadczenie) przy rezerwacji.
+              {sel.price == null
+                ? 'Ta usługa na NFZ wymaga skierowania — przy rezerwacji podasz kod e-skierowania z P1.'
+                : 'Ta usługa wymaga skierowania — podasz kod e-skierowania z P1 albo oświadczysz skierowanie papierowe.'}
             </p>
           )}
           <div className="grid grid-cols-3 gap-2">

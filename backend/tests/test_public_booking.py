@@ -124,13 +124,20 @@ def test_gosc_z_wizyta_widoczny_na_liscie_placowki(client, setup, factory):
     assert any(p["patient_id"] == pid for p in after)
 
 
-def test_gosc_nfz_badanie_wymaga_skierowania(client, setup):
+def test_gosc_nfz_badanie_wymaga_skierowania(client, setup, integration_fakes):
     exam = make_slot(client, setup, hour=8, service_name="RTG klatki piersiowej")
     deny = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"]})
-    assert deny.status_code == 409 and "skierowania" in deny.json()["detail"]
+    assert deny.status_code == 409 and "e-skierowanie" in deny.json()["detail"]
     verify_phone(client, GUEST["phone_number"], "BOOKING")
+    # papierowe oświadczenie na NFZ nie daje refundacji → 409
+    paper = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"],
+                                              "external_referral": True})
+    assert paper.status_code == 409 and "e-skierowanie" in paper.json()["detail"]
+    # kod e-skierowania z P1 → 200, bez płatności (NFZ)
+    code = integration_fakes.p1.issue_referral(pesel=GUEST["pesel"], doctor_pwz="1234567",
+                                               icd10="J18", referral_type="LAB", notes="RTG")
     ok = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"],
-                                           "external_referral": True})
+                                           "p1_referral_code": code})
     assert ok.status_code == 200
     assert ok.json()["appointment"]["appointment_status"] == "CONFIRMED"
     assert ok.json()["payment"] is None  # NFZ — bez płatności

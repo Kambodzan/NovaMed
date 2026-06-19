@@ -90,6 +90,9 @@ export function UmowWizyte() {
     enabled: !!clinic,
   })
   const needsReferral = !!slot?.referral_required
+  // NFZ (termin bez ceny) — refundacja wymaga e-skierowania w P1; jedyną ścieżką jest kod.
+  // Płatne — pełna elastyczność (skierowanie z NovaMed / kod P1 / papierowe oświadczenie).
+  const isNfz = !slot?.price
   const { data: patientDocs } = useQuery({
     queryKey: ['patient-docs', picked?.patient_id],
     queryFn: () => api<DocumentOut[]>(`/patients/${picked!.patient_id}/documents`),
@@ -150,9 +153,9 @@ export function UmowWizyte() {
       method: 'POST',
       body: {
         patient_id: picked!.patient_id, reason: reason.trim() || undefined,
-        external_referral: needsReferral && referralChoice === 'external',
-        p1_referral_code: needsReferral && referralChoice === 'p1' && p1Code.trim() ? p1Code.trim() : undefined,
-        referral_document_id: needsReferral && referralChoice && referralChoice !== 'external' && referralChoice !== 'p1' ? referralChoice : undefined,
+        external_referral: needsReferral && !isNfz && referralChoice === 'external',
+        p1_referral_code: needsReferral && (isNfz || referralChoice === 'p1') && p1Code.trim() ? p1Code.trim() : undefined,
+        referral_document_id: needsReferral && !isNfz && referralChoice && referralChoice !== 'external' && referralChoice !== 'p1' ? referralChoice : undefined,
         hold_token: holdToken,
       },
     }),
@@ -166,7 +169,7 @@ export function UmowWizyte() {
   })
 
   const newValid = newForm.first_name.trim() && newForm.last_name.trim() && /^\d{11}$/.test(newForm.pesel.trim()) && newForm.birth_date && newForm.phone_number.trim().length >= 7
-  const referralBlocked = needsReferral && (!referralChoice || (referralChoice === 'p1' && !p1Code.trim()))
+  const referralBlocked = needsReferral && (isNfz ? !p1Code.trim() : (!referralChoice || (referralChoice === 'p1' && !p1Code.trim())))
   const canBook = picked && slot && !referralBlocked
 
   return (
@@ -297,8 +300,15 @@ export function UmowWizyte() {
           <Field label="Powód wizyty (opcjonalnie)" hint="trafi do lekarza w grafiku">
             <input className={inputCls} value={reason} placeholder="np. kontrola, ból gardła…" onChange={e => setReason(e.target.value)} disabled={!slot} />
           </Field>
-          {needsReferral && (
-            <Field label="Skierowanie" hint="ta wizyta/badanie NFZ wymaga skierowania">
+          {needsReferral && (isNfz ? (
+            // NFZ — jedyny dokument to e-skierowanie z P1 (kod), obowiązkowo.
+            <Field label="Skierowanie" hint="refundacja NFZ wymaga e-skierowania z P1">
+              <input className={inputCls} value={p1Code} maxLength={20}
+                placeholder="Kod e-skierowania z P1 (np. 4821)" onChange={e => setP1Code(e.target.value)} />
+            </Field>
+          ) : (
+            // Płatne — skierowanie z NovaMed (na koncie) / kod P1 / papierowe oświadczenie.
+            <Field label="Skierowanie" hint="to badanie wymaga skierowania">
               <Select value={referralChoice} onChange={setReferralChoice} placeholder="Wybierz skierowanie…"
                 options={[
                   ...referrals.map(r => ({ value: r.document_id, label: `e-skierowanie${r.code ? ` ${r.code}` : ''}`, hint: r.details ?? undefined })),
@@ -310,7 +320,7 @@ export function UmowWizyte() {
                   placeholder="Kod e-skierowania z P1 (np. 4821)" onChange={e => setP1Code(e.target.value)} />
               )}
             </Field>
-          )}
+          ))}
           <div className="flex flex-wrap items-center gap-3">
             <Button size="lg" disabled={!canBook || book.isPending} onClick={() => book.mutate()}>
               <CalendarCheck size={17} /> {book.isPending ? 'Umawianie…' : 'Umów wizytę'}

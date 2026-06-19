@@ -269,6 +269,15 @@ const EN: Record<string, string> = {
   'konsultacja u specjalisty': 'consultation with a specialist',
   'RTG, USG, spirometria… — do placówki': 'X-ray, ultrasound, spirometry… — at a location',
   'To badanie wymaga skierowania': 'This test requires a referral',
+  'Ta wizyta na NFZ wymaga e-skierowania': 'This NHF (public) visit requires an e-referral',
+  'To badanie na NFZ wymaga e-skierowania': 'This NHF (public) test requires an e-referral',
+  'Refundacja NFZ przysługuje tylko z e-skierowaniem w systemie P1 — podaj jego kod (od lekarza, który je wystawił).':
+    'Public (NHF) reimbursement requires an e-referral in the P1 system — enter its code (from the doctor who issued it).',
+  'Kod e-skierowania z P1, np. 4821': 'P1 e-referral code, e.g. 4821',
+  'Ta usługa na NFZ wymaga skierowania — przy potwierdzeniu podasz kod e-skierowania z P1.':
+    'This NHF (public) service requires a referral — you will enter the P1 e-referral code at confirmation.',
+  'Ta usługa wymaga skierowania — wskażesz je przy potwierdzeniu (e-skierowanie z P1, z NovaMed lub oświadczenie).':
+    'This service requires a referral — you will indicate it at confirmation (P1 e-referral, NovaMed referral, or a declaration).',
   'Skierowanie z NovaMed': 'NovaMed referral',
   'Oświadczam, że mam skierowanie zewnętrzne (okażę przed badaniem)': 'I declare I have an external referral (will present it before the test)',
   'wymaga skierowania': 'referral required',

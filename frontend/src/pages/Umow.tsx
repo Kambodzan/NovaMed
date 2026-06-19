@@ -168,7 +168,9 @@ function DoctorCard({ d, multiClinic, onPick }: {
           {sel?.referral && (
             <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
               <FileSignature size={13} className="mt-0.5 shrink-0" />
-              {t('Ta usługa na NFZ wymaga skierowania — wskażesz je (kod e-skierowania lub oświadczenie) przy potwierdzeniu.')}
+              {sel.price == null
+                ? t('Ta usługa na NFZ wymaga skierowania — przy potwierdzeniu podasz kod e-skierowania z P1.')
+                : t('Ta usługa wymaga skierowania — wskażesz je przy potwierdzeniu (e-skierowanie z P1, z NovaMed lub oświadczenie).')}
             </p>
           )}
           <div className="mb-2 flex justify-end gap-1">
@@ -486,18 +488,26 @@ export function Umow() {
   }
 
   const book = useMutation({
-    mutationFn: (id: string) => api<BookOut>(asPatient(`/appointments/${id}/book`), {
-      method: 'POST',
-      body: {
-        reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
-        // skierowanie podpinamy i przy badaniu (referral_required), i przy wizycie
-        // u specjalisty (SPECIALIST → backend oznaczy je REALIZED)
-        referral_document_id: refDocId && !externalRef && !p1Mode ? refDocId : null,
-        external_referral: !!slot?.referral_required && externalRef,
-        p1_referral_code: p1Mode && p1Code.trim() ? p1Code.trim() : null,
-        hold_token: holdToken,
-      },
-    }),
+    mutationFn: (id: string) => {
+      // NFZ (termin bez ceny) — refundacja wymaga realnego e-skierowania w P1, jedyną
+      // dopuszczalną ścieżką jest kod P1. Płatne — pełna elastyczność (NovaMed/P1/papier).
+      const refReq = !!slot?.referral_required
+      const isNfz = !slot?.price
+      return api<BookOut>(asPatient(`/appointments/${id}/book`), {
+        method: 'POST',
+        body: {
+          reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
+          // skierowanie podpinamy i przy badaniu (referral_required), i przy wizycie
+          // u specjalisty (SPECIALIST → backend oznaczy je REALIZED)
+          referral_document_id: refReq && !isNfz && refDocId && !externalRef && !p1Mode ? refDocId : null,
+          external_referral: refReq && !isNfz && externalRef,
+          p1_referral_code: refReq
+            ? (isNfz ? (p1Code.trim() || null) : (p1Mode && p1Code.trim() ? p1Code.trim() : null))
+            : null,
+          hold_token: holdToken,
+        },
+      })
+    },
     onSuccess: (data) => {
       setBooked(data)
       setHoldToken(null)  // hold zamienił się w rezerwację
@@ -841,44 +851,64 @@ export function Umow() {
                 </Field>
                 {slot.referral_required && (
                   <div className="space-y-2 rounded-2xl bg-amber-50 px-4 py-3">
-                    <p className="text-sm font-extrabold text-amber-800">{slot.doctor_id ? t('Ta wizyta wymaga skierowania') : t('To badanie wymaga skierowania')}</p>
-                    {(myReferrals ?? []).map(r => (
-                      <label key={r.document_id} className="flex cursor-pointer items-start gap-2.5">
-                        <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
-                          checked={!externalRef && !p1Mode && refDocId === r.document_id}
-                          onChange={() => { setRefDocId(r.document_id); setExternalRef(false); setP1Mode(false) }} />
-                        <span className="text-sm font-semibold text-gray-700">
-                          {t('Skierowanie z NovaMed')}: {r.details ?? r.code ?? `#${r.document_id}`}
-                          <span className="block text-xs font-medium text-gray-500">
-                            {formatDatePL(r.issued_at)}{r.code ? ` · ${r.code}` : ''}
+                    {!slot.price ? (
+                      // NFZ — refundacja wymaga e-skierowania w P1; jedyną opcją jest kod.
+                      <>
+                        <p className="text-sm font-extrabold text-amber-800">
+                          {slot.doctor_id ? t('Ta wizyta na NFZ wymaga e-skierowania') : t('To badanie na NFZ wymaga e-skierowania')}
+                        </p>
+                        <p className="text-xs font-medium text-amber-700">
+                          {t('Refundacja NFZ przysługuje tylko z e-skierowaniem w systemie P1 — podaj jego kod (od lekarza, który je wystawił).')}
+                        </p>
+                        <input
+                          className={cx(inputCls, 'w-full')}
+                          value={p1Code} maxLength={20} autoFocus
+                          onChange={e => setP1Code(e.target.value)}
+                          placeholder={t('Kod e-skierowania z P1, np. 4821')} />
+                      </>
+                    ) : (
+                      // Płatne — pełna elastyczność: skierowanie z NovaMed / kod P1 / oświadczenie.
+                      <>
+                        <p className="text-sm font-extrabold text-amber-800">{slot.doctor_id ? t('Ta wizyta wymaga skierowania') : t('To badanie wymaga skierowania')}</p>
+                        {(myReferrals ?? []).map(r => (
+                          <label key={r.document_id} className="flex cursor-pointer items-start gap-2.5">
+                            <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                              checked={!externalRef && !p1Mode && refDocId === r.document_id}
+                              onChange={() => { setRefDocId(r.document_id); setExternalRef(false); setP1Mode(false) }} />
+                            <span className="text-sm font-semibold text-gray-700">
+                              {t('Skierowanie z NovaMed')}: {r.details ?? r.code ?? `#${r.document_id}`}
+                              <span className="block text-xs font-medium text-gray-500">
+                                {formatDatePL(r.issued_at)}{r.code ? ` · ${r.code}` : ''}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                        {/* e-skierowanie z P1 (np. od lekarza rodzinnego) — weryfikowane kodem */}
+                        <label className="flex cursor-pointer items-start gap-2.5">
+                          <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                            checked={p1Mode}
+                            onChange={() => { setP1Mode(true); setExternalRef(false); setRefDocId(null) }} />
+                          <span className="text-sm font-semibold text-gray-700">
+                            {t('Mam e-skierowanie (kod z P1)')}
                           </span>
-                        </span>
-                      </label>
-                    ))}
-                    {/* e-skierowanie z P1 (np. od lekarza rodzinnego) — weryfikowane kodem */}
-                    <label className="flex cursor-pointer items-start gap-2.5">
-                      <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
-                        checked={p1Mode}
-                        onChange={() => { setP1Mode(true); setExternalRef(false); setRefDocId(null) }} />
-                      <span className="text-sm font-semibold text-gray-700">
-                        {t('Mam e-skierowanie (kod z P1)')}
-                      </span>
-                    </label>
-                    {p1Mode && (
-                      <input
-                        className={cx(inputCls, 'ml-7 w-[calc(100%-1.75rem)]')}
-                        value={p1Code} maxLength={20} autoFocus
-                        onChange={e => setP1Code(e.target.value)}
-                        placeholder={t('Kod e-skierowania, np. 4821')} />
+                        </label>
+                        {p1Mode && (
+                          <input
+                            className={cx(inputCls, 'ml-7 w-[calc(100%-1.75rem)]')}
+                            value={p1Code} maxLength={20} autoFocus
+                            onChange={e => setP1Code(e.target.value)}
+                            placeholder={t('Kod e-skierowania, np. 4821')} />
+                        )}
+                        <label className="flex cursor-pointer items-start gap-2.5">
+                          <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
+                            checked={externalRef}
+                            onChange={() => { setExternalRef(true); setRefDocId(null); setP1Mode(false) }} />
+                          <span className="text-sm font-semibold text-gray-700">
+                            {t('Oświadczam, że mam skierowanie zewnętrzne (okażę przed badaniem)')}
+                          </span>
+                        </label>
+                      </>
                     )}
-                    <label className="flex cursor-pointer items-start gap-2.5">
-                      <input type="radio" name="referral" className="mt-0.5 h-4 w-4 accent-(--color-primary)"
-                        checked={externalRef}
-                        onChange={() => { setExternalRef(true); setRefDocId(null); setP1Mode(false) }} />
-                      <span className="text-sm font-semibold text-gray-700">
-                        {t('Oświadczam, że mam skierowanie zewnętrzne (okażę przed badaniem)')}
-                      </span>
-                    </label>
                   </div>
                 )}
                 {slot.appointment_type !== 'ONLINE' && !slot.service_name && slot.allow_online && (
@@ -923,7 +953,9 @@ export function Umow() {
                     : t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}
                 </p>
                 <Button size="lg"
-                  disabled={book.isPending || (slot.referral_required && !externalRef && !refDocId && !(p1Mode && p1Code.trim()))}
+                  disabled={book.isPending || (slot.referral_required && (
+                    !slot.price ? !p1Code.trim() : (!externalRef && !refDocId && !(p1Mode && p1Code.trim()))
+                  ))}
                   onClick={() => book.mutate(slot.appointment_id)}>
                   {book.isPending ? t('Rezerwowanie…') : slot.price ? t('Rezerwuję i przechodzę do płatności') : t('Rezerwuję termin')}
                 </Button>

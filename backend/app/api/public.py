@@ -203,9 +203,17 @@ def guest_book(
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
     p1_code = body.p1_referral_code.strip() if body.p1_referral_code else None
-    if a.referral_required and not body.external_referral and not p1_code:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail=f"„{a.service_name}” na NFZ wymaga skierowania — podaj kod e-skierowania z P1 albo zaznacz oświadczenie.")
+    # walidacja skierowania PRZED efektami ubocznymi (zużycie kodu SMS, utworzenie gościa):
+    # NFZ (termin bez ceny) — refundacja tylko z realnym e-skierowaniem w P1; papierowe
+    # oświadczenie jej nie daje. Płatne — kod P1 albo oświadczenie do wyboru.
+    if a.referral_required and not p1_code:
+        if a.price is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Na NFZ wymagane jest e-skierowanie (podaj kod z P1) — "
+                                       "papierowe oświadczenie nie daje refundacji.")
+        if not body.external_referral:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail=f"„{a.service_name}” wymaga skierowania — podaj kod e-skierowania z P1 albo zaznacz oświadczenie.")
 
     # gość: po PESEL-u — istniejące AKTYWNE konto → logowanie zamiast dubla
     patient = db.scalar(select(Patient).where(Patient.pesel == body.pesel))
@@ -242,6 +250,7 @@ def guest_book(
         if p1_code:
             apply_p1_referral(db, p1, a, guest.user_id, p1_code)
         else:
+            # tu dociera tylko slot płatny (NFZ bez kodu odrzucone w walidacji wyżej)
             a.external_referral = True
 
     if a.price is None:
