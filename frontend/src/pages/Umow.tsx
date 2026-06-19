@@ -406,10 +406,11 @@ export function Umow() {
   })
 
   // wejście „umów ze skierowania" (z zakładki Skierowania) — kontekst skierowania
+  // (LAB → badanie, SPECIALIST → wizyta u specjalisty)
   const { data: refDocInfo } = useQuery({
     queryKey: ['ref-doc', refDocId, activeId],
     queryFn: async () => (await api<DocumentOut[]>(asPatient('/documents/my'))).find(d => d.document_id === refDocId) ?? null,
-    enabled: bookKind === 'exam' && !!refDocId,
+    enabled: !!refDocId,
   })
 
   const invalidate = () => {
@@ -447,7 +448,9 @@ export function Umow() {
       method: 'POST',
       body: {
         reason: reason.trim() || null, notify_earlier: notifyEarlier, online,
-        referral_document_id: slot?.referral_required && !externalRef ? refDocId : null,
+        // skierowanie podpinamy i przy badaniu (referral_required), i przy wizycie
+        // u specjalisty (SPECIALIST → backend oznaczy je REALIZED)
+        referral_document_id: refDocId && !externalRef ? refDocId : null,
         external_referral: !!slot?.referral_required && externalRef,
         hold_token: holdToken,
       },
@@ -607,13 +610,19 @@ export function Umow() {
               </div>
             )}
 
-            {bookKind === 'exam' && refDocId && refDocInfo && (
+            {refDocId && refDocInfo && (
               <div className="flex items-start gap-2.5 rounded-2xl bg-primary-soft px-4 py-3">
                 <FileSignature size={16} className="mt-0.5 shrink-0 text-primary" />
                 <div className="min-w-0 text-sm">
-                  <p className="font-extrabold text-gray-900">{t('Umawiasz badanie ze skierowania')}</p>
+                  <p className="font-extrabold text-gray-900">
+                    {bookKind === 'exam' ? t('Umawiasz badanie ze skierowania') : t('Umawiasz wizytę u specjalisty ze skierowania')}
+                  </p>
                   <p className="font-medium text-gray-600">{refDocInfo.details}{refDocInfo.code ? ` · ${refDocInfo.code}` : ''}</p>
-                  <p className="mt-0.5 text-xs font-medium text-gray-400">{t('Wybierz badanie i termin poniżej — skierowanie podepniemy automatycznie.')}</p>
+                  <p className="mt-0.5 text-xs font-medium text-gray-400">
+                    {bookKind === 'exam'
+                      ? t('Wybierz badanie i termin poniżej — skierowanie podepniemy automatycznie.')
+                      : t('Wybierz lekarza i termin poniżej — skierowanie podepniemy automatycznie.')}
+                  </p>
                 </div>
               </div>
             )}

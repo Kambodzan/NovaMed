@@ -42,7 +42,7 @@ export function Start() {
     unpaid[0] && { icon: CreditCard, label: `${t('Dokończ płatność')} (${unpaid.length})`, to: `/wizyty?pay=${unpaid[0].appointment_id}`, danger: true },
     toConfirm[0] && { icon: Check, label: `${t('Potwierdź obecność')} (${toConfirm.length})`, to: `/wizyty?confirm=${toConfirm[0].appointment_id}` },
     newResults[0] && { icon: FlaskConical, label: `${t('Nowe wyniki badań')} (${newResults.length})`, to: '/dokumentacja?type=LAB_RESULT' },
-    toBook[0] && { icon: FileText, label: `${t('Skierowanie do umówienia')} (${toBook.length})`, to: `/skierowania?umow=${toBook[0].document_id}` },
+    toBook[0] && { icon: FileText, label: `${t('Skierowanie do umówienia')} (${toBook.length})`, to: `/umow?mode=visit&refDoc=${toBook[0].document_id}` },
     toReview[0] && { icon: Star, label: `${t('Oceń wizytę')} (${toReview.length})`, to: `/wizyty?review=${toReview[0].appointment_id}` },
   ].filter(Boolean) as { icon: typeof Check; label: string; to: string; danger?: boolean }[]
 
