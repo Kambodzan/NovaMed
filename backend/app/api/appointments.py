@@ -22,8 +22,10 @@ from app.domain.appointments import (
     assert_transition,
 )
 from app.domain.notify import notify
+from app.domain.referrals import consume_p1_referral, verify_p1_referral
 from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
+from app.integrations.p1 import P1Client, get_p1_client
 from app.integrations.payments import PaymentsClient, get_payments_client
 from app.models import (
     Appointment, AppUser, Clinic, Doctor, DoctorService, DoctorSpecialization, Patient, Payment, Role,
@@ -177,8 +179,9 @@ class BookIn(BaseModel):
     notify_earlier: bool = Field(default=False, description="Powiadom, gdy zwolni się wcześniejszy termin")
     # teleporada to WYBÓR PACJENTA przy rezerwacji, nie cecha slotu
     online: bool = Field(default=False, description="Pacjent woli teleporadę (wizyta online)")
-    # badania ze skierowaniem: nasze skierowanie z apki LUB oświadczenie o zewnętrznym
+    # skierowanie: nasze z apki / kod e-skierowania z P1 (NFZ) / oświadczenie o zewnętrznym
     referral_document_id: UUID | None = None
+    p1_referral_code: str | None = Field(default=None, max_length=20)
     external_referral: bool = False
     hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /appointments/{id}/hold)
 
@@ -440,6 +443,22 @@ def release_appointment_hold(
     return {"released": released}
 
 
+def apply_p1_referral(db: Session, p1: P1Client, a: Appointment, patient_id: UUID, code: str) -> None:
+    """Realizuje e-skierowanie z P1: sprawdza je względem PESEL pacjenta i
+    specjalizacji wybranego lekarza (lub typu badania), zużywa (jednorazowo)
+    i oznacza wizytę jako pokrytą skierowaniem zewnętrznym."""
+    patient = db.get(Patient, patient_id)
+    targets: list[str] = []
+    if a.doctor_id is not None:
+        doctor = db.get(Doctor, a.doctor_id)
+        targets = list(doctor.specialization_names) if doctor else []
+    if a.service_name:
+        targets.append(a.service_name)
+    verify_p1_referral(p1, code, pesel=patient.pesel if patient else "", targets=targets)
+    consume_p1_referral(p1, code)
+    a.external_referral = True
+
+
 @router.post("/appointments/{appointment_id}/book", response_model=BookOut)
 def book_appointment(
     appointment_id: UUID,
@@ -449,6 +468,7 @@ def book_appointment(
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
     payments: PaymentsClient = Depends(get_payments_client),
+    p1: P1Client = Depends(get_p1_client),
 ):
     """UC-P3 + UC-O1 + UC-I4. Wizyta bezpłatna: FREE→CONFIRMED.
     Wizyta płatna: FREE→TEMP_LOCK + płatność PENDING u operatora —
@@ -467,11 +487,13 @@ def book_appointment(
     # badanie ze skierowaniem: wymagane nasze skierowanie ALBO oświadczenie o zewnętrznym
     if a.referral_required:
         ref_id = body.referral_document_id if body else None
+        p1_code = (body.p1_referral_code.strip() if body and body.p1_referral_code else None)
         external = bool(body and body.external_referral)
-        if not ref_id and not external:
+        if not ref_id and not p1_code and not external:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Badanie „{a.service_name}” wymaga skierowania — wybierz skierowanie z NovaMed albo oświadcz, że masz zewnętrzne.",
+                detail=f"„{a.service_name}” na NFZ wymaga skierowania — wskaż e-skierowanie z NovaMed, "
+                       "podaj kod e-skierowania z P1 albo oświadcz, że masz zewnętrzne.",
             )
         if ref_id:
             from app.models import MedicalDocument  # import lokalny — unika cyklu
@@ -480,6 +502,8 @@ def book_appointment(
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                     detail="Wskazane skierowanie nie istnieje lub nie należy do pacjenta.")
             a.referral_document_id = ref_id
+        elif p1_code:
+            apply_p1_referral(db, p1, a, patient_id, p1_code)
         else:
             a.external_referral = True
 
@@ -632,6 +656,7 @@ class BookForIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
     external_referral: bool = False
     referral_document_id: UUID | None = None  # e-skierowanie z NovaMed (badanie NFZ)
+    p1_referral_code: str | None = Field(default=None, max_length=20)  # kod e-skierowania z P1
     hold_token: str | None = None  # token miękkiej rezerwacji slotu
 
 
@@ -642,6 +667,7 @@ def book_for_patient(
     _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
+    p1: P1Client = Depends(get_p1_client),
 ):
     """Rezerwacja przez rejestrację w imieniu pacjenta (telefon/okienko) — UC-PP1.
     Termin FREE→CONFIRMED od razu (bez TEMP_LOCK): płatność za wizytę płatną
@@ -656,10 +682,12 @@ def book_for_patient(
     patient = db.get(Patient, body.patient_id)
     if patient is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
-    if a.referral_required and not body.external_referral and body.referral_document_id is None:
+    p1_code = body.p1_referral_code.strip() if body.p1_referral_code else None
+    if a.referral_required and not body.external_referral and body.referral_document_id is None and not p1_code:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Badanie „{a.service_name}” na NFZ wymaga skierowania — wskaż e-skierowanie z NovaMed albo potwierdź skierowanie zewnętrzne.",
+            detail=f"„{a.service_name}” na NFZ wymaga skierowania — wskaż e-skierowanie z NovaMed, "
+                   "podaj kod e-skierowania z P1 albo potwierdź skierowanie zewnętrzne.",
         )
 
     if a.referral_required:
@@ -670,6 +698,8 @@ def book_for_patient(
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                     detail="Wskazane skierowanie nie istnieje lub nie należy do pacjenta.")
             a.referral_document_id = body.referral_document_id
+        elif p1_code:
+            apply_p1_referral(db, p1, a, body.patient_id, p1_code)
         else:
             a.external_referral = True
     if body.reason:

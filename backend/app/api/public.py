@@ -12,7 +12,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.appointments import AppointmentOut, appointment_out, perform_reschedule, visit_label
+from app.api.appointments import AppointmentOut, appointment_out, apply_p1_referral, perform_reschedule, visit_label
+from app.integrations.p1 import P1Client, get_p1_client
 from app.api.family import pesel_valid
 from app.core.config import settings
 from app.core.db import get_db
@@ -74,6 +75,7 @@ class GuestBookIn(BaseModel):
     email: EmailStr
     reason: str | None = Field(default=None, max_length=500)
     external_referral: bool = False
+    p1_referral_code: str | None = Field(default=None, max_length=20)  # kod e-skierowania z P1
     hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /public/slots/{id}/hold)
 
     @field_validator("pesel")
@@ -185,6 +187,7 @@ def guest_book(
     body: GuestBookIn,
     db: Session = Depends(get_db),
     payments: PaymentsClient = Depends(get_payments_client),
+    p1: P1Client = Depends(get_p1_client),
 ):
     """Rezerwacja bez logowania. Wizyta bezpłatna (NFZ): FREE→CONFIRMED od razu.
     Wizyta płatna: FREE→TEMP_LOCK + płatność PENDING u operatora; gość opłaca ją
@@ -199,9 +202,10 @@ def guest_book(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin nie jest już dostępny.")
     if a.appointment_datetime < datetime.now():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten termin już minął — wybierz inny.")
-    if a.referral_required and not body.external_referral:
+    p1_code = body.p1_referral_code.strip() if body.p1_referral_code else None
+    if a.referral_required and not body.external_referral and not p1_code:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail=f"Badanie „{a.service_name}” na NFZ wymaga skierowania — zaznacz oświadczenie.")
+                            detail=f"„{a.service_name}” na NFZ wymaga skierowania — podaj kod e-skierowania z P1 albo zaznacz oświadczenie.")
 
     # gość: po PESEL-u — istniejące AKTYWNE konto → logowanie zamiast dubla
     patient = db.scalar(select(Patient).where(Patient.pesel == body.pesel))
@@ -235,7 +239,10 @@ def guest_book(
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]
     if a.referral_required:
-        a.external_referral = True
+        if p1_code:
+            apply_p1_referral(db, p1, a, guest.user_id, p1_code)
+        else:
+            a.external_referral = True
 
     if a.price is None:
         a.appointment_status = AppointmentStatus.CONFIRMED.value

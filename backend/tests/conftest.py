@@ -15,6 +15,7 @@ from app.core.db import Base, get_db
 from app.integrations.base import IntegrationError
 from app.integrations.ewus import get_ewus_client
 from app.integrations.lab import get_lab_client
+from app.integrations.p1 import get_p1_client
 from app.integrations.payments import get_payments_client
 from app.integrations.sms import set_sms_client
 from app.main import app
@@ -80,6 +81,47 @@ class FakePayments:
     def get_status(self, *, provider_ref: str) -> str:
         return self.payments[provider_ref]
 
+
+class FakeP1:
+    """Fake P1 w pamięci — e-recepty/e-skierowania + weryfikacja kodu skierowania."""
+    def __init__(self):
+        self._docs: dict[str, dict] = {}
+        self._counter = itertools.count(1)
+
+    def _code(self) -> str:
+        return f"{next(self._counter):04d}"
+
+    def issue_prescription(self, *, pesel, doctor_pwz, icd10, drugs) -> str:
+        code = self._code()
+        self._docs[code] = {"type": "prescription", "pesel": pesel}
+        return code
+
+    def issue_referral(self, *, pesel, doctor_pwz, icd10, referral_type, notes) -> str:
+        code = self._code()
+        self._docs[code] = {"type": "referral", "pesel": pesel, "referral_type": referral_type}
+        return code
+
+    def revoke_document(self, *, code) -> None:
+        if code in self._docs:
+            self._docs[code]["revoked"] = True
+
+    def register_external_referral(self, *, code, pesel, specialization, notes=None) -> None:
+        self._docs[code] = {"type": "referral", "source": "external", "pesel": pesel,
+                            "specialization": specialization, "notes": notes, "used": False}
+
+    def verify_referral(self, *, code) -> dict | None:
+        return self._docs.get(code)
+
+    def consume_referral(self, *, code) -> None:
+        from app.integrations.base import IntegrationError
+        doc = self._docs.get(code)
+        if doc is None:
+            raise IntegrationError("P1: brak dokumentu.")
+        if doc.get("used"):
+            raise IntegrationError("P1: skierowanie już wykorzystane.")
+        doc["used"] = True
+
+
 TEST_SECRET = "test-jwt-secret-0123456789abcdefghijklmn"
 
 
@@ -104,7 +146,7 @@ def db_session():
 @pytest.fixture()
 def integration_fakes():
     """Fake-klienty integracji — testy są hermetyczne (zero HTTP)."""
-    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments(), sms=FakeSms())
+    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments(), sms=FakeSms(), p1=FakeP1())
 
 
 @pytest.fixture()
@@ -119,6 +161,7 @@ def client(db_session, monkeypatch, integration_fakes):
     app.dependency_overrides[get_ewus_client] = lambda: integration_fakes.ewus
     app.dependency_overrides[get_lab_client] = lambda: integration_fakes.lab
     app.dependency_overrides[get_payments_client] = lambda: integration_fakes.payments
+    app.dependency_overrides[get_p1_client] = lambda: integration_fakes.p1
     set_sms_client(integration_fakes.sms)  # SMS nie jest dependency FastAPI — singleton modułu
     with TestClient(app) as c:
         yield c

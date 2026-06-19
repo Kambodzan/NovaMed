@@ -226,3 +226,60 @@ def test_lab_zlecenie_i_synchronizacja(client, setup, integration_fakes):
 
     # pacjent nie uruchomi synchronizacji
     assert client.post("/integrations/lab/sync", headers=auth_header(setup["patient_token"])).status_code == 403
+
+
+# ---------- e-skierowanie z P1 przy rezerwacji (NFZ u specjalisty) ----------
+
+def _referral_slot(client, setup, db_session, hour=9):
+    """Slot u kardiologa wymagający skierowania (usługa NFZ „Konsultacja kardiologiczna")."""
+    from app.models import DoctorService, Service
+    svc = Service(clinic_id=setup["clinic"].clinic_id, name="Konsultacja kardiologiczna",
+                  duration_min=20, price=None, referral_required=True, active=True)
+    db_session.add(svc)
+    db_session.flush()
+    db_session.add(DoctorService(doctor_id=setup["doctor"].user_id, service_id=svc.service_id))
+    db_session.commit()
+    dt = (datetime.now() + timedelta(days=3)).replace(hour=hour, minute=0, second=0, microsecond=0)
+    r = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots",
+                    json={"doctor_id": str(setup["doctor"].user_id), "service_id": str(svc.service_id),
+                          "datetimes": [dt.isoformat()]},
+                    headers=auth_header(setup["reg_token"]))
+    assert r.status_code == 201, r.text
+    slot = r.json()[0]
+    assert slot["referral_required"] is True
+    return slot
+
+
+def test_p1_skierowanie_pasujace_realizuje(client, setup, integration_fakes, db_session):
+    # e-skierowanie do Kardiologa w P1 (np. od lekarza rodzinnego), na PESEL pacjenta
+    integration_fakes.p1.register_external_referral(code="SKR1", pesel="90010112345", specialization="Kardiolog")
+    slot = _referral_slot(client, setup, db_session)
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"p1_referral_code": "SKR1"}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert integration_fakes.p1._docs["SKR1"]["used"] is True  # zużyte (jednorazowe)
+
+
+def test_p1_skierowanie_zla_specjalizacja_odrzucone(client, setup, integration_fakes, db_session):
+    integration_fakes.p1.register_external_referral(code="DERM", pesel="90010112345", specialization="Dermatolog")
+    slot = _referral_slot(client, setup, db_session)
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"p1_referral_code": "DERM"}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 409 and "innej poradni" in r.json()["detail"]
+    assert integration_fakes.p1._docs["DERM"]["used"] is False  # nie zużyte
+
+
+def test_p1_skierowanie_zly_pesel_odrzucone(client, setup, integration_fakes, db_session):
+    integration_fakes.p1.register_external_referral(code="OBC", pesel="44051401359", specialization="Kardiolog")
+    slot = _referral_slot(client, setup, db_session)
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"p1_referral_code": "OBC"}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 409 and "inny PESEL" in r.json()["detail"]
+
+
+def test_p1_skierowanie_nieznany_kod_odrzucone(client, setup, integration_fakes, db_session):
+    slot = _referral_slot(client, setup, db_session)
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"p1_referral_code": "NICEMA"}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 409 and "Nie znaleziono" in r.json()["detail"]

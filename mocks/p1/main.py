@@ -55,6 +55,40 @@ def issue_referral(body: ReferralIn):
     return {"referral_code": code, "status": "CONFIRMED"}
 
 
+class ExternalReferralIn(BaseModel):
+    code: str = Field(min_length=3, max_length=20)
+    pesel: str = Field(pattern=r"^\d{11}$")
+    specialization: str = Field(min_length=2, max_length=100)  # docelowa poradnia (np. "Kardiolog", "Chirurg")
+    notes: str | None = None
+
+
+@app.post("/api/v1/external-referrals", status_code=201)
+def register_external_referral(body: ExternalReferralIn):
+    """Symuluje e-skierowanie wystawione POZA NovaMed (np. przez lekarza rodzinnego)
+    i widoczne w P1 — pacjent okazuje je kodem przy rezerwacji u specjalisty. W realu
+    takie skierowania po prostu są w P1; tu pozwalamy je zarejestrować (seed/demo)."""
+    _issued[body.code] = {
+        "type": "referral", "source": "external", "pesel": body.pesel,
+        "specialization": body.specialization, "notes": body.notes, "used": False,
+    }
+    return {"code": body.code, "status": "ACTIVE"}
+
+
+@app.post("/api/v1/documents/{code}/consume")
+def consume_document(code: str):
+    """Realizacja skierowania przy rezerwacji — oznacza je jako wykorzystane
+    (e-skierowanie jest jednorazowe)."""
+    doc = _issued.get(code)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="P1: dokument o podanym kodzie nie istnieje.")
+    if doc.get("revoked"):
+        raise HTTPException(status_code=409, detail="P1: skierowanie zostało anulowane.")
+    if doc.get("used"):
+        raise HTTPException(status_code=409, detail="P1: skierowanie zostało już wykorzystane.")
+    doc["used"] = True
+    return {"code": code, "status": "USED"}
+
+
 @app.get("/api/v1/documents/{code}")
 def get_document(code: str):
     doc = _issued.get(code)

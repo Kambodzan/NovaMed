@@ -22,6 +22,19 @@ class P1Client(Protocol):
         """Anuluje wystawiony dokument w P1 (storno e-recepty/e-skierowania)."""
         ...
 
+    def verify_referral(self, *, code: str) -> dict | None:
+        """Sprawdza e-skierowanie w P1 po kodzie. Zwraca dokument (type/pesel/
+        specialization/used/revoked) albo None gdy kod nie istnieje."""
+        ...
+
+    def consume_referral(self, *, code: str) -> None:
+        """Oznacza skierowanie jako wykorzystane (jednorazowe) przy rezerwacji."""
+        ...
+
+    def register_external_referral(self, *, code: str, pesel: str, specialization: str, notes: str | None = None) -> None:
+        """Seed/demo: rejestruje w P1 skierowanie wystawione poza NovaMed."""
+        ...
+
 
 class HttpP1Client:
     def __init__(self, base_url: str | None = None, timeout: float = 5.0):
@@ -56,6 +69,25 @@ class HttpP1Client:
 
     def revoke_document(self, *, code: str) -> None:
         self._post(f"/api/v1/documents/{code}/revoke", {})
+
+    def verify_referral(self, *, code: str) -> dict | None:
+        try:
+            resp = httpx.get(f"{self.base_url}/api/v1/documents/{code}", timeout=self.timeout)
+        except httpx.HTTPError as exc:
+            raise IntegrationError("Brak połączenia z systemem P1 — spróbuj ponownie.") from exc
+        if resp.status_code == 404:
+            return None
+        if resp.status_code >= 400:
+            raise IntegrationError("P1: nie udało się zweryfikować skierowania.")
+        return resp.json()
+
+    def consume_referral(self, *, code: str) -> None:
+        self._post(f"/api/v1/documents/{code}/consume", {})
+
+    def register_external_referral(self, *, code: str, pesel: str, specialization: str, notes: str | None = None) -> None:
+        self._post("/api/v1/external-referrals", {
+            "code": code, "pesel": pesel, "specialization": specialization, "notes": notes,
+        })
 
 
 def get_p1_client() -> P1Client:
