@@ -63,7 +63,8 @@ export function RezerwacjaPubliczna() {
   const cards = useMemo(() => {
     const map = new Map<string, { id: string | null; name: string; sub: string | null; ref: boolean; days: Map<string, AppointmentOut[]> }>()
     for (const s of slots ?? []) {
-      if (kind === 'visit' ? s.service_name != null : s.service_name == null) continue
+      // wizyta = slot z lekarzem (też usługowy); badanie = pracownia bez lekarza
+      if (kind === 'visit' ? s.doctor_id == null : s.doctor_id != null) continue
       const key = kind === 'visit' ? `d${s.doctor_id}` : s.service_name!
       const cur = map.get(key) ?? {
         id: kind === 'visit' ? s.doctor_id : null,
@@ -263,7 +264,25 @@ function PublicCard({ c, onPick, disabled }: {
 }) {
   const [open, setOpen] = useState(false)
   const [showReviews, setShowReviews] = useState(false)
+  const [svc, setSvc] = useState('')
   const nearest = c.days[0][1][0]
+  // usługi (typy wizyt) lekarza — gość wybiera usługę, potem godzinę (przy badaniach
+  // karta to już jedna usługa, więc selektor się nie pokaże)
+  const flat = c.days.flatMap(([, l]) => l)
+  const svcMap = new Map<string, { key: string; label: string; price: number | null; referral: boolean; slots: AppointmentOut[] }>()
+  for (const s of flat) {
+    // grupujemy po NAZWIE usługi — ta sama usługa w różnych placówkach to jeden typ
+    const key = s.service_name ?? ''
+    const cur = svcMap.get(key) ?? { key, label: s.service_name ?? 'Konsultacja', price: s.price ?? null, referral: s.referral_required, slots: [] }
+    cur.referral = cur.referral || s.referral_required
+    cur.slots.push(s)
+    svcMap.set(key, cur)
+  }
+  const services = [...svcMap.values()].sort((a, b) => (a.price ?? -1) - (b.price ?? -1))
+  const sel = services.find(x => x.key === svc) ?? services[0]
+  const svcByDay = new Map<string, AppointmentOut[]>()
+  for (const s of sel?.slots ?? []) { const day = s.appointment_datetime.slice(0, 10); svcByDay.set(day, [...(svcByDay.get(day) ?? []), s]) }
+  const days = [...svcByDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([d, l]) => [d, l.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const)
   const { data: rating } = useQuery({
     queryKey: ['public-doctor-rating', c.id],
     queryFn: () => api<{ average: number | null; count: number }>(`/public/doctors/${c.id}/rating`),
@@ -292,23 +311,39 @@ function PublicCard({ c, onPick, disabled }: {
         <ChevronDown size={15} className={cx('text-gray-400 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="grid grid-cols-3 gap-2 border-t border-gray-200/70 p-4 pt-3">
-          {c.days.slice(0, 3).map(([day, list]) => (
-            <div key={day} className="min-w-0">
-              <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
-                {dayNo(day + 'T00:00:00')} {monthShort(day + 'T00:00:00')}
-              </p>
-              <div className="flex flex-col gap-1">
-                {list.slice(0, 5).map(s => (
-                  <button key={s.appointment_id} onClick={() => onPick(s)} disabled={disabled}
-                    className="group cursor-pointer rounded-lg bg-surface px-1 py-1 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
-                    {formatTime(s.appointment_datetime)}
-                    {s.price != null && <span className="block text-[10px] font-bold text-gray-400 group-hover:text-white/80">{s.price} zł</span>}
-                  </button>
-                ))}
-              </div>
+        <div className="border-t border-gray-200/70 p-4 pt-3">
+          {services.length > 1 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {services.map(s => (
+                <button key={s.key} onClick={() => setSvc(s.key)}
+                  className={cx('flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
+                    sel?.key === s.key ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-600 hover:text-primary')}>
+                  {s.label}
+                  <span className={cx('font-extrabold', sel?.key === s.key ? 'text-white/80' : s.price != null ? 'text-gray-900' : 'text-emerald-700')}>
+                    · {s.price != null ? `${s.price} zł` : 'NFZ'}
+                  </span>
+                </button>
+              ))}
             </div>
-          ))}
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            {days.slice(0, 3).map(([day, list]) => (
+              <div key={day} className="min-w-0">
+                <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
+                  {dayNo(day + 'T00:00:00')} {monthShort(day + 'T00:00:00')}
+                </p>
+                <div className="flex flex-col gap-1">
+                  {list.slice(0, 5).map(s => (
+                    <button key={s.appointment_id} onClick={() => onPick(s)} disabled={disabled}
+                      className="group cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
+                      {formatTime(s.appointment_datetime)}
+                      {s.price != null && <span className="block text-[10px] font-bold text-gray-400 group-hover:text-white/80">{s.price} zł</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {showReviews && c.id && (

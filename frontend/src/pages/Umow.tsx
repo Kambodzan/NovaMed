@@ -75,13 +75,29 @@ function DoctorCard({ d, multiClinic, onPick }: {
   const [showReviews, setShowReviews] = useState(false)
   const [offset, setOffset] = useState(0)
   const [showAll, setShowAll] = useState(false)
-  const visible = d.days.slice(offset, offset + 3)
-  const nearest = d.days[0][1][0]
+  const [svc, setSvc] = useState('')
   // NFZ / ceny wizyt prywatnych — z dostępnych terminów lekarza
   const flat = d.days.flatMap(([, list]) => list)
   const hasNfz = flat.some(s => s.price == null)
   const prices = flat.filter(s => s.price != null).map(s => s.price as number)
   const minPrice = prices.length ? Math.min(...prices) : null
+  // usługi (typy wizyt) lekarza z jego slotów — pacjent wybiera usługę, potem godzinę
+  const svcMap = new Map<string, { key: string; label: string; price: number | null; referral: boolean; slots: AppointmentOut[] }>()
+  for (const s of flat) {
+    // grupujemy po NAZWIE usługi — ta sama usługa w różnych placówkach (różne id) to jeden typ
+    const key = s.service_name ?? ''
+    const cur = svcMap.get(key) ?? { key, label: s.service_name ?? t('Konsultacja'), price: s.price ?? null, referral: s.referral_required, slots: [] }
+    cur.referral = cur.referral || s.referral_required
+    cur.slots.push(s)
+    svcMap.set(key, cur)
+  }
+  const services = [...svcMap.values()].sort((a, b) => (a.price ?? -1) - (b.price ?? -1))
+  const sel = services.find(x => x.key === svc) ?? services[0]
+  const svcByDay = new Map<string, AppointmentOut[]>()
+  for (const s of sel?.slots ?? []) { const day = s.appointment_datetime.slice(0, 10); svcByDay.set(day, [...(svcByDay.get(day) ?? []), s]) }
+  const days = [...svcByDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([day, list]) => [day, list.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const)
+  const visible = days.slice(offset, offset + 3)
+  const nearest = d.days[0][1][0]
   const { data: rating } = useQuery({
     queryKey: ['doctor-rating', d.id],
     queryFn: () => api<{ average: number | null; count: number }>(`/reviews/doctor/${d.id}`),
@@ -133,13 +149,33 @@ function DoctorCard({ d, multiClinic, onPick }: {
 
       {open && (
         <div className="border-t border-gray-200/70 p-4 pt-3">
+          {services.length > 1 ? (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {services.map(s => (
+                <button key={s.key} onClick={() => { setSvc(s.key); setOffset(0); setShowAll(false) }}
+                  className={cx('flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
+                    sel?.key === s.key ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-600 hover:text-primary')}>
+                  {s.label}
+                  <span className={cx('font-extrabold', sel?.key === s.key ? 'text-white/80' : s.price != null ? 'text-gray-900' : 'text-emerald-700')}>
+                    · {s.price != null ? `${s.price} zł` : 'NFZ'}
+                  </span>
+                  {s.referral && <FileSignature size={10} className="opacity-80" />}
+                </button>
+              ))}
+            </div>
+          ) : sel && (
+            <p className="mb-3 text-sm font-bold text-gray-900">
+              {sel.label} · <span className={sel.price != null ? 'text-gray-900' : 'text-emerald-700'}>{sel.price != null ? `${sel.price} zł` : 'NFZ'}</span>
+              {sel.referral && <span className="ml-1 text-xs font-semibold text-amber-700">· {t('wymaga skierowania')}</span>}
+            </p>
+          )}
           <div className="mb-2 flex justify-end gap-1">
             <button aria-label={t('Wcześniejsze dni')} disabled={offset === 0}
               onClick={() => setOffset(o => Math.max(0, o - 3))}
               className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
               <ChevronLeft size={15} />
             </button>
-            <button aria-label={t('Kolejne dni')} disabled={offset + 3 >= d.days.length}
+            <button aria-label={t('Kolejne dni')} disabled={offset + 3 >= days.length}
               onClick={() => setOffset(o => o + 3)}
               className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
               <ChevronRight size={15} />
@@ -281,8 +317,10 @@ export function Umow() {
   const doctorCards = useMemo(() => {
     const map = new Map<string, { id: string; name: string; specs: string[]; referralRequired: boolean; clinics: Set<string>; byDay: Map<string, AppointmentOut[]> }>()
     for (const s of allSlots ?? []) {
-      // tryb: wizyty lekarskie vs badania (pracownia)
-      if (bookKind === 'visit' ? s.service_name != null : s.service_name == null) continue
+      // tryb: wizyty lekarskie (każdy slot z lekarzem, też usługowy) vs badania
+      // pracowniane (bez lekarza). Wcześniej dzielone po service_name — błędnie
+      // wrzucało usługi lekarskie do badań
+      if (bookKind === 'visit' ? s.doctor_id == null : s.doctor_id != null) continue
       if (spec && !s.specializations.includes(spec)) continue
       if (clinicFilter?.startsWith('city:') && cityOf(s.clinic_name) !== clinicFilter.slice(5)) continue
       if (clinicFilter?.startsWith('cli:') && s.clinic_name !== clinicFilter.slice(4)) continue
@@ -759,6 +797,7 @@ export function Umow() {
               {showSlotReviews && slot.doctor_id && (
                 <DoctorReviewsModal name={slot.doctor_name} endpoint={`/reviews/doctor/${slot.doctor_id}`} onClose={() => setShowSlotReviews(false)} />
               )}
+              {slot.service_name && <p className="text-sm font-bold text-gray-800">{slot.service_name}</p>}
               <p className="text-sm font-semibold text-gray-500">
                 {slot.specializations.join(' · ')} · {online
                   ? t('teleporada')

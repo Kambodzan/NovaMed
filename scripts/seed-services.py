@@ -65,11 +65,12 @@ def at(day_off: int, hour: int) -> str:
         hour=hour, minute=0, second=0, microsecond=0).isoformat()
 
 
-def clear_free_service_slots(adm, clinic_id):
-    """Sprząta wolne sloty USŁUGOWE placówki — idempotentny, czysty re-seed."""
+def clear_free_doctor_slots(adm, clinic_id):
+    """Sprząta wolne sloty LEKARSKIE placówki (zwykłe i usługowe) — żeby lekarze
+    oferowali tylko usługi z katalogu. Badań pracownianych (bez lekarza) nie rusza."""
     n = 0
     for s in c.get(f"{API}/slots", headers=adm, params={"clinic_id": clinic_id}).json():
-        if s.get("service_id"):
+        if s.get("doctor_id"):
             if c.delete(f"{API}/slots/{s['appointment_id']}", headers=adm).status_code == 204:
                 n += 1
     return n
@@ -97,7 +98,7 @@ def main():
         # rozłączne dni per placówka — lekarz w kilku placówkach nie koliduje czasowo
         days = [b + ci * CLINIC_DAY_STRIDE for b in DAY_BASES]
         print(f"== {cname} (dni +{days[0]}..+{days[-1]}) ==")
-        removed = clear_free_service_slots(adm, cid)
+        removed = clear_free_doctor_slots(adm, cid)
         if removed:
             print(f"   wyczyszczono starych wolnych slotów usługowych: {removed}")
         existing = {s["name"]: s for s in c.get(f"{API}/clinics/{cid}/services", headers=adm).json()}

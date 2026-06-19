@@ -20,6 +20,8 @@ export interface AppointmentOut {
   doctor_id: string | null  // NULL = badanie diagnostyczne (pracownia placówki)
   doctor_name: string
   service_name: string | null
+  service_id?: string | null   // usługa z katalogu (typ wizyty)
+  duration_min?: number | null
   referral_required: boolean
   specializations: string[]
   clinic_id: string
