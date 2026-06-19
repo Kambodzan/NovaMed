@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText, FlaskConical, FolderOpen, Stamp } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
 import { EmptyState, Loading, Overline, StatusBadge, Tile, cx } from '../ui'
@@ -22,10 +22,21 @@ export function Dokumentacja() {
   const [previewFor, setPreviewFor] = useState<DocumentOut | null>(null)
   const { activeId, asPatient } = useFamily()
   const { t } = useI18n()
+  const queryClient = useQueryClient()
   const { data: docs } = useQuery({
     queryKey: ['my-documents', activeId],
     queryFn: () => api<DocumentOut[]>(asPatient('/documents/my')),
   })
+
+  // otwarcie wyniku badania = obejrzane → znika z „Nowych wyników" w Do zrobienia
+  const markSeen = useMutation({
+    mutationFn: (id: string) => api(`/documents/${id}/seen`, { method: 'POST' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['my-documents'] }),
+  })
+  const openDoc = (doc: DocumentOut) => {
+    setPreviewFor(doc)
+    if (doc.document_type === 'LAB_RESULT' && doc.seen === false) markSeen.mutate(doc.document_id)
+  }
 
   const filtered = (docs ?? [])
     .filter(d => d.document_type in docMeta)
@@ -63,7 +74,7 @@ export function Dokumentacja() {
             return (
               <li key={doc.document_id}>
                 <button type="button" className="block w-full cursor-pointer text-left"
-                  onClick={() => setPreviewFor(doc)} title={t('Podgląd')}>
+                  onClick={() => openDoc(doc)} title={t('Podgląd')}>
                 <Tile className="p-5 transition-shadow hover:ring-2 hover:ring-primary/20" delay={100 + i * 40}>
                   <div className="flex flex-wrap items-start gap-4">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
@@ -79,7 +90,12 @@ export function Dokumentacja() {
                         )}
                       </p>
                     </div>
-                    <StatusBadge status={doc.document_status} />
+                    <div className="flex flex-col items-end gap-1.5">
+                      {doc.document_type === 'LAB_RESULT' && doc.seen === false && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">{t('nowy')}</span>
+                      )}
+                      <StatusBadge status={doc.document_status} />
+                    </div>
                   </div>
                 </Tile>
                 </button>

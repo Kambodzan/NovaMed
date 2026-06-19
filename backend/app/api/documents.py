@@ -99,6 +99,7 @@ class DocumentOut(BaseModel):
     appointment_id: UUID | None = None  # wizyta, w której wystawiono dokument
     lab_values: list[LabValueOut] | None = None  # ustrukturyzowane wyniki badania
     valid_until: date | None = None  # ważność (e-recepta)
+    seen: bool = True  # czy pacjent już obejrzał (dla „nowych" wyników badań)
 
 
 # ---------- pomocnicze ----------
@@ -164,6 +165,7 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         error_message=error_message,
         lab_values=lab_values,
         valid_until=valid_until,
+        seen=doc.patient_seen_at is not None,
     )
 
 
@@ -775,6 +777,23 @@ def my_documents(
         .order_by(MedicalDocument.issued_at.desc())
     )
     return [document_out(db, d) for d in rows]
+
+
+@router.post("/documents/{document_id}/seen", response_model=DocumentOut)
+def mark_document_seen(
+    document_id: UUID,
+    user: AppUser = Depends(require_roles("pacjent")),
+    db: Session = Depends(get_db),
+):
+    """Pacjent oznacza dokument jako obejrzany — zdejmuje go z „Nowych wyników"
+    w „Do zrobienia" na pulpicie. Działa też dla podopiecznych (rodzina)."""
+    doc = db.get(MedicalDocument, document_id)
+    if doc is None or doc.patient_id not in allowed_patient_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dokument nie istnieje.")
+    if doc.patient_seen_at is None:
+        doc.patient_seen_at = datetime.now()
+        db.commit()
+    return document_out(db, doc)
 
 
 @router.get("/documents/issued", response_model=list[DocumentOut])

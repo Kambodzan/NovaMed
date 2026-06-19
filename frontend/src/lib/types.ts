@@ -144,6 +144,7 @@ export interface DocumentOut {
   appointment_id: string | null
   lab_values?: LabValue[] | null
   valid_until?: string | null
+  seen?: boolean  // czy pacjent obejrzał (dla „nowych" wyników badań w Do zrobienia)
 }
 
 export interface LabValue {

@@ -23,6 +23,9 @@ class MedicalDocument(Base):
     document_type: Mapped[str] = mapped_column(String(50))  # PRESCRIPTION/REFERRAL/LAB_RESULT/SICK_LEAVE/NOTE
     document_content: Mapped[str | None] = mapped_column(Text)
     document_status: Mapped[str] = mapped_column(String(50))
+    # kiedy pacjent obejrzał dokument (NULL = jeszcze nie) — do „nowych" wyników
+    # badań w „Do zrobienia" na pulpicie pacjenta.
+    patient_seen_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     # foreign_keys jawnie: appointment.referral_document_id tworzy DRUGĄ ścieżkę FK
     # między tabelami (badanie → podpięte skierowanie), więc relacja byłaby niejednoznaczna

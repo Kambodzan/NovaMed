@@ -35,7 +35,7 @@ export function Start() {
   // właściwej akcji (modal płatności/oceny, picker skierowania, filtr wyników)
   const unpaid = visits?.filter(v => v.appointment_status === 'TEMP_LOCK') ?? []
   const toConfirm = visits?.filter(v => v.appointment_status === 'CONFIRMED' && v.confirmation_requested && !v.patient_confirmed) ?? []
-  const newResults = docs?.filter(d => d.document_type === 'LAB_RESULT' && d.document_status === 'READY') ?? []
+  const newResults = docs?.filter(d => d.document_type === 'LAB_RESULT' && d.document_status === 'READY' && d.seen === false) ?? []
   const toBook = docs?.filter(d => d.document_type === 'REFERRAL' && d.referral_type === 'SPECIALIST' && !['REALIZED', 'REVOKED'].includes(d.document_status)) ?? []
   const toReview = visits?.filter(v => v.appointment_status === 'COMPLETED' && v.doctor_id && !v.reviewed) ?? []
   const todos = [

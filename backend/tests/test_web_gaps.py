@@ -101,6 +101,23 @@ def test_wynik_z_papieru_bez_wizyty(client, setup):
     assert any(d["document_id"] == doc["document_id"] for d in docs)
 
 
+def test_wynik_oznaczany_jako_obejrzany(client, setup):
+    """Wynik startuje jako nieobejrzany (nowy); pacjent oznacza go obejrzanym."""
+    s = setup
+    pid = s["patient"].user_id
+    doc = client.post(f"/patients/{pid}/lab-results", headers=auth_header(s["reg_token"]),
+                      json={"test_type": "TSH", "test_description": "w normie"}).json()
+    did = doc["document_id"]
+    assert doc["seen"] is False
+    mine = client.get("/documents/my", headers=auth_header(s["patient_token"])).json()
+    assert next(d for d in mine if d["document_id"] == did)["seen"] is False
+    # pacjent oznacza obejrzany → seen=True (idempotentnie)
+    r = client.post(f"/documents/{did}/seen", headers=auth_header(s["patient_token"]))
+    assert r.status_code == 200 and r.json()["seen"] is True
+    mine2 = client.get("/documents/my", headers=auth_header(s["patient_token"])).json()
+    assert next(d for d in mine2 if d["document_id"] == did)["seen"] is True
+
+
 def make_visit_with_prescription(client, s) -> int:
     dt = (datetime.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
     slot = client.post(
