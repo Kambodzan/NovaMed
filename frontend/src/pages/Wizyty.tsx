@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CalendarPlus, Check, ClipboardList, Clock, MapPin, Star, Video } from 'lucide-react'
 import { PodgladDokumentu } from '../components/PodgladDokumentu'
+import { SlotCalendar } from '../components/SlotCalendar'
 import { useSecondsLeft, mmss } from '../components/Countdown'
 import type { ClinicalNote, DocumentOut } from '../lib/types'
 import { Button, DateChip, EmptyState, Loading, Modal, Overline, StatusBadge, Tile, cx, inputCls } from '../ui'
@@ -492,11 +493,20 @@ function RescheduleModal({ visit, onClose, onDone }: {
 }) {
   const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
-  const [showAll, setShowAll] = useState(false)
+  // badanie pracowniane (bez lekarza) szukamy po placówce, wizytę — po lekarzu
+  const scope = visit.doctor_id ? `doctor_id=${visit.doctor_id}` : `clinic_id=${visit.clinic_id}`
   const { data: slots } = useQuery({
-    queryKey: ['slots', visit.doctor_id],
-    queryFn: () => api<AppointmentOut[]>(`/slots?doctor_id=${visit.doctor_id}`),
+    queryKey: ['slots', visit.doctor_id, visit.clinic_id],
+    queryFn: () => api<AppointmentOut[]>(`/slots?${scope}`),
   })
+
+  // backend przyjmie tylko ten sam rodzaj (usługa/badanie) i tę samą cenę — pokazujemy tylko takie
+  const eligible = (slots ?? []).filter(s =>
+    s.appointment_id !== visit.appointment_id
+    && s.service_name === visit.service_name
+    && (s.price || 0) === (visit.price || 0)
+    && isFuture(s.appointment_datetime),
+  )
 
   const reschedule = useMutation({
     mutationFn: (newId: string) => api(`/appointments/${visit.appointment_id}/reschedule`, {
@@ -507,35 +517,14 @@ function RescheduleModal({ visit, onClose, onDone }: {
   })
 
   return (
-    <Modal overline={`${visit.doctor_name} · ${t('obecnie')} ${formatTime(visit.appointment_datetime)}`} title={t('Wybierz nowy termin')} onClose={onClose}>
+    <Modal overline={`${visit.doctor_name} · ${t('obecnie')} ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)}`} title={t('Wybierz nowy termin')} onClose={onClose}>
       {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-      {slots && slots.length > 0 ? (
-        <ul className="space-y-2 pb-4">
-          {slots.slice(0, showAll ? undefined : 8).map(s => (
-            <li key={s.appointment_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
-              <DateChip month={monthShort(s.appointment_datetime)} day={dayNo(s.appointment_datetime)} time={formatTime(s.appointment_datetime)} />
-              <span className="flex-1 text-sm font-semibold text-gray-500">
-                {s.appointment_type === 'ONLINE' ? t('teleporada') : s.clinic_name}
-                <span className={cx('ml-2 font-bold', s.price ? 'text-gray-900' : 'text-emerald-700')}>
-                  {s.price ? `${s.price} zł` : 'NFZ'}
-                </span>
-              </span>
-              <Button size="sm" disabled={reschedule.isPending} onClick={() => reschedule.mutate(s.appointment_id)}>
-                {t('Wybierz')}
-              </Button>
-            </li>
-          ))}
-          {!showAll && slots.length > 8 && (
-            <li className="text-center">
-              <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
-                {t('Pokaż więcej terminów')} ({slots.length - 8})
-              </Button>
-            </li>
-          )}
-        </ul>
-      ) : (
-        <p className="pb-4 text-sm font-medium text-gray-500">{t('Ten lekarz nie ma teraz wolnych terminów.')}</p>
-      )}
+      <SlotCalendar
+        slots={eligible}
+        busy={reschedule.isPending}
+        showMeta={!visit.doctor_id || eligible.some(s => s.appointment_type === 'ONLINE')}
+        onPick={s => reschedule.mutate(s.appointment_id)}
+      />
     </Modal>
   )
 }

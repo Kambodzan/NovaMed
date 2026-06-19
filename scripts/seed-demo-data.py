@@ -81,6 +81,28 @@ docs = {d["name"]: d["doctor_id"] for d in api("GET", f"/clinics/{piastow}/docto
 kow_id = next(v for k, v in docs.items() if "Kowalczyk" in k)
 ziel_id = next(v for k, v in docs.items() if "Zieliński" in k)
 
+# katalog usług (seed-services musi pójść WCZEŚNIEJ) — wizyty demo rezerwujemy na
+# slotach USŁUGOWYCH, żeby niosły service_name (jak każda realna rezerwacja).
+_svc_cache: dict[str, list] = {}
+
+
+def svc(clinic_id: str, doctor_id: str, name_substr: str) -> str | None:
+    """service_id usługi danego lekarza w placówce po fragmencie nazwy (None = brak)."""
+    if clinic_id not in _svc_cache:
+        _svc_cache[clinic_id] = api("GET", f"/clinics/{clinic_id}/services", reg).json()
+    for s in _svc_cache[clinic_id]:
+        if name_substr.lower() in s["name"].lower() and doctor_id in s.get("doctor_ids", []):
+            return s["service_id"]
+    return None
+
+
+KARD = svc(piastow, kow_id, "Konsultacja kardiologiczna")       # Kowalczyk, Piastów
+INTERN_P = svc(piastow, ziel_id, "Konsultacja internistyczna")  # Zieliński, Piastów
+INTERN_U = svc(ursus, ziel_id, "Konsultacja internistyczna")    # Zieliński, Ursus
+if not all((KARD, INTERN_P, INTERN_U)):
+    print("  ! UWAGA: brak usług w katalogu — uruchom najpierw seed-services.py "
+          "(wizyty demo będą generyczne, bez przekładania).")
+
 # (appointment_id, dni_wstecz) — do cofnięcia daty na końcu
 to_backdate: list[tuple[str, int]] = []
 _slot_n = [0]
@@ -89,17 +111,24 @@ _slot_n = [0]
 def make_slot(clinic_id: str, doctor_id: str, dt: datetime, **extra) -> str:
     r = api("POST", f"/clinics/{clinic_id}/slots", reg,
             json={"doctor_id": doctor_id, "datetimes": [dt.isoformat()], **extra})
+    if r.status_code == 201:
+        return r.json()[0]["appointment_id"]
+    if r.status_code == 409:  # slot na ten czas już istnieje (np. z seed-services) — użyj go
+        for s in api("GET", "/slots", reg, params={"doctor_id": doctor_id}).json():
+            if s["appointment_datetime"][:16] == dt.isoformat()[:16]:
+                return s["appointment_id"]
     r.raise_for_status()
     return r.json()[0]["appointment_id"]
 
 
 def completed_visit(clinic_id: str, doctor_tok: str, doctor_id: str, patient_id: str,
-                    days_ago: int, note: str) -> str:
+                    days_ago: int, note: str, service_id: str | None = None) -> str:
     """Pełne flow zakończonej wizyty (dziś), z datą cofniętą na końcu."""
     dt = next_grid_time(_slot_n[0] * 15)
     _slot_n[0] += 1
-    aid = make_slot(clinic_id, doctor_id, dt)
-    api("POST", f"/appointments/{aid}/book-for", reg, json={"patient_id": patient_id}).raise_for_status()
+    aid = make_slot(clinic_id, doctor_id, dt, **({"service_id": service_id} if service_id else {}))
+    book = {"patient_id": patient_id, **({"external_referral": True} if service_id else {})}
+    api("POST", f"/appointments/{aid}/book-for", reg, json=book).raise_for_status()
     api("POST", f"/appointments/{aid}/status", doctor_tok, json={"new_status": "IN_PROGRESS"}).raise_for_status()
     api("PUT", f"/appointments/{aid}/note", doctor_tok, json={"content": note}).raise_for_status()
     to_backdate.append((aid, days_ago))
@@ -111,11 +140,14 @@ def finish(aid: str, doctor_tok: str) -> None:
 
 
 def upcoming_visit(clinic_id: str, doctor_id: str, patient_id: str, days_ahead: int,
-                   hour: int, online: bool = False) -> str:
+                   hour: int, online: bool = False, service_id: str | None = None) -> str:
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     extra = {"appointment_type": "ONLINE"} if online else {}
+    if service_id:
+        extra["service_id"] = service_id
     aid = make_slot(clinic_id, doctor_id, dt, **extra)
-    api("POST", f"/appointments/{aid}/book-for", reg, json={"patient_id": patient_id}).raise_for_status()
+    book = {"patient_id": patient_id, **({"external_referral": True} if service_id else {})}
+    api("POST", f"/appointments/{aid}/book-for", reg, json=book).raise_for_status()
     return aid
 
 
@@ -171,9 +203,9 @@ if nursing_ref:
         api("POST", f"/procedures/{proc['procedure_id']}/complete", lis,
             json={"notes": "Pomiar RR 134/84, iniekcja wykonana bez powikłań."})
 
-# nadchodzące wizyty Janiny (stacjonarna + teleporada)
-upcoming_visit(piastow, kow_id, jan_id, days_ahead=6, hour=9)
-upcoming_visit(piastow, kow_id, jan_id, days_ahead=20, hour=11, online=True)
+# nadchodzące wizyty Janiny (stacjonarna + teleporada) — usługowe, więc da się je przełożyć
+upcoming_visit(piastow, kow_id, jan_id, days_ahead=6, hour=9, service_id=KARD)
+upcoming_visit(piastow, kow_id, jan_id, days_ahead=20, hour=11, online=True, service_id=KARD)
 
 # --- Tomasz: wizyta zakończona (Internista Zieliński, Piastów) ---------------
 print("Tomasz — wizyta, dokumenty, opinia…")
@@ -192,40 +224,12 @@ issue("/reviews", tom, {"appointment_id": t1, "doctor_rating": 4, "clinic_rating
                         "doctor_comment": "Konkretnie i rzeczowo, szybko postawiona diagnoza."})
 
 # nadchodząca wizyta Tomasza w Ursusie (multi-placówka)
-upcoming_visit(ursus, ziel_id, tom_id, days_ahead=4, hour=10)
+upcoming_visit(ursus, ziel_id, tom_id, days_ahead=4, hour=10, service_id=INTERN_U)
 
-# --- pula WOLNYCH terminów do rezerwacji (inaczej wyszukiwarka pacjenta pusta) -
-print("Wolne terminy do rezerwacji…")
-saw_id = next(v for k, v in docs.items() if "Sawicka" in k)
-# (lekarz, placówka, [(godz, min, tryb, cena)]) — czasy per-lekarz rozłączne
-# między placówkami (kolizja slotów lekarza jest globalna). tryb: 'stat'
-# (stacjonarna z opcją teleporady), 'stat_only' (tylko stacjonarna), 'online'.
-SLOT_PLAN = [
-    (kow_id, piastow, [(9, 0, "stat", None), (10, 0, "stat", None), (11, 0, "stat", 150.0)]),
-    (kow_id, next(v for k, v in clinics.items() if "Praga" in k), [(13, 0, "online", None), (14, 0, "stat", None)]),
-    (ziel_id, piastow, [(9, 30, "stat", None), (10, 30, "stat_only", None)]),
-    (ziel_id, ursus, [(13, 30, "stat", None), (14, 30, "stat", None)]),
-    (saw_id, piastow, [(11, 30, "stat", None), (12, 30, "stat", 200.0)]),
-    (saw_id, ursus, [(15, 0, "stat_only", None), (16, 0, "online", None)]),
-]
-free_made = 0
-for day in range(1, 7):  # następne 6 dni
-    d0 = datetime.now() + timedelta(days=day)
-    for doctor_id, clinic_id, times in SLOT_PLAN:
-        for hh, mm, mode, price in times:
-            dt = d0.replace(hour=hh, minute=mm, second=0, microsecond=0)
-            extra = {}
-            if mode == "online":
-                extra["appointment_type"] = "ONLINE"
-            elif mode == "stat_only":
-                extra["allow_online"] = False  # tylko stacjonarnie
-            if price:
-                extra["price"] = price
-            r = api("POST", f"/clinics/{clinic_id}/slots", reg,
-                    json={"doctor_id": doctor_id, "datetimes": [dt.isoformat()], **extra})
-            if r.status_code == 201:
-                free_made += 1
-# kilka badań diagnostycznych (pracownia placówki): prywatne i ze skierowaniem
+# --- badania diagnostyczne (pracownia placówki, bez lekarza) ----------------
+# Pulę WOLNYCH terminów LEKARSKICH dostarcza seed-services.py (sloty usługowe).
+# Tu dokładamy tylko badania pracowniane, których seed-services nie tworzy.
+print("Badania diagnostyczne (pracownia)…")
 for day in (2, 4):
     base = datetime.now() + timedelta(days=day)
     api("POST", f"/clinics/{piastow}/slots", reg, json={
@@ -234,7 +238,7 @@ for day in (2, 4):
     api("POST", f"/clinics/{piastow}/slots", reg, json={
         "service_name": "RTG klatki piersiowej", "referral_required": True,
         "datetimes": [base.replace(hour=8, minute=30, second=0, microsecond=0).isoformat()]})
-print(f"  wolnych terminów lekarskich: {free_made} + badania diagnostyczne")
+print("  badania diagnostyczne: dodane")
 
 # --- cofnięcie dat zakończonych wizyt (realistyczna historia) ---------------
 print("Cofanie dat wizyt zakończonych (historia)…")
@@ -259,6 +263,7 @@ try:
 finally:
     db.close()
 
-print(f"\nGotowe. Wizyt zakończonych: {len(to_backdate)}; nadchodzących: 3; wolnych terminów: {free_made}+.")
+print(f"\nGotowe. Wizyt zakończonych: {len(to_backdate)}; nadchodzących: 3 (usługowe). "
+      "Wolne terminy lekarskie: z seed-services.py.")
 print("Zaloguj się jako pacjent (np. janina.wisniewska@novamed.dev / NovaMed.Test1),")
 print("lekarz (a.kowalczyk@…) lub rejestracja, żeby przeklikać dane.")
