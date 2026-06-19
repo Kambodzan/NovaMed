@@ -243,7 +243,7 @@ print("  badania diagnostyczne: dodane")
 # --- cofnięcie dat zakończonych wizyt (realistyczna historia) ---------------
 print("Cofanie dat wizyt zakończonych (historia)…")
 from app.core.db import SessionLocal  # noqa: E402
-from app.models import Appointment, MedicalDocument, ClinicalNote  # noqa: E402
+from app.models import Appointment, MedicalDocument, ClinicalNote, Review  # noqa: E402
 db = SessionLocal()
 try:
     for aid, days_ago in to_backdate:
@@ -259,6 +259,9 @@ try:
             n.created_at = target
             if n.signed_at:
                 n.signed_at = target
+        # opinia wystawiona po wizycie — data też cofnięta (inaczej „dziś")
+        for rv in db.query(Review).filter(Review.appointment_id == au).all():
+            rv.created_at = target
     db.commit()
 finally:
     db.close()

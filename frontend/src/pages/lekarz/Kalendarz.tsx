@@ -77,9 +77,15 @@ export function LekarzKalendarz() {
                   {list.map(v => {
                     const finished = ['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(v.appointment_status)
                     if (!v.patient_id) {
+                      // wolny slot — przy współrezerwacji kilka usług nakłada się na tę
+                      // samą godzinę, więc pokazujemy nazwę usługi, by je rozróżnić
                       return (
-                        <div key={v.appointment_id} className="rounded-lg border border-dashed border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-300 [font-variant-numeric:tabular-nums]">
-                          {formatTime(v.appointment_datetime)} wolny
+                        <div key={v.appointment_id} title={v.service_name ?? 'wolny termin'}
+                          className="rounded-lg border border-dashed border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-400 [font-variant-numeric:tabular-nums]">
+                          <span className="text-gray-500">{formatTime(v.appointment_datetime)}</span>
+                          {v.service_name
+                            ? <span className="block truncate text-gray-400">{v.service_name}</span>
+                            : ' wolny'}
                         </div>
                       )
                     }
