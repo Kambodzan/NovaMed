@@ -955,10 +955,11 @@ def reschedule_appointment(
     block_overlapping(db, new)
     new.notify_earlier = old.notify_earlier      # preferencja wędruje z wizytą
     new.appointment_notes = old.appointment_notes  # powód wizyty też (lekarz nie traci wywiadu)
-    # przełożenie przez personel — pacjent dostaje powiadomienie o nowym terminie
-    if not is_patient and old.patient_id:
+    # każde przełożenie (pacjent/recepcja) → informacyjny SMS o nowym terminie,
+    # BEZ prośby o potwierdzenie (to tylko powiadomienie, nie confirm-link)
+    if old.patient_id:
         notify(db, old.patient_id, "Wizyta przełożona",
-               f"Twoja wizyta została przełożona na nowy termin: {visit_label(db, new)}.")
+               f"Nowy termin Twojej wizyty: {visit_label(db, new)}.")
     db.commit()
     return appointment_out(db, new)
 

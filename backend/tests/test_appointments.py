@@ -212,6 +212,10 @@ def test_przelozenie_wizyty(client, setup):
     times = [s["appointment_datetime"] for s in resp.json()]
     assert len(times) == 1
 
+    # informacyjne powiadomienie o nowym terminie (bez prośby o potwierdzenie)
+    notifs = client.get("/notifications/my", headers=auth_header(setup["patient_token"])).json()
+    assert any(n["notification_title"] == "Wizyta przełożona" for n in notifs)
+
 
 def test_dzien_lekarza_i_przebieg_wizyty(client, setup):
     slot_id = make_slot(client, setup, days_ahead=2, hour=8)
