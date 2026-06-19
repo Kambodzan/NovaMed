@@ -261,6 +261,7 @@ const EN: Record<string, string> = {
   'Szukaj': 'Search',
   'Lekarz i termin': 'Doctor & time',
   'Wszyscy lekarze': 'All doctors',
+  'Wyczyść wszystko': 'Clear all',
   'Przeglądaj wszystkich lekarzy': 'Browse all doctors',
   'prywatnie od': 'private from',
   'Wizyta lekarska': 'Doctor visit',

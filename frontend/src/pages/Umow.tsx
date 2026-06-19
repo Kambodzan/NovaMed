@@ -702,6 +702,12 @@ export function Umow() {
                 {clinicFilter?.startsWith('cli:') && addressOf(clinicFilter.slice(4)) && (
                   <span className="text-xs font-semibold text-gray-500">{addressOf(clinicFilter.slice(4))}</span>
                 )}
+                {[doctorFilter, spec, clinicFilter].filter(Boolean).length >= 2 && (
+                  <button onClick={() => { setSpec(null); setDoctorFilter(null); setClinicFilter(null); setShowAllDocs(false); setQuery('') }}
+                    className="cursor-pointer rounded-full px-3 py-1.5 text-xs font-extrabold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
+                    {t('Wyczyść wszystko')}
+                  </button>
+                )}
               </div>
             )}
 
