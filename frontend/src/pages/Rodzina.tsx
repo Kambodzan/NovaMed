@@ -120,7 +120,7 @@ export function Rodzina() {
             <Button disabled={add.isPending || peselBad} type="submit"><Plus size={15} /> {t('Dodaj')}</Button>
           </div>
         </form>
-        <p className="mt-2 text-xs font-medium text-gray-400">
+        <p className="mt-2 text-xs font-medium text-gray-500">
           {t('Podopieczny nie loguje się samodzielnie — wszystkie powiadomienia o jego wizytach i dokumentach trafiają do Ciebie.')}
         </p>
         {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}

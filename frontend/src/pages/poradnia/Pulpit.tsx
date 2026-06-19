@@ -19,7 +19,7 @@ function Stat({ label, value, hint, tone }: { label: string; value: string | num
       <Overline className={tone === 'amber' ? '!text-amber-600' : undefined}>{label}</Overline>
       <p className={cx('mt-2 text-4xl font-extrabold tracking-tight [font-variant-numeric:tabular-nums]',
         tone === 'amber' ? 'text-amber-700' : tone === 'primary' ? 'text-primary' : 'text-gray-900')}>{value}</p>
-      {hint && <p className="mt-1 text-xs font-semibold text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs font-semibold text-gray-500">{hint}</p>}
     </Tile>
   )
 }
@@ -98,7 +98,7 @@ export function Pulpit() {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-extrabold text-gray-900">{a.label}</span>
-                  <span className="block truncate text-xs font-medium text-gray-400">{a.desc}</span>
+                  <span className="block truncate text-xs font-medium text-gray-500">{a.desc}</span>
                 </span>
                 <ChevronRight size={16} className="ml-auto shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
               </Link>
@@ -112,7 +112,7 @@ export function Pulpit() {
                 <Link to="/kalendarz" className="text-xs font-extrabold text-primary hover:underline">cały grafik</Link>
               } />
               {upcoming.length === 0 ? (
-                <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-400">Brak kolejnych wizyt dziś.</p>
+                <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Brak kolejnych wizyt dziś.</p>
               ) : (
                 <ul className="space-y-1.5">
                   {upcoming.map(a => (

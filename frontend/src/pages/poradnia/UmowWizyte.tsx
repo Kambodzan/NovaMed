@@ -33,7 +33,7 @@ function StepHead({ n, title, done, summary, onEdit }: { n: number; title: strin
         {summary && <span className="block truncate text-xs font-medium text-gray-500">{summary}</span>}
       </span>
       {done && onEdit && (
-        <button onClick={onEdit} className="inline-flex cursor-pointer items-center gap-1 text-xs font-extrabold text-gray-400 hover:text-primary">
+        <button onClick={onEdit} className="inline-flex cursor-pointer items-center gap-1 text-xs font-extrabold text-gray-500 hover:text-primary">
           <Pencil size={12} /> zmień
         </button>
       )}
@@ -199,11 +199,11 @@ export function UmowWizyte() {
             {mode === 'existing' ? (
               <>
                 <div className="relative">
-                  <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+                  <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
                   <input className={cx(inputCls, 'w-full pl-10')} autoFocus placeholder="Nazwisko lub PESEL…" value={q} onChange={e => setQ(e.target.value)} />
                 </div>
                 <ul className="mt-2 space-y-1.5">
-                  {q.trim() && matches.length === 0 && <li className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-400">Brak pacjenta w tej placówce — użyj „Nowy pacjent".</li>}
+                  {q.trim() && matches.length === 0 && <li className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500">Brak pacjenta w tej placówce — użyj „Nowy pacjent".</li>}
                   {matches.map(p => (
                     <li key={p.patient_id}>
                       <button onClick={() => setPicked({ patient_id: p.patient_id, name: `${p.first_name} ${p.last_name}`, pesel: p.pesel })}
@@ -242,22 +242,22 @@ export function UmowWizyte() {
           <div className="mt-3">
             <div className="mb-3 flex flex-wrap gap-2">
               <div className="relative min-w-[13rem] flex-1">
-                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
                 <input className={cx(inputCls, 'w-full pl-10 pr-8')} placeholder="Szukaj: lekarz lub specjalizacja…" value={query} onChange={e => setQuery(e.target.value)} />
-                {query && <button onClick={() => setQuery('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-700"><X size={14} /></button>}
+                {query && <button onClick={() => setQuery('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-500 hover:text-gray-700"><X size={14} /></button>}
               </div>
               <div className="w-40"><DatePicker value={dayFilter} placeholder="dowolny dzień" onChange={setDayFilter} /></div>
-              {dayFilter && <button onClick={() => setDayFilter('')} className="cursor-pointer text-xs font-extrabold text-gray-400 hover:text-gray-700">wyczyść</button>}
+              {dayFilter && <button onClick={() => setDayFilter('')} className="cursor-pointer text-xs font-extrabold text-gray-500 hover:text-gray-700">wyczyść</button>}
             </div>
             {slotsByDay.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm font-medium text-gray-400">
+              <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm font-medium text-gray-500">
                 {query || dayFilter ? 'Brak wolnych terminów dla tego filtra.' : 'Brak wolnych terminów — dodaj je w Kalendarzu.'}
               </p>
             ) : (
               <div className="max-h-[42vh] space-y-3 overflow-y-auto pr-1">
                 {slotsByDay.map(([d, list]) => (
                   <div key={d}>
-                    <p className="sticky top-0 z-10 bg-surface/95 py-1 text-xs font-extrabold tracking-wide text-gray-500 backdrop-blur">{formatDatePL(d + 'T00:00:00')} <span className="font-bold text-gray-400">· {list.length}</span></p>
+                    <p className="sticky top-0 z-10 bg-surface/95 py-1 text-xs font-extrabold tracking-wide text-gray-500 backdrop-blur">{formatDatePL(d + 'T00:00:00')} <span className="font-bold text-gray-500">· {list.length}</span></p>
                     <ul className="space-y-1.5">
                       {list.map(s => {
                         const online = s.appointment_type === 'ONLINE'
@@ -302,7 +302,7 @@ export function UmowWizyte() {
             <Button size="lg" disabled={!canBook || book.isPending} onClick={() => book.mutate()}>
               <CalendarCheck size={17} /> {book.isPending ? 'Umawianie…' : 'Umów wizytę'}
             </Button>
-            <p className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
               <Clock size={12} />
               {!picked ? 'Wybierz pacjenta.' : !slot ? 'Wybierz wolny termin.' : referralBlocked ? 'Wskaż skierowanie.' : `Potwierdzimy od razu + SMS.${slot.price ? ` Opłata ${slot.price} zł na miejscu.` : ''}`}
             </p>

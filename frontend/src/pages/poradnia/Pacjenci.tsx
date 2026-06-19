@@ -60,7 +60,7 @@ export function PacjenciPlacowki() {
             <div className="flex flex-wrap items-center gap-2">
               <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
               <div className="relative">
-                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
                 <input className={cx(inputCls, 'w-72 pl-10')} autoFocus placeholder="Nazwisko, PESEL lub telefon…" value={q} onChange={e => setQ(e.target.value)} />
               </div>
             </div>
@@ -82,7 +82,7 @@ export function PacjenciPlacowki() {
             <thead>
               <tr>
                 {['Pacjent', 'PESEL', 'Telefon', 'Status eWUŚ', ''].map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase">{h}</th>
+                  <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-500 uppercase">{h}</th>
                 ))}
               </tr>
             </thead>

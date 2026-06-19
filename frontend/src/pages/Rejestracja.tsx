@@ -94,12 +94,12 @@ export function Rejestracja() {
   const SummaryRow = ({ label, value, goto }: { label: string; value: string; goto: number }) => (
     <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5">
       <div className="min-w-0">
-        <p className="text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">{label}</p>
+        <p className="text-[11px] font-extrabold tracking-wider text-gray-500 uppercase">{label}</p>
         <p className="truncate text-sm font-bold text-gray-900">{value || '—'}</p>
       </div>
       {(goto > 1 || !accountReady) && (
         <button onClick={() => setStep(goto)} aria-label={`Zmień: ${label}`}
-          className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary">
+          className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary">
           <Pencil size={13} />
         </button>
       )}
@@ -118,11 +118,11 @@ export function Rejestracja() {
             <li key={s} className="flex items-center gap-1.5">
               <span className={cx(
                 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold',
-                step > i + 1 ? 'bg-primary text-white' : step === i + 1 ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-400',
+                step > i + 1 ? 'bg-primary text-white' : step === i + 1 ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-500',
               )}>
                 {step > i + 1 ? <Check size={13} /> : i + 1}
               </span>
-              <span className={cx('hidden text-xs font-bold sm:inline', step === i + 1 ? 'text-gray-900' : 'text-gray-400')}>{s}</span>
+              <span className={cx('hidden text-xs font-bold sm:inline', step === i + 1 ? 'text-gray-900' : 'text-gray-500')}>{s}</span>
             </li>
           ))}
         </ol>

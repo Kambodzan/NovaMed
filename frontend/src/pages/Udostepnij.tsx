@@ -114,7 +114,7 @@ export function Udostepnij() {
               <Overline className="!text-primary/60">{t('Przekaż ten kod lekarzowi lub pielęgniarce')}</Overline>
               <p className="my-3 text-4xl font-extrabold tracking-[0.25em] text-primary">{lastCode.access_code}</p>
               {qr && <img src={qr} alt="Kod QR" className="mx-auto mb-2 rounded-xl bg-white p-1" />}
-              <p className="text-xs font-semibold text-gray-400">
+              <p className="text-xs font-semibold text-gray-500">
                 {scopeLabel(lastCode)} · {t('do odebrania do:')} {formatTime(lastCode.expires_at)} {t('(potem dostęp jest już stały)')}
               </p>
               <div className="mt-4 flex justify-center gap-2">

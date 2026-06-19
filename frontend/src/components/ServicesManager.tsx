@@ -53,14 +53,14 @@ export function ServicesManager({ clinicId }: { clinicId: string }) {
         <p className="text-sm font-extrabold text-gray-900">Usługi (typy wizyt)</p>
         <Button size="sm" variant="secondary" onClick={() => setEditing('new')}><Plus size={14} /> Dodaj usługę</Button>
       </div>
-      <p className="mb-3 text-xs font-medium text-gray-400">
+      <p className="mb-3 text-xs font-medium text-gray-500">
         Każda usługa ma własny czas i cenę; przypisz ją lekarzom, którzy ją wykonują. Pakiet = usługa z łączną ceną.
       </p>
 
       {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       {!services || services.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm font-medium text-gray-400">
+        <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm font-medium text-gray-500">
           Brak usług — dodaj pierwszą (np. „Konsultacja internistyczna", „USG jamy brzusznej").
         </p>
       ) : (
@@ -75,8 +75,8 @@ export function ServicesManager({ clinicId }: { clinicId: string }) {
                     {s.specialization ? ` · ${s.specialization}` : ''}{s.referral_required ? ' · wymaga skierowania' : ''}
                   </p>
                 </div>
-                <button onClick={() => setEditing(s)} aria-label="Edytuj" className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary"><Pencil size={14} /></button>
-                <button onClick={() => remove.mutate(s.service_id)} aria-label="Wycofaj" className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600"><Trash2 size={14} /></button>
+                <button onClick={() => setEditing(s)} aria-label="Edytuj" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary"><Pencil size={14} /></button>
+                <button onClick={() => remove.mutate(s.service_id)} aria-label="Wycofaj" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-red-600"><Trash2 size={14} /></button>
               </div>
               {doctors && doctors.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">

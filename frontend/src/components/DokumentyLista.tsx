@@ -42,11 +42,11 @@ export function DokumentyLista({ documents, emptyHint, byline = 'doctor', onCanc
               <Icon size={16} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+              <p className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">
                 {KIND_LABEL[d.document_type]} · {formatDatePL(d.issued_at)}
               </p>
               <p className="mt-0.5 text-sm font-bold break-words text-gray-900">{d.details ?? '—'}</p>
-              <p className="mt-0.5 text-xs font-semibold text-gray-400">
+              <p className="mt-0.5 text-xs font-semibold text-gray-500">
                 {byline === 'patient' ? d.patient_name : d.doctor_name}{d.code ? <> · kod: <span className="rounded-md bg-gray-100 px-1.5 py-0.5 font-extrabold tracking-[0.15em] text-gray-900">{d.code}</span></> : null}
               </p>
             </div>

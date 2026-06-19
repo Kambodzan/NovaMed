@@ -199,7 +199,7 @@ export function Gabinet() {
   })
 
   if (!visit) {
-    return <p className="py-10 text-center text-sm font-semibold text-gray-400">Wczytywanie wizyty…</p>
+    return <p className="py-10 text-center text-sm font-semibold text-gray-500">Wczytywanie wizyty…</p>
   }
 
   const inProgress = visit.appointment_status === 'IN_PROGRESS'
@@ -330,7 +330,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                     </div>
                   </div>
                 ) : (
-                  <button onClick={openClinical} className="mb-2 flex w-full cursor-pointer items-center gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-400 hover:bg-gray-100">
+                  <button onClick={openClinical} className="mb-2 flex w-full cursor-pointer items-center gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100">
                     <AlertTriangle size={13} /> Alergie: nie odnotowano — kliknij, aby uzupełnić
                   </button>
                 )}
@@ -361,10 +361,10 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 {(patient.chronic_diseases || patient.chronic_medications) && (
                   <div className="mt-1.5 space-y-1 rounded-xl bg-gray-50 px-3.5 py-2.5">
                     {patient.chronic_diseases && (
-                      <p className="text-sm"><span className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">Choroby przewlekłe: </span><span className="font-semibold text-gray-700">{patient.chronic_diseases}</span></p>
+                      <p className="text-sm"><span className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">Choroby przewlekłe: </span><span className="font-semibold text-gray-700">{patient.chronic_diseases}</span></p>
                     )}
                     {patient.chronic_medications && (
-                      <p className="text-sm"><span className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">Leki stałe: </span><span className="font-semibold text-gray-700">{patient.chronic_medications}</span></p>
+                      <p className="text-sm"><span className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">Leki stałe: </span><span className="font-semibold text-gray-700">{patient.chronic_medications}</span></p>
                     )}
                   </div>
                 )}
@@ -372,7 +372,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                   <ClipboardPen size={12} /> {patient.allergies || patient.chronic_diseases || patient.chronic_medications ? 'Edytuj dane kliniczne' : 'Dodaj alergie / choroby / leki'}
                 </button>
               </div>
-            ) : <p className="text-sm font-medium text-gray-400">Wczytywanie…</p>}
+            ) : <p className="text-sm font-medium text-gray-500">Wczytywanie…</p>}
           </Tile>
 
           {/* nota z wizyty (encounter note): szkic edytowalny do podpisu, po podpisie
@@ -380,7 +380,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           {signed ? (
             <Tile className="p-5" delay={100}>
               <TileHeader title={<span className="inline-flex items-center gap-1.5 text-emerald-700"><FileCheck2 size={13} /> Nota z wizyty — podpisana</span>} />
-              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-gray-400">
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-gray-500">
                 <Lock size={11} /> {clinicalNote?.signed_by_name}
                 {clinicalNote?.signed_at && ` · ${formatDatePL(clinicalNote.signed_at)}, ${formatTime(clinicalNote.signed_at)}`}
               </p>
@@ -417,17 +417,17 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 <div className="mt-3 border-t border-gray-100 pt-2">
                   <button type="button" onClick={() => setRevOpen(o => !o)} aria-expanded={revOpen}
                     className="flex w-full cursor-pointer items-center justify-between rounded-xl px-1 py-1.5 text-left hover:bg-gray-50">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wider text-gray-500 uppercase">
                       <History size={13} /> Historia zmian ({clinicalNote!.events.length})
                     </span>
-                    <ChevronDown size={15} className={cx('text-gray-400 transition-transform', revOpen && 'rotate-180')} />
+                    <ChevronDown size={15} className={cx('text-gray-500 transition-transform', revOpen && 'rotate-180')} />
                   </button>
                   {revOpen && (
                     <ul className="mt-1 space-y-1">
                       {clinicalNote!.events.map((e, i) => (
                         <li key={i} className="flex flex-wrap items-center justify-between gap-1 rounded-lg bg-gray-50 px-3 py-1.5 text-xs">
                           <span className="font-bold text-gray-700">{NOTE_ACTION_LABEL[e.action] ?? e.action}</span>
-                          <span className="font-medium text-gray-400">{e.actor_name} · {formatDatePL(e.created_at)}, {formatTime(e.created_at)}</span>
+                          <span className="font-medium text-gray-500">{e.actor_name} · {formatDatePL(e.created_at)}, {formatTime(e.created_at)}</span>
                         </li>
                       ))}
                     </ul>
@@ -489,7 +489,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 </Button>
                 {noteSaved && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700"><Check size={13} /> Zapisano</span>}
               </div>
-              <p className="mt-2 text-xs font-medium text-gray-400">Szkic edytowalny do podpisu. Zakończenie wizyty podpisuje notę automatycznie.</p>
+              <p className="mt-2 text-xs font-medium text-gray-500">Szkic edytowalny do podpisu. Zakończenie wizyty podpisuje notę automatycznie.</p>
             </Tile>
           ) : confirmed ? (
             <Tile className="p-5" delay={100}>
@@ -599,7 +599,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
               {visitDocs.length > 0 ? (
                 <DokumentyLista documents={visitDocs} onCancel={cancelDoc} />
               ) : (
-                <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-sm font-medium text-gray-400">
+                <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-sm font-medium text-gray-500">
                   Wystawione dokumenty (recepty, skierowania, wyniki) pojawią się tutaj od razu.
                 </p>
               )}
@@ -625,14 +625,14 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                             {h.note ? '' : ' · brak noty'}
                           </span>
                         </span>
-                        <ChevronDown size={15} className={cx('shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+                        <ChevronDown size={15} className={cx('shrink-0 text-gray-500 transition-transform', open && 'rotate-180')} />
                       </button>
                       {open && (
                         <div className="space-y-2 border-t border-gray-100 px-4 py-3">
                           {h.note ? (
                             <p className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{h.note}</p>
                           ) : (
-                            <p className="text-sm font-medium text-gray-400">Lekarz nie zostawił noty z tej wizyty.</p>
+                            <p className="text-sm font-medium text-gray-500">Lekarz nie zostawił noty z tej wizyty.</p>
                           )}
                           {h.addenda.map((a, j) => (
                             <p key={j} className="border-l-2 border-primary/40 pl-3 text-sm font-medium whitespace-pre-wrap text-gray-700">
@@ -663,11 +663,11 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
             aria-expanded={histOpen}
             className="flex w-full cursor-pointer items-center justify-between rounded-xl px-1 py-1.5 text-left hover:bg-gray-50"
           >
-            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wider text-gray-500 uppercase">
               <FolderOpen size={13} /> Wszystkie dokumenty
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-extrabold text-gray-500 normal-case">{historyDocs.length}</span>
             </span>
-            <ChevronDown size={15} className={cx('text-gray-400 transition-transform', histOpen && 'rotate-180')} />
+            <ChevronDown size={15} className={cx('text-gray-500 transition-transform', histOpen && 'rotate-180')} />
           </button>
 
           {histOpen && (

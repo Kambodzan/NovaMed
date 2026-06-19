@@ -131,12 +131,12 @@ export function Select({
         }}
         className={cx(
           inputCls, 'flex w-full cursor-pointer items-center justify-between gap-2 text-left',
-          'disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400',
-          !selected && 'text-gray-400',
+          'disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500',
+          !selected && 'text-gray-500',
         )}
       >
         <span className="truncate">{display}</span>
-        <ChevronDown size={15} className={cx('shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={15} className={cx('shrink-0 text-gray-500 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && createPortal(
@@ -149,18 +149,18 @@ export function Select({
           {withSearch && (
             <div className="border-b border-gray-100 p-2">
               <div className="relative">
-                <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
+                <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-500" />
                 <input
                   ref={inputRef} value={q} onChange={e => { setQ(e.target.value); setHi(0) }} onKeyDown={onKey}
                   placeholder={t('Szukaj…')}
-                  className="h-9 w-full rounded-xl bg-gray-50 pr-3 pl-9 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:bg-gray-100 focus:outline-none"
+                  className="h-9 w-full rounded-xl bg-gray-50 pr-3 pl-9 text-sm font-medium text-gray-900 placeholder:text-gray-500 focus:bg-gray-100 focus:outline-none"
                 />
               </div>
             </div>
           )}
           <ul ref={listRef} className="max-h-[264px] overflow-y-auto p-1.5">
             {filtered.length === 0 ? (
-              <li className="px-3 py-3 text-center text-sm font-medium text-gray-400">{t('Brak wyników')}</li>
+              <li className="px-3 py-3 text-center text-sm font-medium text-gray-500">{t('Brak wyników')}</li>
             ) : filtered.map((o, i) => {
               const isSel = o.value === value
               return (
@@ -176,7 +176,7 @@ export function Select({
                   >
                     <span className="min-w-0">
                       <span className={cx('block truncate text-sm', isSel ? 'font-extrabold text-primary' : 'font-semibold text-gray-800')}>{o.label}</span>
-                      {o.hint && <span className="block truncate text-xs font-medium text-gray-400">{o.hint}</span>}
+                      {o.hint && <span className="block truncate text-xs font-medium text-gray-500">{o.hint}</span>}
                     </span>
                     {isSel && <Check size={15} className="shrink-0 text-primary" />}
                   </button>

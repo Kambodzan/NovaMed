@@ -184,7 +184,7 @@ export function RezerwacjaPubliczna() {
             {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)} · {slot.clinic_name}
             {slot.price != null && <span className="text-primary"> · {slot.price} zł</span>}
           </p>
-          <p className="mb-4 text-xs font-semibold text-gray-400">
+          <p className="mb-4 text-xs font-semibold text-gray-500">
             Ten termin jest teraz zarezerwowany dla Ciebie — dokończ rezerwację w ciągu kilku minut.
           </p>
           <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified) book.mutate() }}>
@@ -247,7 +247,7 @@ export function RezerwacjaPubliczna() {
               <EmptyState icon={<HeartPulse size={28} strokeWidth={1.5} />} title="Brak wolnych terminów"
                 hint="Wróć później — terminy pojawiają się na bieżąco." />
             ) : cards.map(c => <PublicCard key={c.key} c={c} disabled={hold.isPending} onPick={s => hold.mutate(s)} />)}
-            <p className="text-center text-xs font-semibold text-gray-400">
+            <p className="text-center text-xs font-semibold text-gray-500">
               Terminy bez ceny są na NFZ; terminy z ceną to wizyty prywatne — opłacasz je online przy rezerwacji.
             </p>
           </div>
@@ -308,7 +308,7 @@ function PublicCard({ c, onPick, disabled }: {
           {c.sub && <span className="block text-xs font-semibold text-gray-500">{c.sub}</span>}
         </span>
         <span className="text-xs font-extrabold text-primary">{dayNo(nearest.appointment_datetime)} {monthShort(nearest.appointment_datetime)}, {formatTime(nearest.appointment_datetime)}</span>
-        <ChevronDown size={15} className={cx('text-gray-400 transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={15} className={cx('text-gray-500 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
         <div className="border-t border-gray-200/70 p-4 pt-3">
@@ -329,7 +329,7 @@ function PublicCard({ c, onPick, disabled }: {
           <div className="grid grid-cols-3 gap-2">
             {days.slice(0, 3).map(([day, list]) => (
               <div key={day} className="min-w-0">
-                <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
+                <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-500 uppercase">
                   {dayNo(day + 'T00:00:00')} {monthShort(day + 'T00:00:00')}
                 </p>
                 <div className="flex flex-col gap-1">
@@ -337,7 +337,7 @@ function PublicCard({ c, onPick, disabled }: {
                     <button key={s.appointment_id} onClick={() => onPick(s)} disabled={disabled}
                       className="group cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
                       {formatTime(s.appointment_datetime)}
-                      {s.price != null && <span className="block text-[10px] font-bold text-gray-400 group-hover:text-white/80">{s.price} zł</span>}
+                      {s.price != null && <span className="block text-[10px] font-bold text-gray-500 group-hover:text-white/80">{s.price} zł</span>}
                     </button>
                   ))}
                 </div>

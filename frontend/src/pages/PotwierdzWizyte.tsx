@@ -67,12 +67,12 @@ export function PotwierdzWizyte() {
           <HeartPulse size={28} />
         </span>
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-gray-900">NovaMed</h1>
-        <p className="mt-1 text-sm font-semibold text-gray-400">Twoja wizyta</p>
+        <p className="mt-1 text-sm font-semibold text-gray-500">Twoja wizyta</p>
       </div>
 
       <Tile className="w-full max-w-md p-6">
         {isLoading ? (
-          <p className="py-8 text-center text-sm font-semibold text-gray-400">Wczytywanie…</p>
+          <p className="py-8 text-center text-sm font-semibold text-gray-500">Wczytywanie…</p>
         ) : error ? (
           <div className="py-6 text-center">
             <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600"><X size={24} /></span>
@@ -147,7 +147,7 @@ export function PotwierdzWizyte() {
           </>
         )}
       </Tile>
-      <p className="mt-5 text-xs font-medium text-gray-400">Bezpieczny link NovaMed</p>
+      <p className="mt-5 text-xs font-medium text-gray-500">Bezpieczny link NovaMed</p>
     </div>
   )
 }

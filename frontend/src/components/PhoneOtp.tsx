@@ -58,7 +58,7 @@ export function PhoneOtp({ phone, purpose, verified, onVerified, disabled }: {
         <>
           <p className="text-sm font-semibold text-gray-600">
             Wpisz 6-cyfrowy kod z SMS-a wysłanego na <b>{phone}</b>.
-            {devCode && <span className="ml-1 font-bold text-gray-400">(DEV: {devCode})</span>}
+            {devCode && <span className="ml-1 font-bold text-gray-500">(DEV: {devCode})</span>}
           </p>
           <div className="flex gap-2">
             <input className={cx(inputCls, 'flex-1 tracking-[0.4em]')} inputMode="numeric" maxLength={6}

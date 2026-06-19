@@ -94,26 +94,26 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
           <div>
-            <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Pacjent')}</dt>
+            <dt className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Pacjent')}</dt>
             <dd className="mt-0.5 font-bold text-gray-900">{doc.patient_name}</dd>
           </div>
           <div>
-            <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Wystawił(a)')}</dt>
+            <dt className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Wystawił(a)')}</dt>
             <dd className="mt-0.5 font-bold text-gray-900">{doc.doctor_name}</dd>
           </div>
           <div>
-            <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Data wystawienia')}</dt>
+            <dt className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Data wystawienia')}</dt>
             <dd className="mt-0.5 font-bold text-gray-900">
               {formatDatePL(doc.issued_at)}, {formatTime(doc.issued_at)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Status')}</dt>
+            <dt className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Status')}</dt>
             <dd className="mt-1"><StatusBadge status={doc.document_status} /></dd>
           </div>
           {doc.valid_until && (
             <div>
-              <dt className="text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Ważna do')}</dt>
+              <dt className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Ważna do')}</dt>
               <dd className={cx('mt-0.5 font-bold', new Date(doc.valid_until) < new Date() ? 'text-red-600' : 'text-gray-900')}>
                 {formatDatePL(doc.valid_until)}{new Date(doc.valid_until) < new Date() && ` — ${t('Recepta wygasła')}`}
               </dd>
@@ -123,10 +123,10 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
 
         {doc.lab_values && doc.lab_values.length > 0 ? (
           <div className="rounded-2xl bg-gray-50 px-4 py-3">
-            <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Wyniki')}</p>
+            <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Wyniki')}</p>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">
+                <tr className="text-left text-[11px] font-extrabold tracking-wider text-gray-500 uppercase">
                   <th className="pb-1">{t('Parametr')}</th>
                   <th className="pb-1 text-right">{t('Wynik')}</th>
                   <th className="pb-1 text-right">{t('Norma')}</th>
@@ -145,7 +145,7 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
                       <td className={cx('py-1.5 text-right font-extrabold [font-variant-numeric:tabular-nums]', abn ? 'text-red-600' : 'text-gray-900')}>
                         {v.value} {v.unit}{abn && <span className="ml-1">{high ? '↑' : '↓'}</span>}
                       </td>
-                      <td className="py-1.5 text-right text-xs font-medium text-gray-400 [font-variant-numeric:tabular-nums]">{range} {v.unit}</td>
+                      <td className="py-1.5 text-right text-xs font-medium text-gray-500 [font-variant-numeric:tabular-nums]">{range} {v.unit}</td>
                     </tr>
                   )
                 })}
@@ -157,7 +157,7 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
           </div>
         ) : doc.details && (
           <div className="rounded-2xl bg-gray-50 px-4 py-3">
-            <p className="mb-1 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Treść')}</p>
+            <p className="mb-1 text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Treść')}</p>
             <p className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{doc.details}</p>
           </div>
         )}

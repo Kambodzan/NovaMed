@@ -45,13 +45,13 @@ export function LekarzOpinie() {
             <p className="text-4xl font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{data.average.toFixed(1)}</p>
             <div>
               <Stars value={Math.round(data.average)} size={18} />
-              <p className="mt-0.5 text-xs font-semibold text-gray-400">
+              <p className="mt-0.5 text-xs font-semibold text-gray-500">
                 średnia z {data.count} {plOpinie(data.count)}
               </p>
             </div>
           </div>
         ) : (
-          <p className="text-sm font-medium text-gray-400">Jeszcze żaden pacjent nie wystawił oceny.</p>
+          <p className="text-sm font-medium text-gray-500">Jeszcze żaden pacjent nie wystawił oceny.</p>
         )}
       </Tile>
 
@@ -68,7 +68,7 @@ export function LekarzOpinie() {
               <Tile className={cx('p-4')} delay={60 + Math.min(i, 8) * 20}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Stars value={r.rating} />
-                  <span className="text-xs font-semibold text-gray-400">{formatDatePL(r.created_at)}</span>
+                  <span className="text-xs font-semibold text-gray-500">{formatDatePL(r.created_at)}</span>
                 </div>
                 {r.comment && <p className="mt-2 text-sm leading-relaxed font-medium text-gray-700">{r.comment}</p>}
               </Tile>

@@ -283,7 +283,7 @@ export function Telewizyta() {
               <div className="pointer-events-none absolute inset-0 ring-4 ring-emerald-400/70 ring-inset" aria-hidden />
             )}
             {!remoteActive && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900 text-sm font-bold text-gray-400">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900 text-sm font-bold text-gray-500">
                 {wsDown ? (
                   <>
                     <span className="text-red-400">Połączenie z wizytą zostało przerwane.</span>
@@ -323,13 +323,13 @@ export function Telewizyta() {
 
         {/* czat */}
         <Tile className="flex h-[28rem] flex-col p-0 lg:h-auto" delay={120}>
-          <p className="border-b border-gray-100 px-4 py-3 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+          <p className="border-b border-gray-100 px-4 py-3 text-xs font-extrabold tracking-wider text-gray-500 uppercase">
             Czat wizyty
           </p>
           <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
             {messages.map((m, i) => (
               m.kind === 'system' ? (
-                <p key={i} className="text-center text-xs font-semibold text-gray-400">{m.text}</p>
+                <p key={i} className="text-center text-xs font-semibold text-gray-500">{m.text}</p>
               ) : (
                 <div key={i} className={cx('max-w-[85%] rounded-2xl px-3.5 py-2 text-sm font-medium',
                   m.mine ? 'ml-auto bg-primary text-white' : 'bg-gray-100 text-gray-800')}>
@@ -343,14 +343,14 @@ export function Telewizyta() {
               )
             ))}
             {messages.length === 0 && (
-              <p className="pt-6 text-center text-sm font-medium text-gray-400">
+              <p className="pt-6 text-center text-sm font-medium text-gray-500">
                 Napisz wiadomość lub prześlij załącznik (np. zdjęcie wyników).
               </p>
             )}
           </div>
           <div className="flex items-center gap-2 border-t border-gray-100 p-3">
             {!isGuest && (
-              <label className="cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-50 hover:text-primary">
+              <label className="cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-50 hover:text-primary">
                 <Paperclip size={17} />
                 <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void attach(f); e.target.value = '' }} />
               </label>

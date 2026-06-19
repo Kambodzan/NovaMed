@@ -96,7 +96,7 @@ export function SlotCalendar({ slots, onPick, busy = false, showMeta = false }: 
 
       <div className="mb-1 grid grid-cols-7 text-center">
         {WEEKDAYS[lang === 'en' ? 'en' : 'pl'].map(d => (
-          <span key={d} className="text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">{d}</span>
+          <span key={d} className="text-[11px] font-extrabold tracking-wider text-gray-500 uppercase">{d}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 place-items-center gap-y-0.5">
@@ -127,7 +127,7 @@ export function SlotCalendar({ slots, onPick, busy = false, showMeta = false }: 
       <div className="mt-3 border-t border-gray-100 pt-3">
         {selected ? (
           <>
-            <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+            <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">
               {new Date(selected + 'T00:00:00').toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -149,7 +149,7 @@ export function SlotCalendar({ slots, onPick, busy = false, showMeta = false }: 
             </div>
           </>
         ) : (
-          <p className="text-sm font-medium text-gray-400">{t('Wybierz dzień z kalendarza.')}</p>
+          <p className="text-sm font-medium text-gray-500">{t('Wybierz dzień z kalendarza.')}</p>
         )}
       </div>
     </div>

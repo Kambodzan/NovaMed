@@ -24,7 +24,7 @@ export const formatDatePL = (iso: string) => {
 
 export const formatTime = (iso: string) => {
   const d = new Date(iso)
-  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 export const dayNo = (iso: string) => String(new Date(iso).getDate())

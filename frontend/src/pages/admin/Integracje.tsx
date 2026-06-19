@@ -71,7 +71,7 @@ export function AdminIntegracje() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-extrabold text-gray-900">{i.name}</p>
-                <p className="mt-1 text-xs font-semibold text-gray-400">
+                <p className="mt-1 text-xs font-semibold text-gray-500">
                   {i.url} · {i.latency_ms !== null ? `${i.latency_ms} ms` : 'brak odpowiedzi'} · {i.env}
                 </p>
               </div>
@@ -89,9 +89,9 @@ export function AdminIntegracje() {
       </div>
 
       <Tile delay={250} className={(failures?.length ?? 0) > 0 ? 'ring-1 ring-red-200' : undefined}>
-        <TileHeader title={<span className="inline-flex items-center gap-1.5"><AlertTriangle size={13} className={(failures?.length ?? 0) > 0 ? 'text-red-600' : 'text-gray-400'} /> Nieudane wysyłki do P1/ZUS {(failures?.length ?? 0) > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-700">{failures!.length}</span>}</span>} />
+        <TileHeader title={<span className="inline-flex items-center gap-1.5"><AlertTriangle size={13} className={(failures?.length ?? 0) > 0 ? 'text-red-600' : 'text-gray-500'} /> Nieudane wysyłki do P1/ZUS {(failures?.length ?? 0) > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-700">{failures!.length}</span>}</span>} />
         {(failures?.length ?? 0) === 0 ? (
-          <p className="text-sm font-medium text-gray-400">Brak nieudanych wysyłek — wszystkie dokumenty trafiły do systemu centralnego.</p>
+          <p className="text-sm font-medium text-gray-500">Brak nieudanych wysyłek — wszystkie dokumenty trafiły do systemu centralnego.</p>
         ) : (
           <ul className="space-y-1.5">
             {failures!.map(f => (

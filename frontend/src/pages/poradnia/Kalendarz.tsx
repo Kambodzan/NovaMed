@@ -122,9 +122,9 @@ export function Kalendarz() {
             <div className="flex flex-wrap items-center gap-2">
               <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
               <div className="flex items-center gap-1">
-                <button onClick={() => shiftDay(-1)} aria-label="Poprzedni dzień" className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100"><ChevronLeft size={16} /></button>
+                <button onClick={() => shiftDay(-1)} aria-label="Poprzedni dzień" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100"><ChevronLeft size={16} /></button>
                 <DatePicker className="w-40" value={day} onChange={setDay} />
-                <button onClick={() => shiftDay(1)} aria-label="Następny dzień" className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100"><ChevronRight size={16} /></button>
+                <button onClick={() => shiftDay(1)} aria-label="Następny dzień" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100"><ChevronRight size={16} /></button>
                 {day !== todayIso() && <Button variant="ghost" size="sm" onClick={() => setDay(todayIso())}>Dziś</Button>}
               </div>
               <Button variant="secondary" size="sm" onClick={() => setModal('add')}><Plus size={14} /> Dodaj terminy</Button>
@@ -139,10 +139,10 @@ export function Kalendarz() {
       {/* filtr lekarza/specjalizacji */}
       {(items?.length ?? 0) > 0 && (
         <div className="relative max-w-md fade-up">
-          <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+          <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
           <input className={cx(inputCls, 'w-full pl-10 pr-8')} placeholder="Filtruj: lekarz lub specjalizacja…"
             value={q} onChange={e => setQ(e.target.value)} />
-          {q && <button onClick={() => setQ('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-700"><X size={14} /></button>}
+          {q && <button onClick={() => setQ('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-500 hover:text-gray-700"><X size={14} /></button>}
         </div>
       )}
 
@@ -170,7 +170,7 @@ export function Kalendarz() {
                 return (
                   <div key={c.key} className="w-44 shrink-0 px-3 py-2.5">
                     <p className="truncate text-sm font-extrabold text-gray-900">{c.label}</p>
-                    {c.specs.length > 0 && <p className="truncate text-[11px] font-semibold text-gray-400">{c.specs.join(' · ')}</p>}
+                    {c.specs.length > 0 && <p className="truncate text-[11px] font-semibold text-gray-500">{c.specs.join(' · ')}</p>}
                     {!nf ? (
                       <p className="text-[10px] font-bold text-gray-300">brak wolnych terminów</p>
                     ) : nf.slice(0, 10) !== day ? (
@@ -185,7 +185,7 @@ export function Kalendarz() {
             {/* wiersze godzin */}
             {times.map(t => (
               <div key={t} className="flex border-b border-gray-50 last:border-0">
-                <div className="w-16 shrink-0 px-3 py-2 text-xs font-extrabold text-gray-400 [font-variant-numeric:tabular-nums]">{t}</div>
+                <div className="w-16 shrink-0 px-3 py-2 text-xs font-extrabold text-gray-500 [font-variant-numeric:tabular-nums]">{t}</div>
                 {columns.map(c => {
                   const a = cell(t, c.key)
                   if (!a) return <div key={c.key} className="w-44 shrink-0 px-1.5 py-1.5"><div className="h-full min-h-9 rounded-lg" /></div>
@@ -197,7 +197,7 @@ export function Kalendarz() {
                     <div key={c.key} className="w-44 shrink-0 px-1.5 py-1.5">
                       <button onClick={() => { setError(null); setDetail(a) }}
                         className={cx('flex h-full min-h-9 w-full cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left transition-colors',
-                          isFree ? 'border border-dashed border-gray-200 text-gray-400 hover:border-primary hover:text-primary'
+                          isFree ? 'border border-dashed border-gray-200 text-gray-500 hover:border-primary hover:text-primary'
                             : live ? 'bg-primary-soft ring-1 ring-primary'
                             : paused ? 'bg-amber-50 ring-1 ring-amber-200'
                             : done ? 'bg-gray-50 opacity-60' : 'bg-gray-50 hover:bg-gray-100')}>
@@ -453,7 +453,7 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
       {docs && docs.length > 0 && (
         <div className="mt-5">
           <p className="text-sm font-extrabold text-gray-900">Długość wizyt per lekarz</p>
-          <p className="mb-2 text-xs font-medium text-gray-400">
+          <p className="mb-2 text-xs font-medium text-gray-500">
             Puste = siatka placówki ({intervalMin} min). Zmiana zapisuje się po wyjściu z pola.
           </p>
           <div className="space-y-1.5">
@@ -467,7 +467,7 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
                     const num = v === '' ? null : Number(v)
                     if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
                   }} />
-                <span className="text-xs font-bold text-gray-400">min</span>
+                <span className="text-xs font-bold text-gray-500">min</span>
               </div>
             ))}
           </div>

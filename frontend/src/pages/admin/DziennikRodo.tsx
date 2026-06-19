@@ -49,7 +49,7 @@ export function DziennikRodo() {
             <thead>
               <tr>
                 {['Kiedy', 'Kto', 'Zdarzenie', 'Pacjent', 'Szczegóły'].map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase">{h}</th>
+                  <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-500 uppercase">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -61,13 +61,13 @@ export function DziennikRodo() {
                   </td>
                   <td className="border-t border-gray-100 px-4 py-3">
                     <p className="font-bold text-gray-900">{e.actor_name ?? '—'}</p>
-                    <p className="text-xs font-medium text-gray-400">{ROLE_LABEL[e.actor_role] ?? e.actor_role}</p>
+                    <p className="text-xs font-medium text-gray-500">{ROLE_LABEL[e.actor_role] ?? e.actor_role}</p>
                   </td>
                   <td className="border-t border-gray-100 px-4 py-3 font-semibold text-gray-700">
                     {ACTION_LABEL[e.action] ?? e.action}
                   </td>
                   <td className="border-t border-gray-100 px-4 py-3 font-medium text-gray-600">{e.patient_name ?? '—'}</td>
-                  <td className="border-t border-gray-100 px-4 py-3 text-xs font-medium text-gray-400">{e.detail ?? ''}</td>
+                  <td className="border-t border-gray-100 px-4 py-3 text-xs font-medium text-gray-500">{e.detail ?? ''}</td>
                 </tr>
               ))}
             </tbody>

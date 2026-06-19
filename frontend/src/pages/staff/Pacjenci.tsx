@@ -52,7 +52,7 @@ export function StaffPacjenci() {
             <div className="flex flex-wrap items-center gap-2">
               <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
               <div className="relative">
-                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
                 <input className={cx(inputCls, 'w-64 pl-10')} placeholder="Nazwisko lub PESEL…" value={q} onChange={e => setQ(e.target.value)} />
               </div>
             </div>

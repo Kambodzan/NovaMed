@@ -56,7 +56,7 @@ export function SkierowaniaPacjenta() {
                         <Overline>{formatDatePL(doc.issued_at)} · {doc.doctor_name}</Overline>
                         <p className="mt-1 text-sm leading-relaxed font-medium text-gray-700">{doc.details}</p>
                         {active && doc.referral_type === 'NURSING' && (
-                          <p className="mt-1 text-xs font-medium text-gray-400">
+                          <p className="mt-1 text-xs font-medium text-gray-500">
                             {t('Zabieg zaplanuje pielęgniarka — skierowanie czeka w jej kolejce.')}
                           </p>
                         )}

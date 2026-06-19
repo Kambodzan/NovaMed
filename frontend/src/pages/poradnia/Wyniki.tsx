@@ -106,7 +106,7 @@ export function Wyniki() {
         {/* 1 — pacjent */}
         <Tile className="p-5" delay={60}>
           <TileHeader title="1. Pacjent" action={picked && (
-            <button onClick={() => { setPicked(null); setDone(null) }} className="inline-flex cursor-pointer items-center gap-1 text-xs font-extrabold text-gray-400 hover:text-red-600">
+            <button onClick={() => { setPicked(null); setDone(null) }} className="inline-flex cursor-pointer items-center gap-1 text-xs font-extrabold text-gray-500 hover:text-red-600">
               <X size={13} /> zmień
             </button>
           )} />
@@ -121,13 +121,13 @@ export function Wyniki() {
           ) : (
             <>
               <div className="relative">
-                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
                 <input className={cx(inputCls, 'w-full pl-10')} autoFocus placeholder="Nazwisko lub PESEL…"
                   value={q} onChange={e => setQ(e.target.value)} />
               </div>
               <ul className="mt-2 space-y-1.5">
                 {q.trim() && matches.length === 0 && (
-                  <li className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-400">Brak pacjenta w tej placówce.</li>
+                  <li className="rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500">Brak pacjenta w tej placówce.</li>
                 )}
                 {matches.map(p => (
                   <li key={p.patient_id}>
@@ -144,7 +144,7 @@ export function Wyniki() {
               </ul>
               {/* dotychczasowe wyniki pacjenta — kontekst */}
               {picked && labResults.length > 0 && (
-                <p className="mt-2 text-xs font-medium text-gray-400">Ma już {labResults.length} wyników w dokumentacji.</p>
+                <p className="mt-2 text-xs font-medium text-gray-500">Ma już {labResults.length} wyników w dokumentacji.</p>
               )}
             </>
           )}
@@ -165,7 +165,7 @@ export function Wyniki() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-sm font-bold text-gray-700">Parametry <span className="font-medium text-gray-400">(opcjonalnie — pokażą „poza normą")</span></span>
+                <span className="text-sm font-bold text-gray-700">Parametry <span className="font-medium text-gray-500">(opcjonalnie — pokażą „poza normą")</span></span>
                 <button type="button" disabled={!picked} onClick={() => setRows(r => [...r, { ...EMPTY_ROW }])}
                   className="inline-flex cursor-pointer items-center gap-1 text-xs font-extrabold text-primary hover:underline disabled:opacity-40">
                   <Plus size={13} /> dodaj parametr
@@ -173,7 +173,7 @@ export function Wyniki() {
               </div>
               {rows.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="grid grid-cols-[1.4fr_0.8fr_0.7fr_0.7fr_0.7fr_auto] gap-1.5 px-1 text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
+                  <div className="grid grid-cols-[1.4fr_0.8fr_0.7fr_0.7fr_0.7fr_auto] gap-1.5 px-1 text-[10px] font-extrabold tracking-wide text-gray-500 uppercase">
                     <span>Parametr</span><span>Wynik</span><span>Jedn.</span><span>Norma od</span><span>do</span><span></span>
                   </div>
                   {rows.map((r, i) => (
@@ -195,7 +195,7 @@ export function Wyniki() {
             <Button size="lg" disabled={!canSave || save.isPending} onClick={() => save.mutate()}>
               <FlaskConical size={16} /> {save.isPending ? 'Zapisywanie…' : 'Zapisz wynik'}
             </Button>
-            {!picked && <p className="text-xs font-medium text-gray-400">Najpierw wybierz pacjenta.</p>}
+            {!picked && <p className="text-xs font-medium text-gray-500">Najpierw wybierz pacjenta.</p>}
           </div>
         </Tile>
       </div>
@@ -212,7 +212,7 @@ export function Wyniki() {
                 <li key={d.document_id} className="flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-2.5">
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold text-gray-900">{d.details ?? 'Wynik badania'}</span>
-                    <span className="block text-xs font-medium text-gray-400">{formatDatePL(d.issued_at)} · {d.doctor_name}</span>
+                    <span className="block text-xs font-medium text-gray-500">{formatDatePL(d.issued_at)} · {d.doctor_name}</span>
                   </span>
                   <Badge tone="success">{d.document_status}</Badge>
                 </li>

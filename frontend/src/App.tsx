@@ -123,7 +123,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-gray-400">
+      <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-gray-500">
         Wczytywanie…
       </div>
     )

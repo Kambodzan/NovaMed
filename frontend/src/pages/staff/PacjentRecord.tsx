@@ -90,7 +90,7 @@ export function PacjentRecord() {
           <ul className="space-y-1.5">
             {upcoming.map(v => (
               <li key={v.appointment_id} className="flex flex-wrap items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
-                <span className="text-gray-400">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
+                <span className="text-gray-500">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">
                     {formatDatePL(v.appointment_datetime)}, {formatTime(v.appointment_datetime)}
@@ -163,7 +163,7 @@ export function PacjentRecord() {
                       </div>
                       <StatusBadge status={v.appointment_status} />
                       {expandable && (
-                        <ChevronDown size={15} className={cx('shrink-0 text-gray-400 transition-transform', isOpen && 'rotate-180')} />
+                        <ChevronDown size={15} className={cx('shrink-0 text-gray-500 transition-transform', isOpen && 'rotate-180')} />
                       )}
                     </button>
                     {expandable && isOpen && (
@@ -171,7 +171,7 @@ export function PacjentRecord() {
                         {d!.note ? (
                           <p className="text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{d!.note}</p>
                         ) : (
-                          <p className="text-sm font-medium text-gray-400">Lekarz nie zostawił noty z tej wizyty.</p>
+                          <p className="text-sm font-medium text-gray-500">Lekarz nie zostawił noty z tej wizyty.</p>
                         )}
                         {d!.addenda.map((a, j) => (
                           <p key={j} className="border-l-2 border-primary/40 pl-3 text-sm font-medium whitespace-pre-wrap text-gray-700">

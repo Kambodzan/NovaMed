@@ -45,7 +45,7 @@ export function Login() {
           <HeartPulse size={28} />
         </span>
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-gray-900">NovaMed</h1>
-        <p className="mt-1 text-sm font-semibold text-gray-400">Portal Pacjenta</p>
+        <p className="mt-1 text-sm font-semibold text-gray-500">Portal Pacjenta</p>
       </div>
 
       <Tile className="w-full max-w-sm p-6" delay={80}>
@@ -77,7 +77,7 @@ export function Login() {
 
       {import.meta.env.DEV && (
         <div className="fade-up mt-5 text-center" style={{ animationDelay: '160ms' }}>
-          <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">Konta testowe</p>
+          <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">Konta testowe</p>
           <div className="flex flex-wrap justify-center gap-2">
             {TEST_ACCOUNTS.map(([testEmail, label]) => (
               <button

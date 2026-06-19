@@ -325,7 +325,7 @@ function ReviewModal({ visit, onClose, onDone }: {
           <p className="mb-2 text-sm font-extrabold text-gray-900">{t('Oceń placówkę —')} {visit.clinic_name}</p>
           <Stars value={clinicRating} onChange={setClinicRating} />
         </div>
-        <p className="text-xs font-medium text-gray-400">{t('Możesz ocenić lekarza, placówkę lub oboje.')}</p>
+        <p className="text-xs font-medium text-gray-500">{t('Możesz ocenić lekarza, placówkę lub oboje.')}</p>
         {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       </div>
     </Modal>
@@ -371,7 +371,7 @@ function PodsumowanieWizyty({ visit, onClose }: {
         <div className="space-y-4 pb-2">
           {visit.notes && (
             <div className="rounded-2xl bg-gray-50 px-4 py-3">
-              <p className="mb-1 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Zgłoszony powód wizyty')}</p>
+              <p className="mb-1 text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Zgłoszony powód wizyty')}</p>
               <p className="text-sm font-medium text-gray-700">{visit.notes}</p>
             </div>
           )}
@@ -397,7 +397,7 @@ function PodsumowanieWizyty({ visit, onClose }: {
 
           {others.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Dokumenty z tej wizyty')}</p>
+              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Dokumenty z tej wizyty')}</p>
               <ul className="space-y-1.5">
                 {others.map(d => (
                   <li key={d.document_id}>

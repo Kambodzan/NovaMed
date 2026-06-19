@@ -21,7 +21,7 @@ function StatTile({ icon, label, value, sub, delay }: {
 }) {
   return (
     <Tile className="p-4" delay={delay}>
-      <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">
+      <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-gray-500 uppercase">
         {icon} {label}
       </p>
       <p className="mt-1 text-xl font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{value}</p>
@@ -94,7 +94,7 @@ export function LekarzDzien() {
 
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
-      {booked.length > 0 && (
+      {visits !== undefined && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile delay={30} icon={<Users size={12} />} label="Pacjenci" value={booked.length} />
           <StatTile delay={60} icon={<CheckCircle2 size={12} />} label="Zakończone" value={`${done} / ${booked.length}`} />
@@ -109,7 +109,7 @@ export function LekarzDzien() {
 
       <Tile className="p-3 sm:p-4" delay={150}>
         {visits === undefined ? (
-          <p className="py-10 text-center text-sm font-semibold text-gray-400">Wczytywanie grafiku…</p>
+          <p className="py-10 text-center text-sm font-semibold text-gray-500">Wczytywanie grafiku…</p>
         ) : visits.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={28} strokeWidth={1.5} />}
@@ -139,8 +139,8 @@ export function LekarzDzien() {
                       'flex items-center gap-4 rounded-2xl border border-dashed border-gray-200 px-4 py-3',
                       past && 'opacity-50',
                     )}>
-                      <span className="w-12 text-sm font-bold text-gray-300 [font-variant-numeric:tabular-nums]">{formatTime(v.appointment_datetime)}</span>
-                      <span className="text-sm font-medium text-gray-400">wolny termin</span>
+                      <span className="w-12 text-sm font-bold text-gray-500 [font-variant-numeric:tabular-nums]">{formatTime(v.appointment_datetime)}</span>
+                      <span className="text-sm font-medium text-gray-500">wolny termin</span>
                     </li>
                   </Fragment>
                 )
@@ -156,13 +156,13 @@ export function LekarzDzien() {
                     finished && 'opacity-60 transition-opacity hover:opacity-100',
                   )}
                 >
-                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : paused ? 'text-amber-600' : 'text-gray-400')}>
+                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : paused ? 'text-amber-600' : 'text-gray-500')}>
                     {paused && <Pause size={13} className="shrink-0" />}
                     {v.appointment_status === 'COMPLETED' && <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />}
                     {(v.appointment_status === 'NO_SHOW' || v.appointment_status === 'CANCELLED') && <XCircle size={14} className="shrink-0 text-gray-300" />}
                     {formatTime(v.appointment_datetime)}
                   </span>
-                  <span className="text-gray-400">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
+                  <span className="text-gray-500">{v.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}</span>
                   <button
                     onClick={() => navigate(`/wizyta/${v.appointment_id}`)}
                     className="min-w-0 flex-1 cursor-pointer text-left"

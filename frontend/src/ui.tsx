@@ -11,7 +11,7 @@ export const cx = (...parts: Array<string | false | undefined>) =>
 /* ---------- Nagłówki ---------- */
 
 export const Overline = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <p className={cx('text-xs font-extrabold tracking-wider text-gray-400 uppercase', className)}>{children}</p>
+  <p className={cx('text-xs font-extrabold tracking-wider text-gray-500 uppercase', className)}>{children}</p>
 )
 
 export function PageHeader({ overline, title, sub, action }: {
@@ -20,7 +20,7 @@ export function PageHeader({ overline, title, sub, action }: {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
-        {overline && <p className="text-sm font-semibold text-gray-400">{overline}</p>}
+        {overline && <p className="text-sm font-semibold text-gray-500">{overline}</p>}
         <h1 className="mt-0.5 text-[28px] leading-tight font-extrabold tracking-tight text-gray-900">{title}</h1>
         {sub && <p className="mt-1 text-sm font-medium text-gray-500">{sub}</p>}
       </div>
@@ -41,7 +41,8 @@ export function Button({ variant = 'primary', size = 'md', className, ...props }
     <button
       className={cx(
         'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full font-bold transition-all',
-        'disabled:pointer-events-none disabled:opacity-50',
+        // disabled = wyraźnie szary (nie wyblakły primary, który czytał się jak „aktywny")
+        'disabled:pointer-events-none disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none',
         size === 'lg' && 'h-12 px-6 text-[15px]',
         size === 'md' && 'h-10 px-5 text-sm',
         size === 'sm' && 'h-8 px-4 text-xs',
@@ -177,7 +178,7 @@ export function Table({ children }: { children: ReactNode }) {
 
 export function Th({ children, className }: { children?: ReactNode; className?: string }) {
   return (
-    <th className={cx('px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase', className)}>
+    <th className={cx('px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-500 uppercase', className)}>
       {children}
     </th>
   )
@@ -194,7 +195,7 @@ export function Stat({ label, value, hint, delay }: { label: string; value: stri
     <Tile className="p-5" delay={delay}>
       <Overline>{label}</Overline>
       <p className="mt-2 text-4xl font-extrabold tracking-tight text-gray-900 [font-variant-numeric:tabular-nums]">{value}</p>
-      {hint && <p className="mt-1 text-xs font-semibold text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs font-semibold text-gray-500">{hint}</p>}
     </Tile>
   )
 }
@@ -203,7 +204,7 @@ export function Stat({ label, value, hint, delay }: { label: string; value: stri
 // (zapobiega miganiu EmptyState zanim dane z useQuery dojdą)
 export function Loading({ label = 'Wczytywanie…' }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-gray-400">
+    <div className="flex items-center justify-center gap-2 py-12 text-sm font-semibold text-gray-500">
       <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-primary" />
       {label}
     </div>
@@ -273,10 +274,10 @@ export function Field({ label, children, hint }: { label: string; children: Reac
     <label className="block">
       <span className="mb-1.5 block text-sm font-bold text-gray-700">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs font-medium text-gray-400">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs font-medium text-gray-500">{hint}</span>}
     </label>
   )
 }
 
 export const inputCls =
-  'h-11 w-full rounded-xl border border-gray-200 bg-surface px-3.5 text-sm font-medium text-gray-900 placeholder:text-gray-400 hover:border-gray-300'
+  'h-11 w-full rounded-xl border border-gray-200 bg-surface px-3.5 text-sm font-medium text-gray-900 placeholder:text-gray-500 hover:border-gray-300'

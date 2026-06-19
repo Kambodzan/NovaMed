@@ -30,7 +30,7 @@ export function RatingBadge({ average, count, onOpen }: { average: number; count
       title="Zobacz opinie" className="flex cursor-pointer items-center gap-0.5 text-xs font-extrabold text-amber-600 hover:underline">
       <Star size={12} className="fill-amber-400 text-amber-400" />
       {average.toFixed(1)}
-      <span className="font-semibold text-gray-400">({count})</span>
+      <span className="font-semibold text-gray-500">({count})</span>
     </span>
   )
 }
@@ -46,7 +46,7 @@ export function DoctorReviewsModal({ name, endpoint, onClose }: { name: string; 
     <Modal title={`Opinie — ${name}`} onClose={onClose}
       overline={data && data.average != null ? `średnia ${data.average.toFixed(1)} z ${data.count} opinii` : undefined}>
       {isLoading ? (
-        <p className="text-sm font-medium text-gray-400">Wczytywanie…</p>
+        <p className="text-sm font-medium text-gray-500">Wczytywanie…</p>
       ) : withComment.length === 0 ? (
         <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">
           Brak opisowych opinii — pacjenci wystawili na razie tylko oceny gwiazdkowe.
@@ -57,7 +57,7 @@ export function DoctorReviewsModal({ name, endpoint, onClose }: { name: string; 
             <li key={i} className="rounded-2xl bg-gray-50 px-4 py-3">
               <div className="mb-1 flex items-center justify-between gap-3">
                 <Stars value={r.rating} />
-                <span className="text-xs font-semibold text-gray-400">{formatDatePL(r.created_at)}</span>
+                <span className="text-xs font-semibold text-gray-500">{formatDatePL(r.created_at)}</span>
               </div>
               <p className="text-sm font-medium text-gray-700">{r.comment}</p>
             </li>

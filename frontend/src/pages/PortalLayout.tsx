@@ -48,14 +48,14 @@ function AccountMenu() {
       >
         <Avatar initials={initials} size="sm" />
         <span className="hidden max-w-36 truncate text-sm font-bold text-gray-700 sm:inline">{shownName}</span>
-        <ChevronDown size={14} className={cx('text-gray-400 transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={14} className={cx('text-gray-500 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
         <>
           <button aria-hidden className="fixed inset-0 z-10 cursor-default" onClick={() => setOpen(false)} />
           <div role="menu" className="tile-shadow absolute right-0 z-20 mt-2 w-64 rounded-2xl bg-surface p-1.5">
-            <p className="px-3 pt-2 pb-1 text-xs font-extrabold tracking-wider text-gray-400 uppercase">
+            <p className="px-3 pt-2 pb-1 text-xs font-extrabold tracking-wider text-gray-500 uppercase">
               {t('Aktywny profil')}
             </p>
             {[{ id: null as string | null, label: myName }, ...dependents.map(d => ({ id: d.patient_id as string | null, label: `${d.first_name} ${d.last_name}` }))].map(p => (
@@ -74,25 +74,25 @@ function AccountMenu() {
               onClick={() => { setOpen(false); navigate('/profil') }}
               className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-xl border-t border-gray-100 px-3 py-2 pt-2.5 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
-              <UserCog size={14} className="text-gray-400" /> {t('Profil i ustawienia')}
+              <UserCog size={14} className="text-gray-500" /> {t('Profil i ustawienia')}
             </button>
             <button
               role="menuitem"
               onClick={() => { setOpen(false); navigate('/rodzina') }}
               className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
-              <Users size={14} className="text-gray-400" /> {t('Rodzina')}
+              <Users size={14} className="text-gray-500" /> {t('Rodzina')}
             </button>
             <button
               role="menuitem"
               onClick={() => void toggleSms()}
               className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
-              <MessageSquare size={14} className="text-gray-400" />
+              <MessageSquare size={14} className="text-gray-500" />
               <span className="flex-1">{t('Powiadomienia SMS')}</span>
               <span className={cx(
                 'rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase',
-                me?.notify_sms ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-400',
+                me?.notify_sms ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-500',
               )}>
                 {me?.notify_sms ? t('wł.') : t('wył.')}
               </span>

@@ -83,7 +83,7 @@ export function Dokumentacja() {
                     <div className="min-w-0 flex-1">
                       <Overline>{t(m.label)} · {formatDatePL(doc.issued_at)}</Overline>
                       <p className="mt-1 text-sm leading-relaxed font-medium text-gray-600">{doc.details}</p>
-                      <p className="mt-1.5 text-xs font-semibold text-gray-400">
+                      <p className="mt-1.5 text-xs font-semibold text-gray-500">
                         {doc.doctor_name}
                         {doc.code && (
                           <> · {t('kod:')} <span className="rounded-md bg-gray-100 px-2 py-0.5 font-extrabold tracking-[0.2em] text-gray-900">{doc.code}</span></>

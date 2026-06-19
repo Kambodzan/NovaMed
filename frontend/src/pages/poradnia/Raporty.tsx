@@ -17,7 +17,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
     <Tile className="p-5">
       <Overline>{label}</Overline>
       <p className="mt-2 text-4xl font-extrabold tracking-tight text-gray-900 [font-variant-numeric:tabular-nums]">{value}</p>
-      {hint && <p className="mt-1 text-xs font-semibold text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs font-semibold text-gray-500">{hint}</p>}
     </Tile>
   )
 }
@@ -96,7 +96,7 @@ export function Raporty() {
             ) : (
               <div className="flex items-center gap-1.5">
                 <div className="w-36"><DatePicker value={from} max={to || undefined} onChange={setFrom} /></div>
-                <span className="text-sm font-bold text-gray-400">–</span>
+                <span className="text-sm font-bold text-gray-500">–</span>
                 <div className="w-36"><DatePicker value={to} min={from || undefined} onChange={setTo} /></div>
               </div>
             )}
@@ -130,7 +130,7 @@ export function Raporty() {
                   <li key={d.doctor_id}>
                     <div className="mb-1 flex items-baseline justify-between">
                       <span className="text-sm font-bold text-gray-800">{d.doctor_name}</span>
-                      <span className="text-xs font-extrabold text-gray-400 [font-variant-numeric:tabular-nums]">
+                      <span className="text-xs font-extrabold text-gray-500 [font-variant-numeric:tabular-nums]">
                         {d.booked} wizyt · {d.completed} zakończonych
                       </span>
                     </div>

@@ -25,7 +25,7 @@ export function ProShell({ brand, nav, children }: {
           </span>
           <div className="min-w-0 leading-tight">
             <p className="font-extrabold text-gray-900">NovaMed</p>
-            <p className="truncate text-[11px] font-bold text-gray-400">{brand}</p>
+            <p className="truncate text-[11px] font-bold text-gray-500">{brand}</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2" aria-label="Nawigacja główna">
@@ -48,7 +48,7 @@ export function ProShell({ brand, nav, children }: {
         <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-5 py-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-gray-900">{me?.username}</p>
-            <p className="truncate text-[11px] font-semibold text-gray-400">{me?.email}</p>
+            <p className="truncate text-[11px] font-semibold text-gray-500">{me?.email}</p>
             {me?.role && (
               <p className="mt-0.5 text-[10px] font-extrabold tracking-wider text-primary uppercase">{me.role}</p>
             )}
@@ -56,7 +56,7 @@ export function ProShell({ brand, nav, children }: {
           <button
             onClick={() => void logout()}
             aria-label="Wyloguj"
-            className="shrink-0 cursor-pointer rounded-full p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-900"
+            className="shrink-0 cursor-pointer rounded-full p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-900"
           >
             <LogOut size={16} />
           </button>

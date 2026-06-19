@@ -151,7 +151,7 @@ export function KodOdPacjenta() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-gray-900">{g.recipient_name}</span>
-                    <span className="block text-xs font-semibold text-gray-400">
+                    <span className="block text-xs font-semibold text-gray-500">
                       {g.scope_label}{g.redeemed_at ? ` · od ${formatDatePL(g.redeemed_at)}` : ''}
                     </span>
                   </span>
@@ -178,11 +178,11 @@ export function KodOdPacjenta() {
           {/* noty z wizyt (encounter notes) — w zakresie ogólnym / ostatnie 12 mies. */}
           {shared.notes.length > 0 && (
             <div className="mb-4">
-              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">Noty z wizyt</p>
+              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">Noty z wizyt</p>
               <ul className="space-y-2">
                 {shared.notes.map(n => (
                   <li key={n.appointment_id} className="rounded-2xl bg-gray-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-gray-400">{formatDatePL(n.date)} · {n.doctor_name}</p>
+                    <p className="text-xs font-semibold text-gray-500">{formatDatePL(n.date)} · {n.doctor_name}</p>
                     <p className="mt-1 text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{n.content}</p>
                     {n.addenda.map((a, i) => (
                       <p key={i} className="mt-1.5 border-l-2 border-primary/40 pl-3 text-sm font-medium whitespace-pre-wrap text-gray-700">
@@ -196,7 +196,7 @@ export function KodOdPacjenta() {
           )}
 
           {shared.documents.length === 0 && shared.notes.length === 0 ? (
-            <p className="py-6 text-center text-sm font-medium text-gray-400">Brak dokumentów w udostępnionym zakresie.</p>
+            <p className="py-6 text-center text-sm font-medium text-gray-500">Brak dokumentów w udostępnionym zakresie.</p>
           ) : shared.documents.length > 0 && (
             <ul className="space-y-2">
               {shared.documents.map(d => {
@@ -208,7 +208,7 @@ export function KodOdPacjenta() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-gray-900">{d.details ?? d.document_type}</p>
-                      <p className="text-xs font-semibold text-gray-400">
+                      <p className="text-xs font-semibold text-gray-500">
                         {formatDatePL(d.issued_at)} · {d.doctor_name}{d.code ? ` · kod: ${d.code}` : ''}
                       </p>
                     </div>

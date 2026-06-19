@@ -105,7 +105,7 @@ export function NotificationsBell() {
                           {n.notification_title}
                         </span>
                         <span className="mt-0.5 block text-xs font-medium text-gray-600">{n.notification_content}</span>
-                        <span className="mt-1 block text-[11px] font-semibold text-gray-400">
+                        <span className="mt-1 block text-[11px] font-semibold text-gray-500">
                           {formatDatePL(n.sent_at)}, {formatTime(n.sent_at)}
                         </span>
                       </span>

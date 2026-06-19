@@ -123,7 +123,7 @@ export function Zabiegi() {
                   p.procedure_status === 'PLANNED' ? 'bg-gray-50' : 'bg-gray-50 opacity-60',
                 )}
               >
-                <span className="w-12 text-sm font-extrabold text-gray-400 [font-variant-numeric:tabular-nums]">
+                <span className="w-12 text-sm font-extrabold text-gray-500 [font-variant-numeric:tabular-nums]">
                   {formatTime(p.procedure_datetime)}
                 </span>
                 <div className="min-w-0 flex-1">

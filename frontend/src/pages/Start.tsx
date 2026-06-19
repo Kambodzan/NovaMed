@@ -49,7 +49,7 @@ export function Start() {
   return (
     <div className="space-y-6">
       <div className="fade-up">
-        <p className="text-sm font-semibold text-gray-400">{formatDatePL(new Date().toISOString())}</p>
+        <p className="text-sm font-semibold text-gray-500">{formatDatePL(new Date().toISOString())}</p>
         <h1 className="mt-1 text-[28px] leading-tight font-extrabold tracking-tight text-gray-900 sm:text-[32px]">
           {t('Dzień dobry')}{me?.first_name ? `, ${me.first_name}` : ''}
         </h1>
@@ -142,7 +142,7 @@ export function Start() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-bold text-gray-900">{d.details ?? d.document_type}</span>
-                      <span className="block text-xs font-semibold text-gray-400">{formatDatePL(d.issued_at)}</span>
+                      <span className="block text-xs font-semibold text-gray-500">{formatDatePL(d.issued_at)}</span>
                     </span>
                     <StatusBadge status={d.document_status} />
                   </li>

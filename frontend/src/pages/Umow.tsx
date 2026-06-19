@@ -139,12 +139,12 @@ function DoctorCard({ d, multiClinic, onPick }: {
           </span>
         </span>
         <span className="text-right">
-          <span className="block text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">{t('najbliższy')}</span>
+          <span className="block text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">{t('najbliższy')}</span>
           <span className="block text-sm font-extrabold text-primary [font-variant-numeric:tabular-nums]">
             {dayLabel(nearest.appointment_datetime.slice(0, 10))}, {formatTime(nearest.appointment_datetime)}
           </span>
         </span>
-        <ChevronDown size={16} className={cx('shrink-0 text-gray-400 transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={16} className={cx('shrink-0 text-gray-500 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
@@ -172,19 +172,19 @@ function DoctorCard({ d, multiClinic, onPick }: {
           <div className="mb-2 flex justify-end gap-1">
             <button aria-label={t('Wcześniejsze dni')} disabled={offset === 0}
               onClick={() => setOffset(o => Math.max(0, o - 3))}
-              className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+              className="cursor-pointer rounded-full p-1 text-gray-500 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
               <ChevronLeft size={15} />
             </button>
             <button aria-label={t('Kolejne dni')} disabled={offset + 3 >= days.length}
               onClick={() => setOffset(o => o + 3)}
-              className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+              className="cursor-pointer rounded-full p-1 text-gray-500 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
               <ChevronRight size={15} />
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {visible.map(([day, list]) => (
               <div key={day} className="min-w-0">
-                <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-400 uppercase">
+                <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-500 uppercase">
                   {dayLabel(day)}
                 </p>
                 <div className="flex flex-col items-stretch gap-1">
@@ -533,11 +533,11 @@ export function Umow() {
             <li key={s} className="flex items-center gap-2">
               <span className={cx(
                 'flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold',
-                step > i + 1 ? 'bg-primary text-white' : step === i + 1 ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-400',
+                step > i + 1 ? 'bg-primary text-white' : step === i + 1 ? 'bg-primary-soft text-primary' : 'bg-gray-100 text-gray-500',
               )}>
                 {step > i + 1 ? <Check size={13} /> : i + 1}
               </span>
-              <span className={cx('hidden text-xs font-bold sm:inline', step === i + 1 ? 'text-gray-900' : 'text-gray-400')}>{s}</span>
+              <span className={cx('hidden text-xs font-bold sm:inline', step === i + 1 ? 'text-gray-900' : 'text-gray-500')}>{s}</span>
             </li>
           ))}
         </ol>
@@ -607,9 +607,9 @@ export function Umow() {
                 <button
                   onClick={() => setMapOpen(true)}
                   className={cx(inputCls, 'flex w-auto cursor-pointer items-center gap-2 font-bold',
-                    clinicFilter ? 'text-primary' : 'text-gray-400 hover:text-gray-900')}
+                    clinicFilter ? 'text-primary' : 'text-gray-500 hover:text-gray-900')}
                 >
-                  <MapPin size={15} className={clinicFilter ? 'text-primary' : 'text-gray-400'} />
+                  <MapPin size={15} className={clinicFilter ? 'text-primary' : 'text-gray-500'} />
                   {clinicFilter
                     ? (clinicFilter.startsWith('city:') ? clinicFilter.slice(5)
                       : clinicFilter.startsWith('geo:') ? (parseGeo(clinicFilter)?.name ?? `${t('Obszar')} ${parseGeo(clinicFilter)?.km} km`)
@@ -622,7 +622,7 @@ export function Umow() {
             {/* popularne specjalizacje — gotowe wejścia bez pisania */}
             {bookKind === 'visit' && (
             <div>
-              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-400 uppercase">{t('Popularne specjalizacje')}</p>
+              <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Popularne specjalizacje')}</p>
               <div className="flex flex-wrap gap-2">
                 {popularSpecs.map(([s, count]) => (
                   <button
@@ -633,7 +633,7 @@ export function Umow() {
                       spec === s ? 'bg-primary text-white' : 'bg-gray-50 text-gray-700 hover:bg-primary-soft hover:text-primary',
                     )}
                   >
-                    {s} <span className={cx('font-semibold', spec === s ? 'text-white/70' : 'text-gray-400')}>({count})</span>
+                    {s} <span className={cx('font-semibold', spec === s ? 'text-white/70' : 'text-gray-500')}>({count})</span>
                   </button>
                 ))}
               </div>
@@ -656,7 +656,7 @@ export function Umow() {
                     {bookKind === 'exam' ? t('Umawiasz badanie ze skierowania') : t('Umawiasz wizytę u specjalisty ze skierowania')}
                   </p>
                   <p className="font-medium text-gray-600">{refDocInfo.details}{refDocInfo.code ? ` · ${refDocInfo.code}` : ''}</p>
-                  <p className="mt-0.5 text-xs font-medium text-gray-400">
+                  <p className="mt-0.5 text-xs font-medium text-gray-500">
                     {bookKind === 'exam'
                       ? t('Wybierz badanie i termin poniżej — skierowanie podepniemy automatycznie.')
                       : t('Wybierz lekarza i termin poniżej — skierowanie podepniemy automatycznie.')}
@@ -695,7 +695,7 @@ export function Umow() {
                   </button>
                 )}
                 {clinicFilter?.startsWith('cli:') && addressOf(clinicFilter.slice(4)) && (
-                  <span className="text-xs font-semibold text-gray-400">{addressOf(clinicFilter.slice(4))}</span>
+                  <span className="text-xs font-semibold text-gray-500">{addressOf(clinicFilter.slice(4))}</span>
                 )}
               </div>
             )}
@@ -838,7 +838,7 @@ export function Umow() {
                           onChange={() => { setRefDocId(r.document_id); setExternalRef(false) }} />
                         <span className="text-sm font-semibold text-gray-700">
                           {t('Skierowanie z NovaMed')}: {r.details ?? r.code ?? `#${r.document_id}`}
-                          <span className="block text-xs font-medium text-gray-400">
+                          <span className="block text-xs font-medium text-gray-500">
                             {formatDatePL(r.issued_at)}{r.code ? ` · ${r.code}` : ''}
                           </span>
                         </span>
@@ -869,7 +869,7 @@ export function Umow() {
                 )}
                 {slot.appointment_type !== 'ONLINE' && !slot.service_name && !slot.allow_online && (
                   <p className="flex items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-600">
-                    <MapPin size={16} className="mt-0.5 shrink-0 text-gray-400" />
+                    <MapPin size={16} className="mt-0.5 shrink-0 text-gray-500" />
                     {t('Ta wizyta odbywa się wyłącznie stacjonarnie (bez teleporady).')}
                   </p>
                 )}
@@ -1025,7 +1025,7 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
               <li key={e.entry_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-2.5">
                 <span className="flex-1 text-sm font-bold text-gray-900">{e.specialization}</span>
                 <button aria-label={t('Usuń z listy')} onClick={() => leave.mutate(e.entry_id)}
-                  className="cursor-pointer rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600">
+                  className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-red-600">
                   <Trash2 size={15} />
                 </button>
               </li>

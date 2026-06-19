@@ -104,10 +104,10 @@ export function DatePicker({ value, onChange, min, max, required, placeholder, c
         aria-haspopup="dialog" aria-expanded={open}
         onClick={() => open ? setOpen(false) : show()}
         onKeyDown={e => { if (open && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false) } }}
-        className={cx(inputCls, 'flex cursor-pointer items-center justify-between gap-2 text-left', !selected && 'text-gray-400')}
+        className={cx(inputCls, 'flex cursor-pointer items-center justify-between gap-2 text-left', !selected && 'text-gray-500')}
       >
         <span className="truncate">{display}</span>
-        <CalendarDays size={15} className="shrink-0 text-gray-400" />
+        <CalendarDays size={15} className="shrink-0 text-gray-500" />
       </button>
       {/* natywna walidacja required bez natywnego pickera */}
       {required && (
@@ -139,7 +139,7 @@ export function DatePicker({ value, onChange, min, max, required, placeholder, c
             <>
               <div className="mb-1 grid grid-cols-7 text-center">
                 {WEEKDAYS[lang === 'en' ? 'en' : 'pl'].map(d => (
-                  <span key={d} className="text-[11px] font-extrabold tracking-wider text-gray-400 uppercase">{d}</span>
+                  <span key={d} className="text-[11px] font-extrabold tracking-wider text-gray-500 uppercase">{d}</span>
                 ))}
               </div>
               <div className="grid grid-cols-7 place-items-center gap-y-0.5">

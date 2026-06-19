@@ -81,10 +81,18 @@ export function LekarzKalendarz() {
                       // samą godzinę, więc pokazujemy nazwę usługi, by je rozróżnić
                       return (
                         <div key={v.appointment_id} title={v.service_name ?? 'wolny termin'}
-                          className="rounded-lg border border-dashed border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-400 [font-variant-numeric:tabular-nums]">
-                          <span className="text-gray-500">{formatTime(v.appointment_datetime)}</span>
+                          className="rounded-lg border border-dashed border-gray-200 px-2 py-1.5 text-[11px] font-semibold text-gray-500 [font-variant-numeric:tabular-nums]">
+                          <span className="flex items-center justify-between gap-1">
+                            <span>{formatTime(v.appointment_datetime)}</span>
+                            {/* cena rozróżnia nakładające się usługi (NFZ / 150 / 250 zł), gdy nazwa się ucina */}
+                            {v.service_name && (
+                              <span className={v.price ? 'font-bold text-gray-700' : 'font-bold text-emerald-700'}>
+                                {v.price ? `${v.price} zł` : 'NFZ'}
+                              </span>
+                            )}
+                          </span>
                           {v.service_name
-                            ? <span className="block truncate text-gray-400">{v.service_name}</span>
+                            ? <span className="block truncate text-gray-500">{v.service_name}</span>
                             : ' wolny'}
                         </div>
                       )
@@ -98,7 +106,7 @@ export function LekarzKalendarz() {
                           'flex w-full cursor-pointer items-center gap-1 rounded-lg px-2 py-1.5 text-left text-[11px] font-bold transition-colors',
                           v.appointment_status === 'IN_PROGRESS' ? 'bg-primary text-white'
                             : v.appointment_status === 'CONFIRMED' ? 'bg-primary-soft text-primary hover:bg-primary/15'
-                            : 'bg-gray-50 text-gray-400 hover:bg-gray-100',
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100',
                         )}
                       >
                         <span className="[font-variant-numeric:tabular-nums]">{formatTime(v.appointment_datetime)}</span>
@@ -115,7 +123,7 @@ export function LekarzKalendarz() {
           })}
         </div>
       </div>
-      <p className="text-xs font-medium text-gray-400">
+      <p className="text-xs font-medium text-gray-500">
         Kliknij wizytę, aby otworzyć gabinet. Terminy do kalendarza dodaje rejestracja w Panelu Poradni.
       </p>
     </div>

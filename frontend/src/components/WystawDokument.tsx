@@ -211,7 +211,7 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       )}
       {needsIcd && externalIcd && (
         <div className="rounded-xl bg-gray-50 px-3.5 py-2.5">
-          <p className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Rozpoznanie (ICD-10)</p>
+          <p className="text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">Rozpoznanie (ICD-10)</p>
           {icd10Value.trim()
             ? <p className="text-sm font-bold text-gray-900">{icd10Value}</p>
             : <p className="text-sm font-medium text-amber-700">Uzupełnij „Rozpoznanie" w notatce obok — trafi tu automatycznie.</p>}

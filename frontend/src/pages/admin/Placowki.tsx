@@ -87,7 +87,7 @@ function ClinicPanel({ clinic }: { clinic: ClinicLite }) {
       {docs && docs.length > 0 && (
         <div className="mt-6">
           <p className="text-sm font-extrabold text-gray-900">Długość wizyt per lekarz</p>
-          <p className="mb-2 text-xs font-medium text-gray-400">
+          <p className="mb-2 text-xs font-medium text-gray-500">
             Puste = siatka placówki ({intervalMin} min). Zmiana zapisuje się po wyjściu z pola.
           </p>
           <div className="space-y-1.5">
@@ -101,7 +101,7 @@ function ClinicPanel({ clinic }: { clinic: ClinicLite }) {
                     const num = v === '' ? null : Number(v)
                     if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
                   }} />
-                <span className="text-xs font-bold text-gray-400">min</span>
+                <span className="text-xs font-bold text-gray-500">min</span>
               </div>
             ))}
           </div>

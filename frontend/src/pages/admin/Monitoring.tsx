@@ -8,7 +8,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
     <Tile className="p-5">
       <Overline>{label}</Overline>
       <p className="mt-2 text-4xl font-extrabold tracking-tight text-gray-900 [font-variant-numeric:tabular-nums]">{value}</p>
-      {hint && <p className="mt-1 text-xs font-semibold text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs font-semibold text-gray-500">{hint}</p>}
     </Tile>
   )
 }
@@ -60,7 +60,7 @@ export function AdminMonitoring() {
             </li>
             <li className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5">
               <span className="text-sm font-bold text-gray-800">Integracje zewnętrzne</span>
-              <span className="text-xs font-bold text-gray-400">szczegóły w zakładce „Integracje”</span>
+              <span className="text-xs font-bold text-gray-500">szczegóły w zakładce „Integracje”</span>
             </li>
           </ul>
         </Tile>

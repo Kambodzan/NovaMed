@@ -77,13 +77,13 @@ export function AdminUzytkownicy() {
           <thead>
             <tr>
               {['Użytkownik', 'Rola', 'Status', ''].map((h, i) => (
-                <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-400 uppercase">{h}</th>
+                <th key={i} className="px-4 py-3 text-left text-xs font-extrabold tracking-wider text-gray-500 uppercase">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={4} className="border-t border-gray-100 px-4 py-8 text-center text-sm font-medium text-gray-400">
+              <tr><td colSpan={4} className="border-t border-gray-100 px-4 py-8 text-center text-sm font-medium text-gray-500">
                 {users === undefined ? 'Wczytywanie…' : 'Brak użytkowników spełniających kryteria.'}
               </td></tr>
             )}
@@ -91,7 +91,7 @@ export function AdminUzytkownicy() {
               <tr key={u.user_id} className="hover:bg-gray-50">
                 <td className="border-t border-gray-100 px-4 py-3.5">
                   <p className="font-extrabold text-gray-900">{u.username}</p>
-                  <p className="text-xs font-medium text-gray-400">{u.email}</p>
+                  <p className="text-xs font-medium text-gray-500">{u.email}</p>
                 </td>
                 <td className="border-t border-gray-100 px-4 py-3.5">
                   {u.user_id === me?.user_id ? (

@@ -84,7 +84,7 @@ export function Typeahead({ id, value, onChange, onPick, search, placeholder, re
           {items.map((item, i) => (
             item.header ? (
               <li key={item.key} aria-hidden>
-                <p className="px-3 pt-2 pb-1 text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">{item.label}</p>
+                <p className="px-3 pt-2 pb-1 text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">{item.label}</p>
               </li>
             ) : (
             <li key={item.key} role="option" aria-selected={i === activeIdx}>
