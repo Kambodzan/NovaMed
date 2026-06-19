@@ -121,11 +121,6 @@ function DoctorCard({ d, multiClinic, onPick }: {
             {rating && rating.count > 0 && rating.average != null && (
               <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
             )}
-            {d.referralRequired && (
-              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">
-                <FileSignature size={11} /> {t('wymaga skierowania')}
-              </span>
-            )}
           </span>
           <span className="block truncate text-xs font-semibold text-gray-500">
             {[
@@ -166,7 +161,14 @@ function DoctorCard({ d, multiClinic, onPick }: {
           ) : sel && (
             <p className="mb-3 text-sm font-bold text-gray-900">
               {sel.label} · <span className={sel.price != null ? 'text-gray-900' : 'text-emerald-700'}>{sel.price != null ? `${sel.price} zł` : 'NFZ'}</span>
-              {sel.referral && <span className="ml-1 text-xs font-semibold text-amber-700">· {t('wymaga skierowania')}</span>}
+            </p>
+          )}
+          {/* skierowanie pokazujemy DOPIERO przy wybranej usłudze NFZ ze skierowaniem
+              — nie strasząc plakietką przy każdym lekarzu */}
+          {sel?.referral && (
+            <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <FileSignature size={13} className="mt-0.5 shrink-0" />
+              {t('Ta usługa na NFZ wymaga skierowania — wskażesz je (kod e-skierowania lub oświadczenie) przy potwierdzeniu.')}
             </p>
           )}
           <div className="mb-2 flex justify-end gap-1">

@@ -309,11 +309,6 @@ function PublicCard({ c, onPick, disabled }: {
             {rating && rating.count > 0 && rating.average != null && (
               <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
             )}
-            {c.ref && (
-              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-amber-800 uppercase">
-                <FileSignature size={11} /> wymaga skierowania
-              </span>
-            )}
           </span>
           {c.sub && <span className="block text-xs font-semibold text-gray-500">{c.sub}</span>}
         </span>
@@ -332,9 +327,17 @@ function PublicCard({ c, onPick, disabled }: {
                   <span className={cx('font-extrabold', sel?.key === s.key ? 'text-white/80' : s.price != null ? 'text-gray-900' : 'text-emerald-700')}>
                     · {s.price != null ? `${s.price} zł` : 'NFZ'}
                   </span>
+                  {s.referral && <FileSignature size={10} className="opacity-80" />}
                 </button>
               ))}
             </div>
+          )}
+          {/* skierowanie pokazujemy dopiero przy wybranej usłudze NFZ ze skierowaniem */}
+          {sel?.referral && (
+            <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <FileSignature size={13} className="mt-0.5 shrink-0" />
+              Ta usługa na NFZ wymaga skierowania — podasz je (kod e-skierowania lub oświadczenie) przy rezerwacji.
+            </p>
           )}
           <div className="grid grid-cols-3 gap-2">
             {days.slice(0, 3).map(([day, list]) => (
