@@ -231,6 +231,32 @@ def test_przejecie_po_pesel_gosc_z_recepcji(client, setup, db_session):
     assert any(v["appointment_id"] == slot["appointment_id"] for v in mine)
 
 
+def test_przejecie_po_pesel_inny_format_telefonu(client, setup, db_session):
+    """Numer w INNYM formacie ('603 111 222' vs '603111222') nie może rozbić
+    scalenia po PESEL — porównujemy numer ZNORMALIZOWANY (E.164), nie surowy string."""
+    reg = auth_header(setup["reg_token"])
+    slot = make_slot(client, setup, hour=13)
+    r = client.post("/patients/register", headers=reg, json={
+        "first_name": "Adam", "last_name": "Formatowy", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "603 111 222",  # zapisany ze spacjami
+    })
+    pid = r.json()["patient_id"]
+    assert client.post(f"/appointments/{slot['appointment_id']}/book-for", headers=reg,
+                       json={"patient_id": pid}).status_code == 200
+
+    # rejestracja tym samym numerem, ale BEZ spacji + inny e-mail → match po PESEL
+    token = make_token(email="adam.format@example.com")
+    verify_phone(client, "603111222", "REGISTRATION")
+    rp = client.post("/auth/register-profile", headers=auth_header(token), json={
+        "first_name": "Adam", "last_name": "Formatowy", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "603111222",
+    })
+    assert rp.status_code == 201, rp.text
+    assert str(rp.json()["user_id"]) == str(pid)  # scalone mimo innego formatu numeru
+    mine = client.get("/appointments/my", headers=auth_header(token)).json()
+    assert any(v["appointment_id"] == slot["appointment_id"] for v in mine)
+
+
 def test_pesel_zly_telefon_nie_przejmuje(client, setup, db_session):
     """Sam PESEL nie wystarczy do scalenia kartoteki gościa — bez zgodnego
     telefonu powstaje NOWE konto (ochrona przed account takeover po PESEL)."""

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user, get_token_claims, require_roles
 from app.core.config import settings
 from app.core.db import get_db
-from app.domain.otp import require_verified_phone
+from app.domain.otp import normalize_phone, require_verified_phone
 from app.models import AppUser, Patient, Role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -110,15 +110,21 @@ def register_profile(
     # zgodnego telefonu (recepcja go zapisuje). Inaczej znajomość samego PESEL-u
     # pozwalałaby przejąć cudzą kartotekę gościa (account takeover).
     if guest is None and body.phone_number:
-        gp = db.scalar(
+        # numery porównujemy ZNORMALIZOWANE (E.164), nie surowe stringi — inaczej
+        # inny format zapisu ("600 700 004" vs "600700004" vs "+48…") rozjeżdżałby
+        # scalanie i pacjent dostawałby nowe puste konto zamiast swojej kartoteki.
+        want = normalize_phone(body.phone_number)
+        candidates = db.scalars(
             select(Patient).join(AppUser, AppUser.user_id == Patient.patient_id).where(
                 Patient.pesel == body.pesel,
                 AppUser.active_account.is_(False),
                 Patient.guardian_id.is_(None),  # podopiecznych nie przejmujemy tym trybem
-                AppUser.phone_number == body.phone_number.strip(),
-            ))
-        if gp is not None:
-            guest = db.get(AppUser, gp.patient_id)
+            )).all()
+        for cand in candidates:
+            owner = db.get(AppUser, cand.patient_id)
+            if owner.phone_number and normalize_phone(owner.phone_number) == want:
+                guest = owner
+                break
     if guest and db.get(Patient, guest.user_id) is not None:
         patient = db.get(Patient, guest.user_id)
         if patient.guardian_id is None:  # podopiecznych nie przejmujemy tym trybem
