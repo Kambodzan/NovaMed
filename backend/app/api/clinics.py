@@ -10,7 +10,7 @@ from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.audit import log_access
 from app.domain.tenancy import assert_staff_in_clinic
-from app.models import AppUser, Clinic, Doctor, Patient, PatientClinic, StaffClinic
+from app.models import AppUser, Clinic, Doctor, DoctorService, Patient, PatientClinic, Service, StaffClinic
 
 router = APIRouter(prefix="/clinics", tags=["clinics"])
 
@@ -263,3 +263,124 @@ def list_clinic_patients(
         )
         for p, phone in rows
     ]
+
+
+# ---- katalog usług placówki (typy wizyt/przyjęć) ----
+
+class ServiceIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    specialization: str | None = Field(default=None, max_length=100)
+    duration_min: int = Field(default=15, ge=5, le=240)
+    price: float | None = Field(default=None, ge=0)   # NULL = NFZ/bezpłatna
+    referral_required: bool = False
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class ServiceOut(ServiceIn):
+    service_id: UUID
+    clinic_id: UUID
+    active: bool
+    doctor_ids: list[UUID] = []   # którzy lekarze wykonują tę usługę
+
+
+class ServiceDoctorsIn(BaseModel):
+    doctor_ids: list[UUID]
+
+
+def service_out(s: Service) -> ServiceOut:
+    return ServiceOut(
+        service_id=s.service_id, clinic_id=s.clinic_id, name=s.name, specialization=s.specialization,
+        duration_min=s.duration_min, price=float(s.price) if s.price is not None else None,
+        referral_required=s.referral_required, description=s.description, active=s.active,
+        doctor_ids=[ds.doctor_id for ds in s.doctors],
+    )
+
+
+def get_service_in_clinic(clinic_id: UUID, service_id: UUID, db: Session) -> Service:
+    s = db.get(Service, service_id)
+    if s is None or s.clinic_id != clinic_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usługa nie istnieje w tej placówce.")
+    return s
+
+
+@router.get("/{clinic_id}/services", response_model=list[ServiceOut])
+def list_services(clinic_id: UUID, db: Session = Depends(get_db), _: AppUser = Depends(get_current_user)):
+    """Katalog aktywnych usług placówki (typy wizyt) z listą wykonujących lekarzy."""
+    get_clinic_or_404(clinic_id, db)
+    rows = db.scalars(select(Service).where(
+        Service.clinic_id == clinic_id, Service.active.is_(True)).order_by(Service.name))
+    return [service_out(s) for s in rows]
+
+
+@router.post("/{clinic_id}/services", status_code=status.HTTP_201_CREATED, response_model=ServiceOut)
+def create_service(
+    clinic_id: UUID,
+    body: ServiceIn,
+    user: AppUser = Depends(require_roles(*CLINIC_MANAGERS)),
+    db: Session = Depends(get_db),
+):
+    """Nowa usługa w katalogu placówki — kierownik SWOJEJ placówki albo administrator."""
+    get_clinic_or_404(clinic_id, db)
+    assert_staff_in_clinic(db, user, clinic_id)
+    s = Service(clinic_id=clinic_id, **body.model_dump())
+    db.add(s)
+    db.commit()
+    return service_out(s)
+
+
+@router.patch("/{clinic_id}/services/{service_id}", response_model=ServiceOut)
+def update_service(
+    clinic_id: UUID,
+    service_id: UUID,
+    body: ServiceIn,
+    user: AppUser = Depends(require_roles(*CLINIC_MANAGERS)),
+    db: Session = Depends(get_db),
+):
+    assert_staff_in_clinic(db, user, clinic_id)
+    s = get_service_in_clinic(clinic_id, service_id, db)
+    for k, v in body.model_dump().items():
+        setattr(s, k, v)
+    db.commit()
+    return service_out(s)
+
+
+@router.delete("/{clinic_id}/services/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deactivate_service(
+    clinic_id: UUID,
+    service_id: UUID,
+    user: AppUser = Depends(require_roles(*CLINIC_MANAGERS)),
+    db: Session = Depends(get_db),
+):
+    """Wycofanie usługi z katalogu (soft delete — istniejące terminy zostają)."""
+    assert_staff_in_clinic(db, user, clinic_id)
+    s = get_service_in_clinic(clinic_id, service_id, db)
+    s.active = False
+    db.commit()
+
+
+@router.put("/{clinic_id}/services/{service_id}/doctors", response_model=ServiceOut)
+def set_service_doctors(
+    clinic_id: UUID,
+    service_id: UUID,
+    body: ServiceDoctorsIn,
+    user: AppUser = Depends(require_roles(*CLINIC_MANAGERS)),
+    db: Session = Depends(get_db),
+):
+    """Ustawia, którzy lekarze wykonują usługę (przypięcie/synchronizacja). Lekarze
+    muszą pracować w tej placówce."""
+    assert_staff_in_clinic(db, user, clinic_id)
+    s = get_service_in_clinic(clinic_id, service_id, db)
+    wanted = set(body.doctor_ids)
+    for did in wanted:
+        works = db.scalar(select(StaffClinic).where(
+            StaffClinic.clinic_id == clinic_id, StaffClinic.user_id == did, StaffClinic.end_date.is_(None)))
+        if not works:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
+    current = {ds.doctor_id: ds for ds in s.doctors}
+    for did in wanted - set(current):
+        db.add(DoctorService(doctor_id=did, service_id=service_id))
+    for did in set(current) - wanted:
+        db.delete(current[did])
+    db.commit()
+    db.refresh(s)
+    return service_out(s)

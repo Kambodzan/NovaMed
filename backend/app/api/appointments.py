@@ -26,8 +26,8 @@ from app.integrations.base import IntegrationError
 from app.integrations.ewus import EwusClient, get_ewus_client
 from app.integrations.payments import PaymentsClient, get_payments_client
 from app.models import (
-    Appointment, AppUser, Clinic, Doctor, DoctorSpecialization, Patient, Payment, Role,
-    StaffClinic, WaitingListEntry,
+    Appointment, AppUser, Clinic, Doctor, DoctorService, DoctorSpecialization, Patient, Payment, Role,
+    Service, StaffClinic, WaitingListEntry,
 )
 
 # role, które mogą umawiać w imieniu pacjenta (rejestracja/okienko/telefon)
@@ -117,6 +117,9 @@ class SlotsCreateIn(BaseModel):
     # wizyta lekarska: doctor_id; badanie (pracownia placówki): service_name [+ referral_required]
     doctor_id: UUID | None = None
     service_name: str | None = Field(default=None, max_length=100)
+    # usługa z katalogu (typ wizyty/przyjęcia): nazwa/cena/czas/skierowanie z usługi.
+    # Może iść razem z doctor_id (lekarz wykonuje usługę)
+    service_id: UUID | None = None
     referral_required: bool = False
     datetimes: list[datetime]
     appointment_type: AppointmentType = AppointmentType.STATIONARY
@@ -141,7 +144,9 @@ class AppointmentOut(BaseModel):
     reviewed: bool | None = None  # tylko w /appointments/my (UC-P8)
     notes: str | None = None      # powód wizyty („co Ci dolega") podany przy rezerwacji
     notify_earlier: bool = False
-    service_name: str | None = None     # badanie diagnostyczne (NULL = wizyta lekarska)
+    service_name: str | None = None     # nazwa usługi/badania (NULL = zwykła wizyta lekarska)
+    service_id: UUID | None = None       # usługa z katalogu (typ wizyty/przyjęcia)
+    duration_min: int | None = None      # czas trwania [min] (z usługi)
     referral_required: bool = False
     # potwierdzanie obecności (gdy placówka wymaga)
     confirmation_requested: bool = False
@@ -218,6 +223,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         notes=a.appointment_notes,
         notify_earlier=a.notify_earlier,
         service_name=a.service_name,
+        service_id=a.service_id,
+        duration_min=a.duration_min,
         referral_required=a.referral_required,
         confirmation_requested=a.confirmation_requested,
         patient_confirmed=a.patient_confirmed,
@@ -245,27 +252,48 @@ def create_slots(
     clinic = db.get(Clinic, clinic_id)
     if clinic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placówka nie istnieje.")
-    # wizyta lekarska XOR badanie diagnostyczne
-    if (body.doctor_id is None) == (body.service_name is None):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            detail="Podaj doctor_id (wizyta) ALBO service_name (badanie).")
+
+    # usługa z katalogu (typ wizyty/przyjęcia) — z niej nazwa/cena/czas/wymóg skierowania
+    service = None
+    if body.service_id is not None:
+        service = db.get(Service, body.service_id)
+        if service is None or service.clinic_id != clinic_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usługa nie istnieje w tej placówce.")
+        if not service.active:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usługa jest nieaktywna.")
+
     doctor = None
     if body.doctor_id is not None:
         doctor = db.get(Doctor, body.doctor_id)
         if doctor is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lekarz nie istnieje.")
-        # lekarz może dodawać terminy tylko sobie
         if user.role.role_name == "lekarz" and user.user_id != body.doctor_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lekarz może dodawać terminy tylko w swoim kalendarzu.")
         works_here = db.scalar(select(StaffClinic).where(
-            StaffClinic.clinic_id == clinic_id,
-            StaffClinic.user_id == body.doctor_id,
-            StaffClinic.end_date.is_(None),
-        ))
+            StaffClinic.clinic_id == clinic_id, StaffClinic.user_id == body.doctor_id, StaffClinic.end_date.is_(None)))
         if not works_here:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
-    # siatka terminów = długość wizyty lekarza (jeśli ustawiona) albo siatka placówki
-    interval = (doctor.slot_duration_min if doctor and doctor.slot_duration_min else clinic.slot_interval_min) or 15
+        if service is not None and db.scalar(select(DoctorService).where(
+                DoctorService.doctor_id == body.doctor_id, DoctorService.service_id == service.service_id)) is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ten lekarz nie wykonuje wybranej usługi.")
+
+    if service is not None:
+        eff_name = service.name
+        eff_price = float(service.price) if service.price is not None else None
+        eff_referral = service.referral_required
+        eff_duration: int | None = service.duration_min
+        interval = service.duration_min or 15
+    else:
+        # legacy: wizyta lekarska XOR badanie pracowniane
+        if (body.doctor_id is None) == (body.service_name is None):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="Podaj doctor_id (wizyta), service_name (badanie) albo service_id (usługa).")
+        eff_name = body.service_name
+        eff_price = body.price
+        eff_referral = (body.price is None) if body.service_name else False
+        eff_duration = None
+        interval = (doctor.slot_duration_min if doctor and doctor.slot_duration_min else clinic.slot_interval_min) or 15
+
     for dt in body.datetimes:
         if dt.minute % interval != 0 or dt.second != 0:
             raise HTTPException(
@@ -275,24 +303,24 @@ def create_slots(
 
     created: list[Appointment] = []
     for dt in body.datetimes:
-        if body.doctor_id is not None:
-            conflict = db.scalar(select(Appointment).where(
-                Appointment.doctor_id == body.doctor_id,
-                Appointment.appointment_datetime == dt,
-                Appointment.appointment_status.notin_([
-                    AppointmentStatus.CANCELLED.value, AppointmentStatus.INTERRUPTED.value,
-                ]),
-            ))
-        else:  # badanie: konflikt per placówka + rodzaj badania + termin
-            conflict = db.scalar(select(Appointment).where(
-                Appointment.clinic_id == clinic_id,
-                Appointment.service_name == body.service_name,
-                Appointment.appointment_datetime == dt,
-                Appointment.appointment_status.notin_([
-                    AppointmentStatus.CANCELLED.value, AppointmentStatus.INTERRUPTED.value,
-                ]),
-            ))
-        if conflict:
+        # konflikt = ten sam dostawca + ta sama usługa/rodzaj + termin. Różne usługi
+        # tego samego lekarza w nakładających się godzinach są DOZWOLONE — przy
+        # rezerwacji zsynchronizuje je współrezerwacja (block_overlapping).
+        q = select(Appointment).where(
+            Appointment.appointment_datetime == dt,
+            Appointment.appointment_status.notin_([AppointmentStatus.CANCELLED.value, AppointmentStatus.INTERRUPTED.value]),
+        )
+        if service is not None:
+            q = q.where(Appointment.service_id == service.service_id)
+            if body.doctor_id is not None:
+                q = q.where(Appointment.doctor_id == body.doctor_id)
+            else:
+                q = q.where(Appointment.clinic_id == clinic_id, Appointment.doctor_id.is_(None))
+        elif body.doctor_id is not None:
+            q = q.where(Appointment.doctor_id == body.doctor_id)
+        else:
+            q = q.where(Appointment.clinic_id == clinic_id, Appointment.service_name == body.service_name)
+        if db.scalar(q):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Termin {dt.isoformat(sep=' ', timespec='minutes')} jest już zajęty.",
@@ -306,10 +334,11 @@ def create_slots(
             appointment_type=body.appointment_type.value,
             # slot ONLINE jest z definicji online; STATIONARY niesie wybór allow_online
             allow_online=body.allow_online if body.appointment_type == AppointmentType.STATIONARY else True,
-            price=body.price,
-            service_name=body.service_name,
-            # NFZ-owe badanie (bez ceny) ZAWSZE wymaga skierowania; prywatne (z ceną) — nie
-            referral_required=(body.price is None) if body.service_name else False,
+            price=eff_price,
+            service_name=eff_name,
+            referral_required=eff_referral,
+            service_id=service.service_id if service is not None else None,
+            duration_min=eff_duration,
         )
         db.add(a)
         created.append(a)

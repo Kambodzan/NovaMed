@@ -23,6 +23,8 @@ const todayIso = () => isoLocal(new Date())
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
+import { ServicesManager, type ServiceOut } from '../../components/ServicesManager'
+
 interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null }
 
 export function Kalendarz() {
@@ -280,7 +282,7 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
   clinicId: string; defaultDay: string; interval: number; onClose: () => void; onAdded: () => void
 }) {
   const [form, setForm] = useState({
-    kind: 'visit', service: '', doctor_id: '', date: defaultDay, time: '09:00',
+    kind: 'visit', service: '', service_id: '', doctor_id: '', date: defaultDay, time: '09:00',
     modality: 'STATIONARY', price: '', weeks: '1',
   })
   const [error, setError] = useState<string | null>(null)
@@ -289,10 +291,19 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
     queryKey: ['clinic-doctors', clinicId],
     queryFn: () => api<DoctorRow[]>(`/clinics/${clinicId}/doctors`),
   })
+  const { data: services } = useQuery({
+    queryKey: ['clinic-services', clinicId],
+    queryFn: () => api<ServiceOut[]>(`/clinics/${clinicId}/services`),
+  })
   const doctorId = form.doctor_id || String(doctors?.[0]?.doctor_id ?? '')
   const selectedDoctor = doctors?.find(d => String(d.doctor_id) === doctorId)
-  // krok siatki = długość wizyty lekarza (jeśli ustawiona) albo siatka placówki
-  const effInterval = form.kind === 'visit' && selectedDoctor?.slot_duration_min ? selectedDoctor.slot_duration_min : interval
+  // usługi, które wykonuje wybrany lekarz (typy wizyt z katalogu)
+  const docServices = (services ?? []).filter(s => s.doctor_ids.includes(doctorId))
+  const pickedService = docServices.find(s => s.service_id === form.service_id) ?? null
+  // krok siatki: czas usługi → długość wizyty lekarza → siatka placówki
+  const effInterval = form.kind === 'visit'
+    ? (pickedService?.duration_min ?? selectedDoctor?.slot_duration_min ?? interval)
+    : interval
 
   const add = useMutation({
     mutationFn: () => {
@@ -307,11 +318,14 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
         method: 'POST',
         body: {
           doctor_id: form.kind === 'visit' ? doctorId : null,
+          // usługa z katalogu: nazwa/cena/czas/skierowanie bierze backend z usługi
+          service_id: form.kind === 'visit' && form.service_id ? form.service_id : null,
           service_name: form.kind === 'exam' ? form.service.trim() : null,
           datetimes,
           appointment_type: form.modality === 'ONLINE' ? 'ONLINE' : 'STATIONARY',
           allow_online: form.modality !== 'STATIONARY_ONLY',
-          price: form.price ? Number(form.price) : null,
+          // przy usłudze cena pochodzi z usługi — nie wysyłamy ręcznej
+          price: form.kind === 'visit' && form.service_id ? null : (form.price ? Number(form.price) : null),
         },
       })
     },
@@ -336,10 +350,17 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
             options={[{ value: 'visit', label: 'wizyta lekarska' }, { value: 'exam', label: 'badanie (pracownia)' }]} />
         </Field>
         {form.kind === 'visit' ? (
+          <>
           <Field label="Lekarz">
-            <Select value={doctorId} onChange={v => setForm(f => ({ ...f, doctor_id: v }))}
+            <Select value={doctorId} onChange={v => setForm(f => ({ ...f, doctor_id: v, service_id: '' }))}
               options={(doctors ?? []).map(d => ({ value: String(d.doctor_id), label: d.name, hint: d.specializations.join(' · ') || undefined }))} />
           </Field>
+          <Field label="Usługa (typ wizyty)" hint={docServices.length === 0 ? 'lekarz nie ma przypiętych usług — zwykła wizyta NFZ' : 'czas i cena z usługi'}>
+            <Select value={form.service_id} onChange={v => setForm(f => ({ ...f, service_id: v }))}
+              options={[{ value: '', label: 'Zwykła wizyta (NFZ)' },
+                ...docServices.map(s => ({ value: s.service_id, label: s.name, hint: `${s.duration_min} min · ${s.price != null ? `${s.price} zł` : 'NFZ'}` }))]} />
+          </Field>
+          </>
         ) : (
           <Field label="Badanie" hint="bez ceny = NFZ (wymaga skierowania); z ceną = prywatne">
             <input className={inputCls} minLength={2} value={form.service} placeholder="np. RTG klatki piersiowej"
@@ -358,9 +379,11 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
               { value: 'ONLINE', label: 'teleporada' },
             ]} />
         </Field>
-        <Field label="Cena [zł]" hint="puste = NFZ">
-          <input type="number" min="0" step="10" className={inputCls} value={form.price} placeholder="—" onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
-        </Field>
+        {!(form.kind === 'visit' && form.service_id) && (
+          <Field label="Cena [zł]" hint="puste = NFZ">
+            <input type="number" min="0" step="10" className={inputCls} value={form.price} placeholder="—" onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
+          </Field>
+        )}
         <Field label="Powtarzanie">
           <Select value={form.weeks} onChange={v => setForm(f => ({ ...f, weeks: v }))}
             options={[{ value: '1', label: 'jednorazowo' }, ...[2, 3, 4, 6, 8, 12].map(n => ({ value: String(n), label: `co tydzień ×${n}` }))]} />
@@ -403,7 +426,7 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
   })
 
   return (
-    <Modal title="Ustawienia placówki" onClose={onClose}
+    <Modal title="Ustawienia placówki" wide onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Anuluj</Button><Button disabled={save.isPending} onClick={() => save.mutate()}>Zapisz</Button></>}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Siatka terminów [min]" hint="co ile minut sloty">
@@ -450,6 +473,10 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
           </div>
         </div>
       )}
+
+      <div className="mt-6 border-t border-gray-100 pt-5">
+        <ServicesManager clinicId={clinic.clinic_id} />
+      </div>
 
       {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
     </Modal>

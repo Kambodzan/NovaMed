@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Field, PageHeader, Tile, inputCls } from '../../ui'
 import { Select } from '../../components/Select'
 import { ClinicSelect, useClinicSelection, type ClinicLite } from '../../components/ClinicPicker'
+import { ServicesManager } from '../../components/ServicesManager'
 import { api, ApiError } from '../../lib/api'
 
 interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null }
@@ -55,6 +56,7 @@ function ClinicPanel({ clinic }: { clinic: ClinicLite }) {
   })
 
   return (
+    <>
     <Tile className="p-5">
       <p className="mb-3 text-sm font-extrabold text-gray-900">Ustawienia placówki</p>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -109,5 +111,7 @@ function ClinicPanel({ clinic }: { clinic: ClinicLite }) {
       {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       {ok && <p className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700">{ok}</p>}
     </Tile>
+    <Tile className="mt-4 p-5"><ServicesManager clinicId={clinic.clinic_id} /></Tile>
+    </>
   )
 }
