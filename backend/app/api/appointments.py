@@ -369,6 +369,10 @@ def delete_free_slot(
     if a.appointment_status != AppointmentStatus.FREE.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="Można usunąć tylko wolny termin (bez rezerwacji).")
+    # wolny termin może mieć osieroconą płatność (rezerwacja → płatność FAILED →
+    # termin wrócił do FREE) — FK by zablokował usunięcie, więc sprzątamy ją najpierw
+    for p in db.scalars(select(Payment).where(Payment.appointment_id == appointment_id)).all():
+        db.delete(p)
     db.delete(a)
     db.commit()
 

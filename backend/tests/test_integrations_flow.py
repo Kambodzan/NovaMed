@@ -87,6 +87,17 @@ def test_platna_wizyta_odmowa_zwalnia_slot(client, setup, factory):
     assert resp.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
 
 
+def test_usuniecie_wolnego_slotu_z_osierocona_platnoscia(client, setup):
+    """Regresja: wolny termin po nieudanej płatności ma osierocony wiersz payment —
+    usunięcie slotu nie może wywalić się na FK (kiedyś 500)."""
+    slot = make_slot(client, setup, price=150)
+    client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+    client.post(f"/appointments/{slot['appointment_id']}/pay",
+                json={"outcome": "failure"}, headers=auth_header(setup["patient_token"]))
+    resp = client.delete(f"/slots/{slot['appointment_id']}", headers=auth_header(setup["reg_token"]))
+    assert resp.status_code == 204, resp.text
+
+
 def test_pay_zabezpieczenia(client, setup, factory):
     slot = make_slot(client, setup, price=100)
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
