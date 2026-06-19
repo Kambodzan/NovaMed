@@ -16,6 +16,7 @@ class AppointmentStatus(str, Enum):
     NO_SHOW = "NO_SHOW"            # NieOdbyta
     INTERRUPTED = "INTERRUPTED"    # Przerwana
     PAUSED = "PAUSED"             # Wstrzymana — pauza (pacjent np. na badaniu), wznawialna
+    BLOCKED = "BLOCKED"           # Zablokowana współrezerwacją — lekarz zajęty nakładającym się terminem
 
 
 class AppointmentType(str, Enum):
@@ -24,8 +25,10 @@ class AppointmentType(str, Enum):
 
 
 ALLOWED_TRANSITIONS: dict[AppointmentStatus, set[AppointmentStatus]] = {
-    AppointmentStatus.FREE: {AppointmentStatus.TEMP_LOCK, AppointmentStatus.CONFIRMED},
+    AppointmentStatus.FREE: {AppointmentStatus.TEMP_LOCK, AppointmentStatus.CONFIRMED, AppointmentStatus.BLOCKED},
     AppointmentStatus.TEMP_LOCK: {AppointmentStatus.FREE, AppointmentStatus.CONFIRMED},
+    # zablokowana współrezerwacją wraca do puli, gdy zwolni się termin, który ją zajął
+    AppointmentStatus.BLOCKED: {AppointmentStatus.FREE},
     AppointmentStatus.CONFIRMED: {
         AppointmentStatus.IN_PROGRESS,
         AppointmentStatus.CANCELLED,

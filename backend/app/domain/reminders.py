@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.domain.appointments import AppointmentStatus
+from app.domain.coreservation import restore_blocked
 from app.domain.notify import notify
 from app.domain.confirm import confirm_link, ensure_confirm_token
 from app.models import Appointment, AppUser, Clinic, Payment
@@ -100,6 +101,7 @@ def release_expired_temp_locks(db: Session) -> int:
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
         a.notify_earlier = False
+        restore_blocked(db, a)
         if patient_id:
             notify(db, patient_id, "Rezerwacja wygasła",
                    f"Płatność za wizytę ({label}) nie została dokończona w {settings.temp_lock_minutes} min "
@@ -120,6 +122,7 @@ def release_expired_temp_locks(db: Session) -> int:
         a.appointment_status = AppointmentStatus.FREE.value
         a.lock_expires_at = None
         a.confirmation_token = None
+        restore_blocked(db, a)
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
 
     db.commit()

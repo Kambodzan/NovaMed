@@ -2,7 +2,7 @@ import uuid
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -57,6 +57,13 @@ class Appointment(Base):
     # płatności): do kiedy slot jest miękko zarezerwowany; po tym czasie pętla tła
     # zwalnia go do puli. NULL = brak holdu.
     lock_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # usługa (typ wizyty/przyjęcia) ze slotu — nazwa/cena/wymóg skierowania kopiowane
+    # z usługi przy tworzeniu terminu; czas wyznacza siatkę i przedział zajętości
+    service_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("service.service_id"))
+    duration_min: Mapped[int | None] = mapped_column(Integer)  # czas trwania [min] — do współrezerwacji
+    # współrezerwacja: gdy lekarz zajmie nakładający się termin, ten wolny slot jest
+    # BLOCKED i wskazuje wizytę, która go zablokowała (po jej odwołaniu wraca do puli)
+    blocked_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("appointment.appointment_id"))
 
     patient = relationship("Patient")
     doctor = relationship("Doctor")

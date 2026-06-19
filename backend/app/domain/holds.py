@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.domain.appointments import AppointmentStatus
 from app.domain.confirm import ensure_confirm_token
+from app.domain.coreservation import block_overlapping, restore_blocked
 from app.models import Appointment
 
 
@@ -28,6 +29,8 @@ def acquire_hold(db: Session, appointment_id: UUID) -> Appointment:
     a.appointment_status = AppointmentStatus.TEMP_LOCK.value
     a.lock_expires_at = datetime.now() + timedelta(minutes=settings.slot_hold_minutes)
     ensure_confirm_token(a)
+    db.flush()  # a.appointment_id pewny przed blokowaniem nakładających się slotów
+    block_overlapping(db, a)
     return a
 
 
@@ -39,6 +42,7 @@ def release_hold(db: Session, appointment_id: UUID, token: str) -> bool:
         a.appointment_status = AppointmentStatus.FREE.value
         a.lock_expires_at = None
         a.confirmation_token = None
+        restore_blocked(db, a)
         return True
     return False
 

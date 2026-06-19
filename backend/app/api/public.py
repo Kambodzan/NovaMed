@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
 from app.domain.confirm import ensure_confirm_token
+from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain.notify import notify
 from app.domain.otp import require_verified_phone, send_otp, verify_otp
@@ -238,6 +239,7 @@ def guest_book(
 
     if a.price is None:
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        block_overlapping(db, a)
         notify(db, guest.user_id, "Wizyta potwierdzona",
                f"Twoja rezerwacja: {visit_label(db, a)}. Załóż konto w NovaMed e-mailem {guest.email}, "
                "aby zarządzać wizytą online.")
@@ -246,6 +248,7 @@ def guest_book(
 
     # wizyta płatna — slot zablokowany do czasu opłacenia (jak TEMP_LOCK pacjenta)
     a.appointment_status = AppointmentStatus.TEMP_LOCK.value
+    block_overlapping(db, a)
     token = ensure_confirm_token(a)
     try:
         provider_ref = payments.create_payment(
@@ -326,6 +329,7 @@ def public_cancel(token: str, db: Session = Depends(get_db)):
     label = visit_label(db, a)
     patient_id = a.patient_id
     a.appointment_status = AppointmentStatus.CANCELLED.value
+    restore_blocked(db, a)
     # termin wraca do puli jako nowy wolny slot (jeśli jeszcze przed czasem)
     if a.appointment_datetime > datetime.now():
         db.add(Appointment(
@@ -333,6 +337,7 @@ def public_cancel(token: str, db: Session = Depends(get_db)):
             appointment_datetime=a.appointment_datetime, appointment_status=AppointmentStatus.FREE.value,
             appointment_type=a.appointment_type, allow_online=a.allow_online, price=a.price,
             service_name=a.service_name, referral_required=a.referral_required,
+            service_id=a.service_id, duration_min=a.duration_min,
         ))
     pay = db.scalar(select(Payment).where(Payment.appointment_id == a.appointment_id, Payment.payment_status == "PAID"))
     refunded = False
@@ -387,6 +392,7 @@ def public_pay(
     pid = a.patient_id
     a.appointment_status = AppointmentStatus.FREE.value
     a.patient_id = None
+    restore_blocked(db, a)
     a.confirmation_token = None
     a.lock_expires_at = None
     notify(db, pid, "Płatność odrzucona",

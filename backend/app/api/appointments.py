@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
 from app.domain.confirm import confirm_link, ensure_confirm_token
+from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain.tenancy import assert_staff_can_access_patient, assert_staff_in_clinic
 from app.core.config import settings
@@ -486,6 +487,7 @@ def book_appointment(
         a.patient_id = patient_id
         a.appointment_status = AppointmentStatus.CONFIRMED.value
         a.lock_expires_at = None
+        block_overlapping(db, a)  # lekarz zajęty → nakładające się usługi znikają z puli
         notify(db, patient_id, "Wizyta potwierdzona",
                f"Twoja wizyta: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
         db.commit()
@@ -514,6 +516,7 @@ def book_appointment(
         created_at=datetime.now(),
     )
     db.add(payment)
+    block_overlapping(db, a)  # blokada płatności zajmuje czas lekarza → nakładające się usługi znikają
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),
@@ -647,6 +650,7 @@ def book_for_patient(
     a.patient_id = body.patient_id
     a.appointment_status = AppointmentStatus.CONFIRMED.value
     a.lock_expires_at = None
+    block_overlapping(db, a)
     if a.price is not None:
         db.add(Payment(
             appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
@@ -727,6 +731,7 @@ def pay_appointment(
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
         a.notify_earlier = False
+        restore_blocked(db, a)  # czas lekarza wolny → nakładające się usługi wracają do puli
         notify(db, user.user_id, "Płatność odrzucona",
                "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
@@ -795,6 +800,7 @@ def cancel_appointment(
 
     assert_transition(a.appointment_status, AppointmentStatus.CANCELLED)
     a.appointment_status = AppointmentStatus.CANCELLED.value
+    restore_blocked(db, a)  # czas lekarza wolny → nakładające się usługi wracają do puli
     # zwrot opłaty za odwołaną wizytę płatną — oznaczamy płatność jako zwróconą
     refunded = False
     if a.price is not None:
@@ -819,8 +825,9 @@ def cancel_appointment(
             appointment_type=a.appointment_type,
             allow_online=a.allow_online,
             price=a.price,
-            service_name=a.service_name,            # badanie: zachowaj rodzaj…
+            service_name=a.service_name,            # badanie/usługa: zachowaj rodzaj…
             referral_required=a.referral_required,  # …i wymóg skierowania
+            service_id=a.service_id, duration_min=a.duration_min,  # …i kontekst współrezerwacji
         ))
         notified = notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
         # zwolniony termin u lekarza → powiadom listę oczekujących tej specjalizacji
@@ -882,6 +889,7 @@ def reschedule_appointment(
 
     assert_transition(old.appointment_status, AppointmentStatus.CANCELLED)
     old.appointment_status = AppointmentStatus.CANCELLED.value
+    restore_blocked(db, old)
     # zwrot starego terminu do puli tylko, jeśli jeszcze przed czasem (bez przeszłych „wolnych")
     if old.appointment_datetime > datetime.now():
         db.add(Appointment(
@@ -895,6 +903,7 @@ def reschedule_appointment(
             price=old.price,
             service_name=old.service_name,
             referral_required=old.referral_required,
+            service_id=old.service_id, duration_min=old.duration_min,
         ))
         notified = notify_earlier_watchers(db, doctor_id=old.doctor_id, clinic_id=old.clinic_id, slot_dts=[old.appointment_datetime])
         if old.doctor_id is not None:
@@ -910,6 +919,7 @@ def reschedule_appointment(
 
     new.patient_id = old.patient_id  # przełożenie zachowuje pacjenta (także podopiecznego)
     new.appointment_status = AppointmentStatus.CONFIRMED.value
+    block_overlapping(db, new)
     new.notify_earlier = old.notify_earlier      # preferencja wędruje z wizytą
     new.appointment_notes = old.appointment_notes  # powód wizyty też (lekarz nie traci wywiadu)
     # przełożenie przez personel — pacjent dostaje powiadomienie o nowym terminie
