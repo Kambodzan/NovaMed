@@ -10,7 +10,7 @@ from app.core.auth import get_current_user, require_roles
 from app.core.db import get_db
 from app.domain.audit import log_access
 from app.domain.tenancy import assert_staff_in_clinic
-from app.models import AppUser, Clinic, Doctor, DoctorService, Patient, PatientClinic, Service, StaffClinic
+from app.models import Appointment, AppUser, Clinic, Doctor, DoctorService, Patient, PatientClinic, Service, StaffClinic
 
 router = APIRouter(prefix="/clinics", tags=["clinics"])
 
@@ -249,11 +249,19 @@ def list_clinic_patients(
     get_clinic_or_404(clinic_id, db)
     assert_staff_in_clinic(db, user, clinic_id)
     log_access(db, actor=user, action="VIEW_PATIENT_LIST", detail=f"placowka {clinic_id}")
+    # widoczni pacjenci placówki = jawnie przypisani (patient_clinic) LUB mający
+    # ślad wizytowy w tej placówce (gość publiczny/telefoniczny też ma wizytę, a
+    # nie dostaje patient_clinic) — spójnie ze śladem z kontroli dostępu (#25),
+    # inaczej recepcja nie znalazłaby gościa, by np. dodać mu wynik badania.
+    in_clinic = (
+        select(PatientClinic.patient_id).where(PatientClinic.clinic_id == clinic_id)
+        .union(select(Appointment.patient_id).where(
+            Appointment.clinic_id == clinic_id, Appointment.patient_id.is_not(None)))
+    )
     rows = db.execute(
         select(Patient, AppUser.phone_number)
-        .join(PatientClinic, PatientClinic.patient_id == Patient.patient_id)
         .join(AppUser, AppUser.user_id == Patient.patient_id)
-        .where(PatientClinic.clinic_id == clinic_id)
+        .where(Patient.patient_id.in_(in_clinic))
         .order_by(Patient.last_name)
     ).all()
     return [

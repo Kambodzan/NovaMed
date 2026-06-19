@@ -101,6 +101,29 @@ def test_gosc_przeklada_wizyte_z_linka(client, setup, db_session):
     assert db_session.get(Appointment, uuid.UUID(slot["appointment_id"])).appointment_status == "CANCELLED"
 
 
+def test_gosc_z_wizyta_widoczny_na_liscie_placowki(client, setup, factory):
+    """Pacjent z wizytą w placówce (gość telefoniczny/publiczny — bez jawnego
+    patient_clinic) MUSI być widoczny w liście pacjentów recepcji, inaczej nie
+    da się go znaleźć np. żeby dodać mu wynik badania."""
+    reg_user, reg_tok = factory.user("rejestracja")
+    factory.employ(setup["clinic"], reg_user.user_id)
+    reg = auth_header(reg_tok)
+    cid = setup["clinic"].clinic_id
+    pid = client.post("/patients/register", headers=reg, json={
+        "first_name": "Goscia", "last_name": "Widoczna", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "601234567",
+    }).json()["patient_id"]
+    # bez wizyty (brak patient_clinic) — jeszcze go nie ma
+    before = client.get(f"/clinics/{cid}/patients", headers=reg).json()
+    assert not any(p["patient_id"] == pid for p in before)
+    # po umówieniu wizyty w tej placówce — JEST na liście
+    slot = make_slot(client, setup, hour=11)
+    assert client.post(f"/appointments/{slot['appointment_id']}/book-for", headers=reg,
+                       json={"patient_id": pid}).status_code == 200
+    after = client.get(f"/clinics/{cid}/patients", headers=reg).json()
+    assert any(p["patient_id"] == pid for p in after)
+
+
 def test_gosc_nfz_badanie_wymaga_skierowania(client, setup):
     exam = make_slot(client, setup, hour=8, service_name="RTG klatki piersiowej")
     deny = client.post("/public/book", json={**GUEST, "appointment_id": exam["appointment_id"]})
