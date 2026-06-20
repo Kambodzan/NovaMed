@@ -58,7 +58,7 @@ def send_otp(db: Session, phone_raw: str, purpose: str) -> str:
         expires_at=datetime.now() + timedelta(minutes=CODE_TTL_MIN),
     ))
     db.commit()
-    get_sms_client().send(to=phone, message=f"Kod weryfikacyjny NovaMed: {code} (wazny {CODE_TTL_MIN} min).")
+    get_sms_client().send(to=phone, message=f"Kod weryfikacyjny NovaMed: {code}")
     return code
 
 
