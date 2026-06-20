@@ -65,10 +65,11 @@ interface DoctorCardData {
 
 // Karta lekarza: zwinięta = ściąga z najbliższym terminem; klik rozwija
 // mini-kalendarz (3 dni, strzałki ‹ ›, godziny jako punkty).
-function DoctorCard({ d, multiClinic, onPick }: {
+function DoctorCard({ d, multiClinic, onPick, addressOf }: {
   d: DoctorCardData
   multiClinic: boolean
   onPick: (s: AppointmentOut) => void
+  addressOf: (clinicName: string) => string | undefined
 }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
@@ -223,6 +224,17 @@ function DoctorCard({ d, multiClinic, onPick }: {
               </div>
             ))}
           </div>
+          {/* adresy placówek lekarza — pacjent widzi DOKĄD przyjść (jak w rezerwacji publicznej) */}
+          {d.clinics.length > 0 && (
+            <div className="mt-3 space-y-0.5 border-t border-gray-200/70 pt-2.5">
+              {d.clinics.map(cl => (
+                <p key={cl} className="flex items-start gap-1.5 text-[11px] font-medium text-gray-500">
+                  <MapPin size={12} className="mt-0.5 shrink-0 text-gray-400" />
+                  <span><b className="font-bold text-gray-700">{shortLoc(cl)}</b>{addressOf(cl) ? ` — ${addressOf(cl)}` : ''}</span>
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {showReviews && (
@@ -749,7 +761,7 @@ export function Umow() {
             ) : (
               <div className="space-y-3">
                 {doctorCards.map(d => (
-                  <DoctorCard key={d.id} d={d} multiClinic={clinicNames.length > 1} onPick={pickSlot} />
+                  <DoctorCard key={d.id} d={d} multiClinic={clinicNames.length > 1} onPick={pickSlot} addressOf={addressOf} />
                 ))}
               </div>
             ))}
