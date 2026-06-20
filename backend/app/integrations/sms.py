@@ -1,11 +1,14 @@
 # Port + adapter HTTP do bramki SMS. Kanał jest best-effort:
 # awaria bramki nigdy nie blokuje operacji domenowej (SMS to dodatek
 # do powiadomienia in-app, nie jego warunek).
+import logging
 from typing import Protocol
 
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger("novamed.sms")
 
 
 class SmsClient(Protocol):
@@ -44,15 +47,28 @@ class TwilioSmsClient:
         self.sid, self.token, self.sender, self.timeout = sid, token, sender, timeout
 
     def send(self, *, to: str, message: str) -> None:
+        dst = _to_e164(to)
         try:
-            httpx.post(
+            resp = httpx.post(
                 f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}/Messages.json",
-                data={"To": _to_e164(to), "From": self.sender, "Body": message[:480]},
+                data={"To": dst, "From": self.sender, "Body": message[:480]},
                 auth=(self.sid, self.token),
                 timeout=self.timeout,
             )
-        except httpx.HTTPError:
-            pass
+            # best-effort, ale logujemy ODRZUCENIE Twilio (np. 21608 numer niezweryfikowany
+            # na trialu, 21408 brak zgody geograficznej na region) — inaczej „nie przychodzi"
+            # jest niediagnozowalne. Sekretów nie logujemy.
+            if resp.status_code >= 400:
+                try:
+                    j = resp.json()
+                    why = f"{j.get('code')}: {j.get('message')}"
+                except ValueError:
+                    why = resp.text[:200]
+                logger.warning("Twilio odrzucił SMS na %s (HTTP %s) — %s", dst, resp.status_code, why)
+            else:
+                logger.info("Twilio: SMS przyjęty do wysyłki na %s", dst)
+        except httpx.HTTPError as exc:
+            logger.warning("Twilio: błąd połączenia przy wysyłce na %s — %s", dst, exc)
 
 
 class NullSmsClient:

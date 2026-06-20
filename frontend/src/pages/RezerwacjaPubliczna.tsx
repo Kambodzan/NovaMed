@@ -332,21 +332,27 @@ export function RezerwacjaPubliczna() {
                 {sendOtp.isPending
                   ? <>Wysyłamy kod SMS na <b>{form.phone_number}</b>…</>
                   : <>Wysłaliśmy 6-cyfrowy kod SMS na <b>{form.phone_number}</b>. Wpisz go, aby potwierdzić rezerwację.
-                      {slot.price != null && ' Opłatę uregulujesz na miejscu.'}
-                      {devCode && <span className="ml-1 font-bold text-gray-500">(DEV: {devCode})</span>}</>}
+                      {slot.price != null && ' Opłatę uregulujesz na miejscu.'}</>}
               </p>
+              {devCode && (
+                <p className="rounded-xl bg-amber-50 px-3.5 py-2 text-sm font-bold text-amber-800">
+                  Tryb demo — kod z SMS: <span className="text-base tracking-[0.25em] text-gray-900">{devCode}</span>
+                </p>
+              )}
               <input className={cx(inputCls, 'tracking-[0.4em]')} inputMode="numeric" maxLength={6} autoFocus
                 placeholder="••••••" value={otpCode}
                 onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); if (error) setError(null) }} />
               {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+              <div className="flex justify-end">
+                <button type="button" onClick={() => sendOtp.mutate()} disabled={sendOtp.isPending}
+                  className="cursor-pointer text-xs font-bold text-primary hover:underline disabled:opacity-50">
+                  {sendOtp.isPending ? 'Wysyłanie…' : 'Nie dostałeś kodu? Wyślij ponownie'}
+                </button>
+              </div>
               <Button size="lg" className="w-full" disabled={otpCode.length !== 6 || verify.isPending || book.isPending}
                 onClick={() => verify.mutate()}>
                 {verify.isPending || book.isPending ? 'Potwierdzanie…' : 'Rezerwuję termin'}
               </Button>
-              <button type="button" onClick={() => sendOtp.mutate()} disabled={sendOtp.isPending}
-                className="cursor-pointer text-xs font-bold text-primary hover:underline disabled:opacity-50">
-                {sendOtp.isPending ? 'Wysyłanie…' : 'Wyślij kod ponownie'}
-              </button>
             </div>
           )}
         </Tile>
