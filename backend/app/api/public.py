@@ -12,7 +12,14 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.appointments import AppointmentOut, appointment_out, apply_p1_referral, perform_reschedule, visit_label
+from app.api.appointments import (
+    AppointmentOut,
+    appointment_out,
+    apply_p1_referral,
+    notify_earlier_watchers,
+    perform_reschedule,
+    visit_label,
+)
 from app.integrations.p1 import P1Client, get_p1_client
 from app.api.family import pesel_valid
 from app.core.config import settings
@@ -473,3 +480,23 @@ def public_pay(
         appointment=appointment_out(db, a),
         payment=GuestPaymentOut(amount=float(retry.amount), provider_ref=retry.provider_ref, payment_status="PENDING"),
     )
+
+
+@router.post("/visit/{token}/cancel-payment", response_model=AppointmentOut)
+def public_cancel_payment(token: str, db: Session = Depends(get_db)):
+    """Gość rezygnuje z płatności (przycisk „wstecz") — zwalnia termin OD RAZU, bez
+    czekania na upływ okna blokady. TEMP_LOCK→FREE, oczekująca płatność → FAILED."""
+    a = _by_token(token, db)
+    if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta nie oczekuje na płatność.")
+    for p in db.scalars(select(Payment).where(
+            Payment.appointment_id == a.appointment_id, Payment.payment_status == "PENDING")):
+        p.payment_status = "FAILED"
+    a.appointment_status = AppointmentStatus.FREE.value
+    a.patient_id = None
+    a.confirmation_token = None
+    a.lock_expires_at = None
+    restore_blocked(db, a)
+    notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+    db.commit()
+    return appointment_out(db, a)

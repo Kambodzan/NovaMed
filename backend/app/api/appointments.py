@@ -854,6 +854,36 @@ def pay_appointment(
     )
 
 
+@router.post("/appointments/{appointment_id}/cancel-payment", response_model=AppointmentOut)
+def cancel_payment(
+    appointment_id: UUID,
+    user: AppUser = Depends(require_roles("pacjent")),
+    db: Session = Depends(get_db),
+):
+    """Rezygnacja z płatności na żądanie pacjenta — zwalnia termin OD RAZU, bez czekania
+    na upływ okna blokady. TEMP_LOCK→FREE, oczekująca płatność oznaczana FAILED, czas
+    lekarza wraca do puli, a listy oczekujących dostają sygnał o wolnym terminie."""
+    a = get_appointment_or_404(appointment_id, db)
+    # status przed właścicielem: wolny termin (już zwolniony) → 409, cudzy TEMP_LOCK → 403
+    if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta nie oczekuje na płatność.")
+    if a.patient_id not in allowed_patient_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja rezerwacja.")
+    for p in db.scalars(select(Payment).where(
+            Payment.appointment_id == a.appointment_id, Payment.payment_status == "PENDING")):
+        p.payment_status = "FAILED"
+    assert_transition(a.appointment_status, AppointmentStatus.FREE)
+    a.appointment_status = AppointmentStatus.FREE.value
+    a.patient_id = None
+    a.notify_earlier = False
+    a.confirmation_token = None
+    a.lock_expires_at = None
+    restore_blocked(db, a)
+    notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+    db.commit()
+    return appointment_out(db, a)
+
+
 @router.post("/appointments/{appointment_id}/confirm-attendance", response_model=AppointmentOut)
 def confirm_attendance(
     appointment_id: UUID,

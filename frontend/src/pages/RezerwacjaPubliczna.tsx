@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { peselValid } from '../lib/pesel'
@@ -123,6 +123,15 @@ export function RezerwacjaPubliczna() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Płatność nie powiodła się.'),
   })
 
+  // „Wstecz" w trakcie płatności — zwalnia termin OD RAZU (bez czekania na sweep)
+  const cancelPay = useMutation({
+    mutationFn: () => api(`/public/visit/${pending!.payToken}/cancel-payment`, { method: 'POST' }),
+    onSettled: () => {
+      setPending(null); setSlot(null); setHoldToken(null); setError(null)
+      void qc.invalidateQueries({ queryKey: ['public-slots'] })
+    },
+  })
+
   const peselBad = form.pesel.length === 11 && !peselValid(form.pesel)
 
   return (
@@ -157,7 +166,13 @@ export function RezerwacjaPubliczna() {
       ) : pending ? (
         <Tile delay={60}>
           <div className="space-y-3">
-            <p className="text-lg font-extrabold text-gray-900">Opłać wizytę</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-lg font-extrabold text-gray-900">Opłać wizytę</p>
+              <button onClick={() => cancelPay.mutate()} disabled={cancelPay.isPending}
+                className="flex items-center gap-1 text-sm font-bold text-gray-500 hover:text-gray-900 disabled:opacity-50">
+                <ChevronLeft size={15} /> Wstecz — zwolnij termin
+              </button>
+            </div>
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
               Termin jest zablokowany do czasu opłacenia. Do zapłaty: <span className="text-gray-900">{pending.amount} zł</span>.
             </p>

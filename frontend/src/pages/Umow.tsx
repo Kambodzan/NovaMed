@@ -529,14 +529,23 @@ export function Umow() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Płatność nie powiodła się.'),
   })
 
+  // rezygnacja z płatności: zwolnij payment-lock OD RAZU (bez czekania na sweep)
+  const cancelPaymentLock = () => {
+    if (slot && booked?.payment && (payPhase === 'awaiting' || payPhase === 'declined')) {
+      void api(asPatient(`/appointments/${slot.appointment_id}/cancel-payment`), { method: 'POST' }).catch(() => {})
+    }
+  }
+
   const resetToSlots = () => {
-    releaseHold()  // zwolnij miękką rezerwację przy powrocie do listy
+    cancelPaymentLock()  // termin zablokowany płatnością → zwolnij natychmiast
+    releaseHold()        // miękka rezerwacja (przed płatnością) → zwolnij tokenem
     setBooked(null)
     setPayPhase('idle')
     setError(null)
     setStep(1)
     book.reset()
     pay.reset()
+    invalidate()
   }
 
   return (
@@ -804,7 +813,11 @@ export function Umow() {
         <Tile delay={60}>
           <TileHeader
             title={booked ? t('Płatność') : t('Potwierdzenie rezerwacji')}
-            action={payPhase === 'idle' ? <Button variant="ghost" size="sm" onClick={resetToSlots}>{t('Zmień termin')}</Button> : undefined}
+            action={payPhase !== 'success'
+              ? <Button variant="ghost" size="sm" onClick={resetToSlots}>
+                  <ChevronLeft size={15} /> {payPhase === 'idle' ? t('Zmień termin') : t('Wstecz — zwolnij termin')}
+                </Button>
+              : undefined}
           />
           <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-gray-50 p-4">
             <DateChip month={monthShort(slot.appointment_datetime)} day={dayNo(slot.appointment_datetime)} time={formatTime(slot.appointment_datetime)} />
@@ -1033,7 +1046,6 @@ export function Umow() {
                     {t('Symuluj kolejną odmowę')}
                   </Button>
                 </div>
-                <button onClick={resetToSlots} className="text-sm font-bold text-gray-500 hover:text-gray-900">{t('Zmień termin')}</button>
               </div>
             )}
           </div>

@@ -178,6 +178,16 @@ def test_gosc_platny_odmowa_pozwala_powtorzyc(client, setup):
     assert again.json()["payment"]["payment_status"] == "PAID"
 
 
+def test_gosc_cancel_payment_zwalnia_termin(client, setup):
+    """Gość klika „Wstecz" w trakcie płatności — termin zwalnia się od razu (TEMP_LOCK→FREE)."""
+    paid = make_slot(client, setup, hour=14, price=150)
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
+    token = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"]}).json()["payment"]["pay_token"]
+    resp = client.post(f"/public/visit/{token}/cancel-payment")
+    assert resp.status_code == 200
+    assert resp.json()["appointment_status"] == "FREE" and resp.json()["patient_id"] is None
+
+
 def test_hold_blokuje_termin_i_release_zwalnia(client, setup):
     slot = make_slot(client, setup, hour=15)
     sid = slot["appointment_id"]

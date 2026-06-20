@@ -86,6 +86,7 @@ const EN: Record<string, string> = {
   'Operator płatności jest symulowany — wybierz wynik autoryzacji.': 'The payment provider is simulated — choose the authorization outcome.',
   'Zapłać kartą (symulacja)': 'Pay by card (simulated)',
   'Symuluj odmowę płatności': 'Simulate declined payment',
+  'Wstecz — zwolnij termin': 'Back — release the slot',
   'Zapłać ponownie (symulacja)': 'Pay again (simulated)',
   'Symuluj kolejną odmowę': 'Simulate another decline',
   'Termin jest nadal dla Ciebie zarezerwowany — możesz spróbować zapłacić ponownie.':

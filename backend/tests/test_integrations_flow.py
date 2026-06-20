@@ -137,6 +137,31 @@ def test_pay_zabezpieczenia(client, setup, factory):
     assert resp.status_code == 409
 
 
+def test_cancel_payment_zwalnia_termin_od_razu(client, setup, factory):
+    """„Wstecz" w trakcie płatności zwalnia termin natychmiast (TEMP_LOCK→FREE) —
+    bez czekania na sweep — więc inny pacjent może go od razu zająć."""
+    slot = make_slot(client, setup, price=150)
+    client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+    resp = client.post(f"/appointments/{slot['appointment_id']}/cancel-payment", headers=auth_header(setup["patient_token"]))
+    assert resp.status_code == 200
+    assert resp.json()["appointment_status"] == "FREE" and resp.json()["patient_id"] is None
+    # inny pacjent może go od razu zająć
+    _, other = factory.patient()
+    again = client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(other))
+    assert again.status_code == 200 and again.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
+
+
+def test_cancel_payment_zabezpieczenia(client, setup, factory):
+    slot = make_slot(client, setup, price=150)
+    client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
+    # nie-właściciel → 403
+    _, other = factory.patient()
+    assert client.post(f"/appointments/{slot['appointment_id']}/cancel-payment", headers=auth_header(other)).status_code == 403
+    # po zwolnieniu termin jest FREE → ponowne cancel-payment (nie TEMP_LOCK) → 409
+    client.post(f"/appointments/{slot['appointment_id']}/cancel-payment", headers=auth_header(setup["patient_token"]))
+    assert client.post(f"/appointments/{slot['appointment_id']}/cancel-payment", headers=auth_header(setup["patient_token"])).status_code == 409
+
+
 def test_porzucenie_blokady_przez_cancel(client, setup):
     slot = make_slot(client, setup, price=120)
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
