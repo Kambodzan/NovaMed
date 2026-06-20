@@ -248,6 +248,7 @@ export function Umow() {
   const [externalRef, setExternalRef] = useState(false)
   const [p1Mode, setP1Mode] = useState(false)   // e-skierowanie z P1 (kod)
   const [p1Code, setP1Code] = useState('')
+  const [payMode, setPayMode] = useState<'online' | 'onsite'>('online')  // płatna wizyta: online vs na miejscu
   const [locQuery, setLocQuery] = useState('')
   const [locError, setLocError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
@@ -504,6 +505,7 @@ export function Umow() {
           p1_referral_code: refReq
             ? (isNfz ? (p1Code.trim() || null) : (p1Mode && p1Code.trim() ? p1Code.trim() : null))
             : null,
+          pay_on_site: !isNfz && payMode === 'onsite',
           hold_token: holdToken,
         },
       })
@@ -511,7 +513,9 @@ export function Umow() {
     onSuccess: (data) => {
       setBooked(data)
       setHoldToken(null)  // hold zamienił się w rezerwację
-      setPayPhase(data.payment ? 'awaiting' : 'success')
+      // tylko płatność online (PENDING) prowadzi do ekranu płatności; na miejscu (PAID)
+      // i NFZ (brak płatności) są od razu potwierdzone
+      setPayPhase(data.payment?.payment_status === 'PENDING' ? 'awaiting' : 'success')
       setError(null)
       invalidate()
     },
@@ -960,17 +964,37 @@ export function Umow() {
                     {t('Powiadom mnie, jeśli u tego lekarza zwolni się wcześniejszy termin')}
                   </span>
                 </label>
-                <p className="text-sm font-medium text-gray-500">
-                  {slot.price
-                    ? t('Po rezerwacji termin blokujemy na czas płatności. Wizyta zostanie potwierdzona po jej zaksięgowaniu.')
-                    : t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}
-                </p>
+                {slot.price ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Płatność')} · {slot.price} zł</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {([
+                        ['online', t('Zapłać teraz online'), t('kartą — potwierdzenie od razu po zapłacie')],
+                        ['onsite', t('Zapłać na miejscu'), t('w okienku placówki — rezerwujesz od razu')],
+                      ] as const).map(([mode, title, sub]) => (
+                        <button key={mode} type="button" onClick={() => setPayMode(mode)}
+                          className={cx('cursor-pointer rounded-2xl px-4 py-3 text-left transition-colors',
+                            payMode === mode ? 'bg-primary-soft ring-2 ring-primary' : 'bg-gray-50 hover:bg-primary-soft/50')}>
+                          <span className={cx('block text-sm font-extrabold', payMode === mode ? 'text-primary' : 'text-gray-900')}>{title}</span>
+                          <span className="block text-xs font-semibold text-gray-500">{sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium text-gray-500">
+                    {t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}
+                  </p>
+                )}
                 <Button size="lg"
                   disabled={book.isPending || (slot.referral_required && (
                     !slot.price ? !p1Code.trim() : (!externalRef && !refDocId && !(p1Mode && p1Code.trim()))
                   ))}
                   onClick={() => book.mutate(slot.appointment_id)}>
-                  {book.isPending ? t('Rezerwowanie…') : slot.price ? t('Rezerwuję i przechodzę do płatności') : t('Rezerwuję termin')}
+                  {book.isPending ? t('Rezerwowanie…')
+                    : !slot.price ? t('Rezerwuję termin')
+                    : payMode === 'onsite' ? t('Rezerwuję — zapłata na miejscu')
+                    : t('Rezerwuję i przechodzę do płatności')}
                 </Button>
               </>
             )}
@@ -1003,9 +1027,15 @@ export function Umow() {
                 <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 p-4">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={16} /></span>
                   <div>
-                    <p className="font-extrabold text-emerald-800">{slot.price ? t('Wizyta potwierdzona i opłacona') : t('Wizyta potwierdzona')}</p>
+                    <p className="font-extrabold text-emerald-800">
+                      {!slot.price ? t('Wizyta potwierdzona')
+                        : payMode === 'onsite' ? t('Wizyta potwierdzona — zapłata na miejscu')
+                        : t('Wizyta potwierdzona i opłacona')}
+                    </p>
                     <p className="mt-0.5 text-sm font-medium text-emerald-700">
-                      {t('Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.')}
+                      {slot.price && payMode === 'onsite'
+                        ? t('Opłatę {amount} zł uregulujesz w okienku placówki. Szczegóły w „Moje wizyty”.', { amount: String(slot.price) })
+                        : t('Szczegóły znajdziesz w zakładce „Moje wizyty”. Przypomnimy Ci o wizycie dzień wcześniej.')}
                     </p>
                   </div>
                 </div>

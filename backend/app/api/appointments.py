@@ -183,6 +183,9 @@ class BookIn(BaseModel):
     referral_document_id: UUID | None = None
     p1_referral_code: str | None = Field(default=None, max_length=20)
     external_referral: bool = False
+    # wizyta płatna: zapłać online (TEMP_LOCK→bramka) albo na miejscu (CONFIRMED od razu,
+    # rozliczenie w okienku). NFZ ignoruje to pole (bezpłatna).
+    pay_on_site: bool = Field(default=False, description="Płatna wizyta: rozliczenie na miejscu zamiast online")
     hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /appointments/{id}/hold)
 
 
@@ -574,6 +577,23 @@ def book_appointment(
                f"Twoja wizyta: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
+
+    # płatność na miejscu — potwierdzamy od razu (jak NFZ/recepcja), rozliczenie w okienku
+    if body and body.pay_on_site:
+        assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
+        a.patient_id = patient_id
+        a.appointment_status = AppointmentStatus.CONFIRMED.value
+        a.lock_expires_at = None
+        onsite = Payment(appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
+                         provider_ref="NA_MIEJSCU", created_at=datetime.now(), paid_at=datetime.now())
+        db.add(onsite)
+        db.flush()
+        block_overlapping(db, a)
+        notify(db, patient_id, "Wizyta potwierdzona",
+               f"Twoja wizyta: {visit_label(db, a)}. Opłata {float(a.price):.2f} zł do uregulowania na miejscu w placówce.")
+        db.commit()
+        return BookOut(appointment=appointment_out(db, a), payment=PaymentInfoOut(
+            payment_id=onsite.payment_id, provider_ref="NA_MIEJSCU", amount=float(a.price), payment_status="PAID"))
 
     # slot trzymany holdem jest już TEMP_LOCK — przejście TEMP_LOCK→TEMP_LOCK pomijamy
     if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:

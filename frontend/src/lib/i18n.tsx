@@ -87,6 +87,14 @@ const EN: Record<string, string> = {
   'Zapłać kartą (symulacja)': 'Pay by card (simulated)',
   'Symuluj odmowę płatności': 'Simulate declined payment',
   'Wstecz — zwolnij termin': 'Back — release the slot',
+  'Zapłać teraz online': 'Pay now online',
+  'kartą — potwierdzenie od razu po zapłacie': 'by card — confirmed right after payment',
+  'Zapłać na miejscu': 'Pay on-site',
+  'w okienku placówki — rezerwujesz od razu': 'at the clinic desk — booked right away',
+  'Rezerwuję — zapłata na miejscu': 'Book — pay on-site',
+  'Wizyta potwierdzona — zapłata na miejscu': 'Appointment confirmed — pay on-site',
+  'Opłatę {amount} zł uregulujesz w okienku placówki. Szczegóły w „Moje wizyty”.':
+    'Pay {amount} zł at the clinic desk. Details in “My appointments”.',
   'Zapłać ponownie (symulacja)': 'Pay again (simulated)',
   'Symuluj kolejną odmowę': 'Simulate another decline',
   'Termin jest nadal dla Ciebie zarezerwowany — możesz spróbować zapłacić ponownie.':

@@ -151,6 +151,17 @@ def test_cancel_payment_zwalnia_termin_od_razu(client, setup, factory):
     assert again.status_code == 200 and again.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
 
 
+def test_platna_wizyta_na_miejscu_potwierdza_od_razu(client, setup):
+    """Pacjent wybiera „zapłać na miejscu": wizyta CONFIRMED od razu (bez bramki),
+    płatność PAID (rozliczana w okienku placówki)."""
+    slot = make_slot(client, setup, price=150)
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"pay_on_site": True}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert r.json()["payment"]["payment_status"] == "PAID"
+
+
 def test_cancel_payment_zabezpieczenia(client, setup, factory):
     slot = make_slot(client, setup, price=150)
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))

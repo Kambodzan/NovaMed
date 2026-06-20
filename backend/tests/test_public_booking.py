@@ -188,6 +188,30 @@ def test_gosc_cancel_payment_zwalnia_termin(client, setup):
     assert resp.json()["appointment_status"] == "FREE" and resp.json()["patient_id"] is None
 
 
+def test_gosc_platny_na_miejscu_wymaga_sms_i_potwierdza(client, setup):
+    """Płatność na miejscu: brak bariery płatności → WYMAGA potwierdzenia SMS; po nim
+    wizyta CONFIRMED od razu, płatność PAID (rozliczenie w okienku), bez bramki online."""
+    paid = make_slot(client, setup, hour=15, price=150)
+    # bez potwierdzenia numeru → 400
+    deny = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"], "payment_mode": "onsite"})
+    assert deny.status_code == 400 and "potwierdź numer" in deny.json()["detail"].lower()
+    verify_phone(client, GUEST["phone_number"], "BOOKING")
+    r = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"], "payment_mode": "onsite"})
+    assert r.status_code == 200, r.text
+    assert r.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert r.json()["payment"]["payment_status"] == "PAID" and r.json()["payment"]["pay_token"] is None
+
+
+def test_gosc_platny_online_nie_wymaga_sms(client, setup):
+    """Płatność online: sama płatność jest dowodem realności → SMS NIE jest wymagany;
+    rezerwacja idzie do TEMP_LOCK + płatność PENDING (bramka), jak dotąd."""
+    paid = make_slot(client, setup, hour=16, price=150)
+    r = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"], "payment_mode": "online"})
+    assert r.status_code == 200, r.text  # BEZ verify_phone
+    assert r.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
+    assert r.json()["payment"]["payment_status"] == "PENDING" and r.json()["payment"]["pay_token"]
+
+
 def test_hold_blokuje_termin_i_release_zwalnia(client, setup):
     slot = make_slot(client, setup, hour=15)
     sid = slot["appointment_id"]

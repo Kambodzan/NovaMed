@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronLeft, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, CreditCard, FileSignature, HeartPulse, MapPin } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { birthFromPesel, peselValid } from '../lib/pesel'
@@ -28,6 +28,8 @@ export function RezerwacjaPubliczna() {
   const [p1Code, setP1Code] = useState('')   // kod e-skierowania z P1
   const [consent, setConsent] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
+  const [formStep, setFormStep] = useState<'data' | 'pay' | 'otp'>('data')  // kroki rezerwacji gościa
+  const [paidOnSite, setPaidOnSite] = useState(false)  // płatna wizyta rozliczana w okienku
   const [pending, setPending] = useState<{ appt: AppointmentOut; amount: number; payToken: string } | null>(null)
   const [holdToken, setHoldToken] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -44,7 +46,7 @@ export function RezerwacjaPubliczna() {
   const hold = useMutation({
     mutationFn: (s: AppointmentOut) => api<{ hold_token: string; expires_at: string }>(
       `/public/slots/${s.appointment_id}/hold`, { method: 'POST' }),
-    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setExternalRef(false); setError(null) },
+    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setExternalRef(false); setError(null); setFormStep('data'); setPhoneVerified(false) },
     onError: (e) => {
       setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć rezerwacji terminu.')
       void qc.invalidateQueries({ queryKey: ['public-slots'] })  // ktoś zajął — odśwież listę
@@ -87,7 +89,8 @@ export function RezerwacjaPubliczna() {
   }, [slots, kind])
 
   const book = useMutation({
-    mutationFn: () => api<GuestBookResult>('/public/book', {
+    // mode przekazany argumentem (nie ze stanu) — unika stale-closure przy kliknięciu
+    mutationFn: (mode: 'online' | 'onsite') => api<GuestBookResult>('/public/book', {
       method: 'POST',
       body: {
         appointment_id: slot!.appointment_id,
@@ -96,6 +99,7 @@ export function RezerwacjaPubliczna() {
         // NFZ (termin bez ceny) — papierowe oświadczenie nie daje refundacji; tylko kod P1.
         external_referral: slot!.price != null && externalRef,
         p1_referral_code: p1Code.trim() || null,
+        payment_mode: mode,  // online → bramka (bez SMS); onsite → potwierdzenie SMS + zapłata w okienku
         hold_token: holdToken,
       },
     }),
@@ -106,6 +110,7 @@ export function RezerwacjaPubliczna() {
       if (res.payment?.payment_status === 'PENDING' && res.payment.pay_token) {
         setPending({ appt: res.appointment, amount: res.payment.amount, payToken: res.payment.pay_token })
       } else {
+        setPaidOnSite(res.payment?.payment_status === 'PAID')  // onsite = PAID (w okienku); NFZ = brak płatności
         setDone(res.appointment)
       }
     },
@@ -118,7 +123,7 @@ export function RezerwacjaPubliczna() {
     onSuccess: (res) => {
       // odmowa NIE kasuje rezerwacji — termin trzymany do końca okna blokady, gość
       // ponawia z tych samych przycisków (backend otworzył nową próbę płatności)
-      if (res.payment?.payment_status === 'PAID') { setDone(res.appointment); setPending(null); setError(null) }
+      if (res.payment?.payment_status === 'PAID') { setPaidOnSite(false); setDone(res.appointment); setPending(null); setError(null) }
       else setError('Płatność odrzucona — termin jest nadal zarezerwowany. Spróbuj zapłacić ponownie.')
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Płatność nie powiodła się.'),
@@ -134,6 +139,11 @@ export function RezerwacjaPubliczna() {
   })
 
   const peselBad = form.pesel.length === 11 && !peselValid(form.pesel)
+  const referralOk = !slot?.referral_required || (slot?.price == null ? !!p1Code.trim() : (!!p1Code.trim() || externalRef))
+  // krok „dane" kompletny: pola + PESEL + zgoda RODO + skierowanie (jeśli wymagane). OTP jest osobnym krokiem.
+  const dataValid = !peselBad && consent && referralOk
+    && !!form.first_name.trim() && !!form.last_name.trim() && /^\d{11}$/.test(form.pesel)
+    && !!form.birth_date && form.phone_number.replace(/\D/g, '').length >= 7 && /\S+@\S+\.\S+/.test(form.email)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-10">
@@ -156,10 +166,11 @@ export function RezerwacjaPubliczna() {
             <p className="text-sm font-medium text-gray-600">
               {done.service_name ?? done.doctor_name} — {formatDatePL(done.appointment_datetime)}, {formatTime(done.appointment_datetime)}
               <br />{done.clinic_name}
+              {done.price != null && <><br />{paidOnSite ? `Opłata ${done.price} zł — na miejscu w placówce.` : `Opłacono online: ${done.price} zł.`}</>}
             </p>
             <p className="text-sm font-medium text-gray-500">
-              Potwierdzenie wysłaliśmy SMS-em. Załóż konto e-mailem <b>{form.email}</b>, aby
-              zarządzać wizytą online — historia rezerwacji przejdzie na Twoje konto.
+              Załóż konto e-mailem <b>{form.email}</b>, aby zarządzać wizytą online —
+              historia rezerwacji przejdzie na Twoje konto.
             </p>
             <Link to="/rejestracja"><Button size="lg">Załóż konto</Button></Link>
           </div>
@@ -198,17 +209,20 @@ export function RezerwacjaPubliczna() {
       ) : slot ? (
         <Tile delay={60}>
           <TileHeader
-            title="Twoje dane"
-            action={<Button variant="ghost" size="sm" onClick={() => { releaseHold(); setSlot(null) }}>Zmień termin</Button>}
+            title={formStep === 'data' ? 'Twoje dane' : formStep === 'pay' ? 'Płatność' : 'Potwierdź numer telefonu'}
+            action={<Button variant="ghost" size="sm" onClick={() => {
+              if (formStep === 'data') { releaseHold(); setSlot(null) }
+              else { setError(null); setFormStep(formStep === 'otp' && slot.price != null ? 'pay' : 'data') }
+            }}>{formStep === 'data' ? 'Zmień termin' : 'Wstecz'}</Button>}
           />
-          <p className="mb-2 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
+          <p className="mb-4 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
             {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)} · {slot.clinic_name}
             {slot.price != null && <span className="text-primary"> · {slot.price} zł</span>}
           </p>
-          <p className="mb-4 text-xs font-semibold text-gray-500">
-            Ten termin jest teraz zarezerwowany dla Ciebie — dokończ rezerwację w ciągu kilku minut.
-          </p>
-          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (!peselBad && phoneVerified && (!slot.referral_required || (slot.price == null ? !!p1Code.trim() : (!!p1Code.trim() || externalRef)))) book.mutate() }}>
+
+          {/* KROK 1 — dane (potwierdzenie SMS jest osobnym krokiem dalej) */}
+          {formStep === 'data' && (
+          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (dataValid) setFormStep(slot.price != null ? 'pay' : 'otp') }}>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Imię"><input className={inputCls} required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} /></Field>
               <Field label="Nazwisko"><input className={inputCls} required value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></Field>
@@ -225,10 +239,9 @@ export function RezerwacjaPubliczna() {
               <Field label="Data urodzenia"><DatePicker required value={form.birth_date} max={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, birth_date: v }))} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Telefon" hint="tu wyślemy kod potwierdzający"><PhoneInput required value={form.phone_number} onChange={v => { setForm(f => ({ ...f, phone_number: v })); setPhoneVerified(false) }} /></Field>
+              <Field label="Telefon" hint="potwierdzimy go kodem SMS w kolejnym kroku"><PhoneInput required value={form.phone_number} onChange={v => { setForm(f => ({ ...f, phone_number: v })); setPhoneVerified(false) }} /></Field>
               <Field label="E-mail"><input type="email" className={inputCls} required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
             </div>
-            <PhoneOtp phone={form.phone_number} purpose="BOOKING" verified={phoneVerified} onVerified={() => setPhoneVerified(true)} />
             <Field label="Co Ci dolega? (opcjonalnie)">
               <textarea className={cx(inputCls, 'h-16 py-2')} maxLength={500} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
             </Field>
@@ -269,13 +282,45 @@ export function RezerwacjaPubliczna() {
                 Wyrażam zgodę na przetwarzanie danych w celu realizacji wizyty (RODO). <span className="text-red-600">*</span>
               </span>
             </label>
-            {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-            <Button size="lg" className="w-full" type="submit"
-              disabled={book.isPending || peselBad || !phoneVerified || (slot.referral_required && (slot.price == null ? !p1Code.trim() : (!p1Code.trim() && !externalRef)))}>
-              {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu'
-                : slot.price != null ? `Rezerwuję i płacę (${slot.price} zł)` : 'Rezerwuję termin'}
-            </Button>
+            <Button size="lg" className="w-full" type="submit" disabled={!dataValid}>Dalej</Button>
           </form>
+          )}
+
+          {/* KROK 2 — płatność (tylko wizyty płatne): teraz online albo na miejscu */}
+          {formStep === 'pay' && slot.price != null && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-500">Jak chcesz uregulować opłatę {slot.price} zł?</p>
+              <button type="button" disabled={book.isPending} onClick={() => book.mutate('online')}
+                className="flex w-full cursor-pointer items-start gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left hover:bg-primary-soft/50 disabled:opacity-50">
+                <CreditCard size={18} className="mt-0.5 shrink-0 text-primary" />
+                <span><span className="block font-extrabold text-gray-900">Zapłać teraz online</span>
+                  <span className="block text-xs font-semibold text-gray-500">kartą — wizyta potwierdzona zaraz po zapłacie, bez kodu SMS</span></span>
+              </button>
+              <button type="button" disabled={book.isPending} onClick={() => setFormStep('otp')}
+                className="flex w-full cursor-pointer items-start gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left hover:bg-primary-soft/50 disabled:opacity-50">
+                <MapPin size={18} className="mt-0.5 shrink-0 text-primary" />
+                <span><span className="block font-extrabold text-gray-900">Zapłać na miejscu</span>
+                  <span className="block text-xs font-semibold text-gray-500">w okienku placówki — najpierw potwierdzimy numer kodem SMS</span></span>
+              </button>
+              {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+            </div>
+          )}
+
+          {/* KROK 3 — potwierdzenie telefonu kodem SMS (NFZ albo płatność na miejscu) */}
+          {formStep === 'otp' && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-600">
+                Potwierdź numer <b>{form.phone_number}</b> kodem SMS — to dowód, że termin rezerwuje jego właściciel.
+                {slot.price != null && ' Opłatę uregulujesz na miejscu.'}
+              </p>
+              <PhoneOtp phone={form.phone_number} purpose="BOOKING" verified={phoneVerified} onVerified={() => setPhoneVerified(true)} />
+              {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+              <Button size="lg" className="w-full" disabled={!phoneVerified || book.isPending}
+                onClick={() => book.mutate(slot.price != null ? 'onsite' : 'online')}>
+                {book.isPending ? 'Rezerwowanie…' : !phoneVerified ? 'Najpierw potwierdź numer telefonu' : 'Rezerwuję termin'}
+              </Button>
+            </div>
+          )}
         </Tile>
       ) : (
         <Tile delay={60}>

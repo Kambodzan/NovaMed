@@ -6,6 +6,7 @@
 from uuid import UUID
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -83,6 +84,9 @@ class GuestBookIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
     external_referral: bool = False
     p1_referral_code: str | None = Field(default=None, max_length=20)  # kod e-skierowania z P1
+    # wizyta płatna: "online" (bramka — płatność jest dowodem realności, bez SMS) albo
+    # "onsite" (rozliczenie w okienku — wtedy wymagamy potwierdzenia numeru kodem SMS)
+    payment_mode: Literal["online", "onsite"] = "online"
     hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /public/slots/{id}/hold)
 
     @field_validator("pesel")
@@ -246,9 +250,13 @@ def guest_book(
             pesel=body.pesel, birth_date=body.birth_date,
         ))
 
-    # numer musi być potwierdzony kodem SMS — dowód, że rezerwujący kontroluje
-    # telefon (anty-spam; potwierdzenia/przypomnienia trafią pod realny numer)
-    require_verified_phone(db, body.phone_number, "BOOKING")
+    is_paid = a.price is not None
+    pay_online = is_paid and body.payment_mode == "online"
+    # Numer potwierdzamy kodem SMS, gdy NIE płacimy online: NFZ i płatność na miejscu nie
+    # mają bariery płatności, więc dowodem kontroli nad numerem (anty-spam) jest kod SMS.
+    # Przy płatności online dowodem realności rezerwującego jest sama udana płatność.
+    if not pay_online:
+        require_verified_phone(db, body.phone_number, "BOOKING")
     a.patient_id = guest.user_id
     a.lock_expires_at = None  # hold zamienia się w realną rezerwację (płatność/CONFIRMED)
     if body.reason:
@@ -260,16 +268,25 @@ def guest_book(
             # tu dociera tylko slot płatny (NFZ bez kodu odrzucone w walidacji wyżej)
             a.external_referral = True
 
-    if a.price is None:
+    if not pay_online:
+        # NFZ (bezpłatna) albo płatność na miejscu — potwierdzamy wizytę od razu
         a.appointment_status = AppointmentStatus.CONFIRMED.value
         block_overlapping(db, a)
+        if is_paid:  # płatność na miejscu — rozliczana w okienku placówki
+            db.add(Payment(appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
+                           provider_ref="NA_MIEJSCU", created_at=datetime.now(), paid_at=datetime.now()))
         link = confirm_link(ensure_confirm_token(a))
         notify(db, guest.user_id, "Wizyta potwierdzona",
-               f"Twoja rezerwacja: {visit_label(db, a)}. Zarządzaj wizytą (przełóż/odwołaj): {link}")
+               f"Twoja rezerwacja: {visit_label(db, a)}. "
+               + (f"Opłata {float(a.price):.2f} zł na miejscu. " if is_paid else "")
+               + f"Zarządzaj wizytą (przełóż/odwołaj): {link}")
         db.commit()
-        return GuestBookOut(appointment=appointment_out(db, a))
+        return GuestBookOut(
+            appointment=appointment_out(db, a),
+            payment=GuestPaymentOut(amount=float(a.price), provider_ref="NA_MIEJSCU", payment_status="PAID") if is_paid else None,
+        )
 
-    # wizyta płatna — slot zablokowany do czasu opłacenia (jak TEMP_LOCK pacjenta)
+    # płatność online — slot zablokowany do czasu opłacenia (TEMP_LOCK), bramka jak u pacjenta
     a.appointment_status = AppointmentStatus.TEMP_LOCK.value
     block_overlapping(db, a)
     token = ensure_confirm_token(a)
