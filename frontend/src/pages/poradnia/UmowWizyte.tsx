@@ -9,6 +9,7 @@ import { CalendarCheck, Check, Clock, MapPin, Pencil, Search, UserPlus, Video, X
 import { Badge, Button, Field, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
+import { birthFromPesel } from '../../lib/pesel'
 import type { AppointmentOut, DocumentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
@@ -227,7 +228,11 @@ export function UmowWizyte() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Imię"><input className={inputCls} value={newForm.first_name} onChange={e => setNewForm(f => ({ ...f, first_name: e.target.value }))} /></Field>
                 <Field label="Nazwisko"><input className={inputCls} value={newForm.last_name} onChange={e => setNewForm(f => ({ ...f, last_name: e.target.value }))} /></Field>
-                <Field label="PESEL" hint="11 cyfr"><input className={inputCls} inputMode="numeric" maxLength={11} value={newForm.pesel} onChange={e => setNewForm(f => ({ ...f, pesel: e.target.value.replace(/\D/g, '') }))} /></Field>
+                <Field label="PESEL" hint="11 cyfr"><input className={inputCls} inputMode="numeric" maxLength={11} value={newForm.pesel} onChange={e => setNewForm(f => {
+                  const pesel = e.target.value.replace(/\D/g, '')
+                  const derived = birthFromPesel(pesel)  // PESEL niesie datę urodzenia — uzupełnij ją automatycznie
+                  return { ...f, pesel, ...(derived ? { birth_date: derived } : {}) }
+                })} /></Field>
                 <Field label="Data urodzenia"><DatePicker value={newForm.birth_date} max={new Date().toISOString().slice(0, 10)} onChange={v => setNewForm(f => ({ ...f, birth_date: v }))} /></Field>
                 <Field label="Telefon" hint="na SMS-y"><input className={inputCls} value={newForm.phone_number} placeholder="601 234 567" onChange={e => setNewForm(f => ({ ...f, phone_number: e.target.value }))} /></Field>
                 <Field label="E-mail (opcjonalnie)" hint="do przejęcia konta"><input className={inputCls} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} /></Field>

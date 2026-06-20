@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, ChevronLeft, CreditCard, FileSignature, HeartPulse } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
-import { peselValid } from '../lib/pesel'
+import { birthFromPesel, peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
 import { PhoneOtp } from '../components/PhoneOtp'
 import { RatingBadge, DoctorReviewsModal } from '../components/DoctorReviews'
@@ -214,7 +214,11 @@ export function RezerwacjaPubliczna() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="PESEL">
-                <input className={inputCls} required pattern="\d{11}" value={form.pesel} onChange={e => setForm(f => ({ ...f, pesel: e.target.value }))} />
+                <input className={inputCls} required pattern="\d{11}" value={form.pesel} onChange={e => setForm(f => {
+                  // PESEL niesie datę urodzenia — uzupełnij ją automatycznie (edytowalna)
+                  const derived = birthFromPesel(e.target.value)
+                  return { ...f, pesel: e.target.value, ...(derived ? { birth_date: derived } : {}) }
+                })} />
                 {peselBad && <p className="mt-1 text-xs font-bold text-red-600">Nieprawidłowy PESEL.</p>}
               </Field>
               <Field label="Data urodzenia"><DatePicker required value={form.birth_date} max={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, birth_date: v }))} /></Field>

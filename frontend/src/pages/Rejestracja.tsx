@@ -6,21 +6,11 @@ import { Check, HeartPulse, Pencil } from 'lucide-react'
 import { Button, Field, Tile, cx, inputCls } from '../ui'
 import { DEV_MODE, useAuth } from '../lib/auth'
 import { api } from '../lib/api'
-import { peselValid } from '../lib/pesel'
+import { birthFromPesel, peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
 import { PhoneOtp } from '../components/PhoneOtp'
 
 const STEPS = ['Konto', 'Twoje dane', 'Kontakt i zgody', 'Podsumowanie']
-
-// data urodzenia zakodowana w PESEL (miesiąc +20 = lata 2000+)
-function birthFromPesel(pesel: string): string | null {
-  if (!peselValid(pesel)) return null
-  const yy = Number(pesel.slice(0, 2))
-  const mmRaw = Number(pesel.slice(2, 4))
-  const dd = pesel.slice(4, 6)
-  const [year, mm] = mmRaw > 20 ? [2000 + yy, mmRaw - 20] : [1900 + yy, mmRaw]
-  return `${year}-${String(mm).padStart(2, '0')}-${dd}`
-}
 
 export function Rejestracja() {
   const { token, profileMissing, registerAccount, refreshMe } = useAuth()
