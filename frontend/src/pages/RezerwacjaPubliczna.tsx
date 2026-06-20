@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronLeft, CreditCard, FileSignature, HeartPulse, MapPin } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileSignature, HeartPulse, MapPin, Search } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { birthFromPesel, peselValid } from '../lib/pesel'
@@ -17,9 +17,14 @@ import type { AppointmentOut } from '../lib/types'
 
 type GuestPayment = { amount: number; provider_ref: string; pay_token: string | null; payment_status: string }
 type GuestBookResult = { appointment: AppointmentOut; payment: GuestPayment | null }
+type PublicClinic = { clinic_id: string; clinic_name: string; address: string }
+
+// lokalizacja z nazwy placówki „Zdrowa Rodzina — Piastów" → „Piastów"
+const shortClinic = (name: string) => name.split('—').pop()?.trim() || name
 
 export function RezerwacjaPubliczna() {
   const [kind, setKind] = useState<'visit' | 'exam'>('visit')
+  const [q, setQ] = useState('')   // omnisearch: lekarz / specjalizacja / placówka
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [done, setDone] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +46,13 @@ export function RezerwacjaPubliczna() {
     queryKey: ['public-slots'],
     queryFn: () => api<AppointmentOut[]>('/public/slots'),
   })
+  const { data: clinics } = useQuery({
+    queryKey: ['public-clinics'],
+    queryFn: () => api<PublicClinic[]>('/public/clinics'),
+    staleTime: 600_000,
+  })
+  // mapa nazwa placówki → adres (do pokazania adresu pod terminem)
+  const addrOf = (name: string) => clinics?.find(c => c.clinic_name === name)?.address ?? null
 
   // miękka rezerwacja slotu na czas wypełniania formularza — kto pierwszy, ten blokuje
   const hold = useMutation({
@@ -65,7 +77,7 @@ export function RezerwacjaPubliczna() {
 
   // goście widzą terminy bezpłatne (NFZ) i prywatne (płatne) — te drugie opłaca się online
   const cards = useMemo(() => {
-    const map = new Map<string, { id: string | null; name: string; sub: string | null; ref: boolean; days: Map<string, AppointmentOut[]> }>()
+    const map = new Map<string, { id: string | null; name: string; sub: string | null; ref: boolean; clinics: Set<string>; days: Map<string, AppointmentOut[]> }>()
     for (const s of slots ?? []) {
       // wizyta = slot z lekarzem (też usługowy); badanie = pracownia bez lekarza
       if (kind === 'visit' ? s.doctor_id == null : s.doctor_id != null) continue
@@ -74,19 +86,24 @@ export function RezerwacjaPubliczna() {
         id: kind === 'visit' ? s.doctor_id : null,
         name: kind === 'visit' ? s.doctor_name : s.service_name!,
         sub: kind === 'visit' ? (s.specializations.join(' · ') || null) : null,
-        ref: s.referral_required, days: new Map<string, AppointmentOut[]>(),
+        ref: s.referral_required, clinics: new Set<string>(), days: new Map<string, AppointmentOut[]>(),
       }
       cur.ref = cur.ref || s.referral_required
+      cur.clinics.add(s.clinic_name)
       const day = s.appointment_datetime.slice(0, 10)
       cur.days.set(day, [...(cur.days.get(day) ?? []), s])
       map.set(key, cur)
     }
+    const needle = q.trim().toLowerCase()
     return [...map.entries()].map(([key, c]) => ({
-      key, ...c,
+      key, ...c, clinics: [...c.clinics],
       days: [...c.days.entries()].sort((a, b) => a[0].localeCompare(b[0]))
         .map(([d, l]) => [d, l.sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))] as const),
-    }))
-  }, [slots, kind])
+    })).filter(c => !needle
+      || c.name.toLowerCase().includes(needle)
+      || (c.sub ?? '').toLowerCase().includes(needle)
+      || c.clinics.some(cl => cl.toLowerCase().includes(needle)))
+  }, [slots, kind, q])
 
   const book = useMutation({
     // mode przekazany argumentem (nie ze stanu) — unika stale-closure przy kliknięciu
@@ -234,8 +251,12 @@ export function RezerwacjaPubliczna() {
             }}>{formStep === 'data' ? 'Zmień termin' : 'Wstecz'}</Button>}
           />
           <p className="mb-4 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
-            {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)} · {slot.clinic_name}
+            {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)}
             {slot.price != null && <span className="text-primary"> · {slot.price} zł</span>}
+            <span className="mt-0.5 flex items-start gap-1.5 text-xs font-medium text-gray-500">
+              <MapPin size={13} className="mt-0.5 shrink-0 text-gray-400" />
+              {slot.clinic_name}{addrOf(slot.clinic_name) ? `, ${addrOf(slot.clinic_name)}` : ''}
+            </span>
           </p>
 
           {/* KROK 1 — dane (potwierdzenie SMS jest osobnym krokiem dalej) */}
@@ -368,11 +389,16 @@ export function RezerwacjaPubliczna() {
                 </button>
               ))}
             </div>
+            <div className="relative">
+              <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className={cx(inputCls, 'pl-10')} value={q} onChange={e => setQ(e.target.value)}
+                placeholder={kind === 'visit' ? 'Szukaj lekarza, specjalizacji lub placówki…' : 'Szukaj badania lub placówki…'} />
+            </div>
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
             {cards.length === 0 ? (
-              <EmptyState icon={<HeartPulse size={28} strokeWidth={1.5} />} title="Brak wolnych terminów"
-                hint="Wróć później — terminy pojawiają się na bieżąco." />
-            ) : cards.map(c => <PublicCard key={c.key} c={c} disabled={hold.isPending} onPick={s => hold.mutate(s)} />)}
+              <EmptyState icon={<HeartPulse size={28} strokeWidth={1.5} />} title={q.trim() ? 'Nic nie pasuje do wyszukiwania' : 'Brak wolnych terminów'}
+                hint={q.trim() ? 'Zmień frazę albo wyczyść wyszukiwanie.' : 'Wróć później — terminy pojawiają się na bieżąco.'} />
+            ) : cards.map(c => <PublicCard key={c.key} c={c} addrOf={addrOf} disabled={hold.isPending} onPick={s => hold.mutate(s)} />)}
             <p className="text-center text-xs font-semibold text-gray-500">
               Terminy bez ceny są na NFZ; terminy z ceną to wizyty prywatne — opłacasz je online przy rezerwacji.
             </p>
@@ -383,14 +409,16 @@ export function RezerwacjaPubliczna() {
   )
 }
 
-function PublicCard({ c, onPick, disabled }: {
-  c: { id: string | null; name: string; sub: string | null; ref: boolean; days: ReadonlyArray<readonly [string, AppointmentOut[]]> }
+function PublicCard({ c, onPick, addrOf, disabled }: {
+  c: { id: string | null; name: string; sub: string | null; ref: boolean; clinics: string[]; days: ReadonlyArray<readonly [string, AppointmentOut[]]> }
   onPick: (s: AppointmentOut) => void
+  addrOf: (clinicName: string) => string | null
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [showReviews, setShowReviews] = useState(false)
   const [svc, setSvc] = useState('')
+  const [off, setOff] = useState(0)   // paginacja dni (3 na stronę) — strzałki prawo/lewo
   const nearest = c.days[0][1][0]
   // usługi (typy wizyt) lekarza — gość wybiera usługę, potem godzinę (przy badaniach
   // karta to już jedna usługa, więc selektor się nie pokaże)
@@ -436,7 +464,7 @@ function PublicCard({ c, onPick, disabled }: {
           {services.length > 1 && (
             <div className="mb-3 flex flex-wrap gap-1.5">
               {services.map(s => (
-                <button key={s.key} onClick={() => setSvc(s.key)}
+                <button key={s.key} onClick={() => { setSvc(s.key); setOff(0) }}
                   className={cx('flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
                     sel?.key === s.key ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-600 hover:text-primary')}>
                   {s.label}
@@ -457,8 +485,21 @@ function PublicCard({ c, onPick, disabled }: {
                 : 'Ta usługa wymaga skierowania — podasz kod e-skierowania z P1 albo oświadczysz skierowanie papierowe.'}
             </p>
           )}
+          {/* nawigacja po dniach — strzałki prawo/lewo (3 dni na stronę) */}
+          {days.length > 3 && (
+            <div className="mb-2 flex items-center justify-end gap-1">
+              <button aria-label="Wcześniejsze dni" disabled={off === 0} onClick={() => setOff(o => Math.max(0, o - 3))}
+                className="cursor-pointer rounded-full p-1 text-gray-500 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+                <ChevronLeft size={15} />
+              </button>
+              <button aria-label="Późniejsze dni" disabled={off + 3 >= days.length} onClick={() => setOff(o => o + 3)}
+                className="cursor-pointer rounded-full p-1 text-gray-500 hover:bg-gray-100 disabled:cursor-default disabled:opacity-30">
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-2">
-            {days.slice(0, 3).map(([day, list]) => (
+            {days.slice(off, off + 3).map(([day, list]) => (
               <div key={day} className="min-w-0">
                 <p className="mb-1.5 text-center text-[10px] font-extrabold tracking-wide text-gray-500 uppercase">
                   {dayNo(day + 'T00:00:00')} {monthShort(day + 'T00:00:00')}
@@ -466,15 +507,29 @@ function PublicCard({ c, onPick, disabled }: {
                 <div className="flex flex-col gap-1">
                   {list.slice(0, 5).map(s => (
                     <button key={s.appointment_id} onClick={() => onPick(s)} disabled={disabled}
+                      title={addrOf(s.clinic_name) ?? s.clinic_name}
                       className="group cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
                       {formatTime(s.appointment_datetime)}
-                      {s.price != null && <span className="block text-[10px] font-bold text-gray-500 group-hover:text-white/80">{s.price} zł</span>}
+                      <span className="block truncate text-[10px] font-semibold text-gray-500 group-hover:text-white/80">
+                        {shortClinic(s.clinic_name)}{s.price != null ? ` · ${s.price} zł` : ''}
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
             ))}
           </div>
+          {/* adresy placówek tej karty (gość widzi DOKĄD ma przyjść) */}
+          {c.clinics.length > 0 && (
+            <div className="mt-3 space-y-0.5 border-t border-gray-200/70 pt-2.5">
+              {c.clinics.map(cl => (
+                <p key={cl} className="flex items-start gap-1.5 text-[11px] font-medium text-gray-500">
+                  <MapPin size={12} className="mt-0.5 shrink-0 text-gray-400" />
+                  <span><b className="font-bold text-gray-700">{shortClinic(cl)}</b>{addrOf(cl) ? ` — ${addrOf(cl)}` : ''}</span>
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {showReviews && c.id && (

@@ -38,28 +38,35 @@ def login(email: str) -> dict:
 CATALOG = {
     "Kardiolog": [
         ("Konsultacja kardiologiczna", 20, None, True, None, False, True),
+        ("Konsultacja kardiologiczna (prywatnie)", 20, 200, False, "Wizyta prywatna — bez skierowania.", False, True),
         ("Echo serca (USG)", 20, 150, False, "Badanie echokardiograficzne serca.", True, False),
         ("Konsultacja kardiologiczna + echo serca", 40, 250, False,
          "Konsultacja kardiologa wraz z badaniem echo serca w jednej wizycie.", True, False),
     ],
     "Internista": [
         ("Konsultacja internistyczna", 15, None, False, None, False, True),
+        ("Konsultacja internistyczna (prywatnie)", 15, 150, False, "Wizyta prywatna — bez skierowania.", False, True),
         ("USG jamy brzusznej", 30, 180, False, "Badanie USG narządów jamy brzusznej.", True, False),
     ],
     "Diabetolog": [
         ("Konsultacja diabetologiczna", 20, None, True, None, False, True),
+        ("Konsultacja diabetologiczna (prywatnie)", 20, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
     ],
     "Endokrynolog": [
         ("Konsultacja endokrynologiczna", 20, None, True, None, False, True),
+        ("Konsultacja endokrynologiczna (prywatnie)", 20, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
         ("USG tarczycy", 20, 160, False, "Badanie USG tarczycy.", True, False),
     ],
 }
 
 DAY_BASES = list(range(1, 11))  # gęsta pula: ~10 dni per placówka (przesuwane stride'em)
 CLINIC_DAY_STRIDE = 10          # lekarz w 2 placówkach = rozłączne dni (nie „dostępny" w dwóch naraz)
-CONSULT_HOURS = [9, 10, 11, 12, 13, 14]  # godziny konsultacji-bazy (gęsto, na każdy dzień)
-OVERLAP_HOUR = 10            # o tej godz. dokładamy usługi dodatkowe → współrezerwacja
-EXTRA_HOUR = 13             # dedykowana godzina usług dodatkowych (bez nakładania)
+NFZ_HOURS = [9, 11, 13]         # godziny konsultacji NFZ
+PRIV_HOURS = [10, 12, 14]       # godziny konsultacji prywatnych (rozłączne z NFZ → realny mix)
+# pierwszy wolny termin danego lekarza przesunięty o N dni (np. „dopiero w połowie lipca")
+DOC_DAY_SHIFT = {"dr Magdalena Sawicka": 24}
+OVERLAP_HOUR = 10            # o tej godz. dokładamy usługi dodatkowe → współrezerwacja (z prywatną konsultacją)
+EXTRA_HOUR = 15             # dedykowana godzina usług dodatkowych (poza godzinami konsultacji)
 
 
 def at(day_off: int, hour: int) -> str:
@@ -129,21 +136,24 @@ def main():
                   json={"doctor_ids": list(w["doctor_ids"])})
             print(f"   usługa: {name:42} {w['dur']}min {('%d zł' % w['price']) if w['price'] else 'NFZ':>6}  lekarzy={len(w['doctor_ids'])}")
 
-        # 2) terminy: konsultacja-baza w siatce godzin; usługi dodatkowe nakładają
-        #    się o OVERLAP_HOUR (demo współrezerwacji) + dedykowane o EXTRA_HOUR
+        # 2) terminy: konsultacje NFZ i prywatne w ROZŁĄCZNYCH godzinach (realny mix,
+        #    nie sama NFZ); usługi dodatkowe nakładają się o OVERLAP_HOUR + dedykowane o EXTRA_HOUR.
+        #    Część lekarzy ma przesunięty pierwszy wolny termin (DOC_DAY_SHIFT).
         for d in doctors:
             did = d["doctor_id"]
+            shift = DOC_DAY_SHIFT.get(d["name"], 0)
             mine = [(name, wanted[name]) for name in wanted if did in wanted[name]["doctor_ids"]]
             base = [(n, w) for n, w in mine if not w["extra"]]
             extras = [(n, w) for n, w in mine if w["extra"]]
             tot = 0
-            for name, _w in base:
+            for name, w in base:
+                hours = PRIV_HOURS if w["price"] is not None else NFZ_HOURS  # prywatna ma cenę, NFZ nie
                 tot += make_slots(adm, cid, did, svc_id[name],
-                                  [at(dd, h) for dd in days for h in CONSULT_HOURS])
+                                  [at(dd + shift, h) for dd in days for h in hours])
             for name, _w in extras:
                 tot += make_slots(adm, cid, did, svc_id[name],
-                                  [at(dd, OVERLAP_HOUR) for dd in days[:2]]      # nakładające
-                                  + [at(dd, EXTRA_HOUR) for dd in days[:2]])     # dedykowane
+                                  [at(dd + shift, OVERLAP_HOUR) for dd in days[:2]]   # nakładające
+                                  + [at(dd + shift, EXTRA_HOUR) for dd in days[:2]])  # dedykowane
             print(f"   terminy dla {d['name']}: +{tot}")
     print("Gotowe.")
 
