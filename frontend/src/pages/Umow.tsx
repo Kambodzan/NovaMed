@@ -831,7 +831,7 @@ export function Umow() {
             title={booked ? t('Płatność') : t('Potwierdzenie rezerwacji')}
             action={payPhase !== 'success'
               ? <Button variant="ghost" size="sm" onClick={resetToSlots}>
-                  <ChevronLeft size={15} /> {payPhase === 'idle' ? t('Zmień termin') : t('Wstecz — zwolnij termin')}
+                  <ChevronLeft size={15} /> {payPhase === 'idle' ? t('Wróć do terminów') : t('Wstecz — zwolnij termin')}
                 </Button>
               : undefined}
           />

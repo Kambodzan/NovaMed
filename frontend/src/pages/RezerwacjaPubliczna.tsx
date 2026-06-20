@@ -248,7 +248,7 @@ export function RezerwacjaPubliczna() {
             action={<Button variant="ghost" size="sm" onClick={() => {
               if (formStep === 'data') { releaseHold(); setSlot(null) }
               else { setError(null); setFormStep(formStep === 'otp' && slot.price != null ? 'pay' : 'data') }
-            }}>{formStep === 'data' ? 'Zmień termin' : 'Wstecz'}</Button>}
+            }}><ChevronLeft size={15} /> {formStep === 'data' ? 'Wróć do terminów' : 'Wstecz'}</Button>}
           />
           <p className="mb-4 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700">
             {slot.service_name ?? slot.doctor_name} · {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)}
