@@ -1014,11 +1014,26 @@ export function Umow() {
                   <div>
                     <p className="font-extrabold text-red-700">{t('Płatność odrzucona')}</p>
                     <p className="mt-0.5 text-sm font-medium text-red-600">
-                      {t('Termin wrócił do puli wolnych terminów. Możesz spróbować ponownie lub wybrać inny termin.')}
+                      {lockLeft !== null && lockLeft <= 0
+                        ? t('Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.')
+                        : t('Termin jest nadal dla Ciebie zarezerwowany — możesz spróbować zapłacić ponownie.')}
                     </p>
                   </div>
                 </div>
-                <Button variant="secondary" onClick={resetToSlots}>{t('Wróć do terminów')}</Button>
+                {lockLeft !== null && lockLeft > 0 && (
+                  <p className="flex items-center gap-1.5 text-sm font-bold text-amber-700"><Clock size={14} /> {t('Termin zarezerwowany jeszcze przez')} {mmss(lockLeft)}</p>
+                )}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button size="lg" disabled={pay.isPending || (lockLeft !== null && lockLeft <= 0)}
+                    onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'success' })}>
+                    <CreditCard size={17} /> {t('Zapłać ponownie (symulacja)')}
+                  </Button>
+                  <Button size="lg" variant="secondary" disabled={pay.isPending || (lockLeft !== null && lockLeft <= 0)}
+                    onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'failure' })}>
+                    {t('Symuluj kolejną odmowę')}
+                  </Button>
+                </div>
+                <button onClick={resetToSlots} className="text-sm font-bold text-gray-500 hover:text-gray-900">{t('Zmień termin')}</button>
               </div>
             )}
           </div>

@@ -67,7 +67,11 @@ def test_platna_wizyta_sukces(client, setup):
     assert visit["appointment_status"] == "CANCELLED" and visit["payment_status"] == "REFUNDED"
 
 
-def test_platna_wizyta_odmowa_zwalnia_slot(client, setup, factory):
+def test_platna_wizyta_odmowa_pozwala_powtorzyc(client, setup, factory):
+    """Odmowa płatności NIE kasuje rezerwacji — termin zostaje TEMP_LOCK (trzymany dla
+    pacjenta), otwiera się nowa próba PENDING, a pacjent może spróbować ponownie (sukces
+    → CONFIRMED). Inny pacjent nie może w tym czasie zająć terminu."""
+    pid = str(setup["patient"].user_id)
     slot = make_slot(client, setup, price=150)
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
 
@@ -76,24 +80,44 @@ def test_platna_wizyta_odmowa_zwalnia_slot(client, setup, factory):
         json={"outcome": "failure"}, headers=auth_header(setup["patient_token"]),
     )
     assert resp.status_code == 200
-    assert resp.json()["appointment"]["appointment_status"] == "FREE"
-    assert resp.json()["appointment"]["patient_id"] is None
-    assert resp.json()["payment"]["payment_status"] == "FAILED"
-
-    # termin wrócił do puli — inny pacjent może go zarezerwować
-    _, other_token = factory.patient()
-    resp = client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(other_token))
-    assert resp.status_code == 200
+    # termin nadal zablokowany dla pacjenta + nowa oczekująca próba płatności
     assert resp.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
+    assert resp.json()["appointment"]["patient_id"] == pid
+    assert resp.json()["payment"]["payment_status"] == "PENDING"
+
+    # inny pacjent NIE może go zająć w czasie blokady
+    _, other_token = factory.patient()
+    busy = client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(other_token))
+    assert busy.status_code == 409
+
+    # ponowna płatność (tym razem sukces) → CONFIRMED + PAID
+    again = client.post(f"/appointments/{slot['appointment_id']}/pay",
+                        json={"outcome": "success"}, headers=auth_header(setup["patient_token"]))
+    assert again.status_code == 200
+    assert again.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert again.json()["payment"]["payment_status"] == "PAID"
 
 
-def test_usuniecie_wolnego_slotu_z_osierocona_platnoscia(client, setup):
-    """Regresja: wolny termin po nieudanej płatności ma osierocony wiersz payment —
-    usunięcie slotu nie może wywalić się na FK (kiedyś 500)."""
+def test_usuniecie_wolnego_slotu_z_osierocona_platnoscia(client, setup, db_session):
+    """Regresja: po wygaśnięciu blokady (sweep) wolny termin ma osierocone wiersze
+    payment (FAILED + wygasły PENDING) — usunięcie slotu nie może wywalić się na FK."""
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from app.domain.reminders import release_expired_temp_locks
+    from app.models import Payment
+
     slot = make_slot(client, setup, price=150)
     client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(setup["patient_token"]))
     client.post(f"/appointments/{slot['appointment_id']}/pay",
                 json={"outcome": "failure"}, headers=auth_header(setup["patient_token"]))
+    # przesuń płatności w przeszłość i odpal sweep → termin wraca do puli (FREE) z osieroconymi payment
+    for p in db_session.scalars(select(Payment).where(Payment.appointment_id == _uuid.UUID(slot["appointment_id"]))):
+        p.created_at = datetime.now() - timedelta(hours=1)
+    db_session.commit()
+    assert release_expired_temp_locks(db_session) == 1
+    db_session.commit()
     resp = client.delete(f"/slots/{slot['appointment_id']}", headers=auth_header(setup["reg_token"]))
     assert resp.status_code == 204, resp.text
 

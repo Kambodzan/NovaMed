@@ -115,8 +115,10 @@ export function RezerwacjaPubliczna() {
     mutationFn: (outcome: 'success' | 'failure') => api<GuestBookResult>(
       `/public/visit/${pending!.payToken}/pay`, { method: 'POST', body: { outcome } }),
     onSuccess: (res) => {
+      // odmowa NIE kasuje rezerwacji — termin trzymany do końca okna blokady, gość
+      // ponawia z tych samych przycisków (backend otworzył nową próbę płatności)
       if (res.payment?.payment_status === 'PAID') { setDone(res.appointment); setPending(null); setError(null) }
-      else { setPending(null); setSlot(null); setError('Płatność odrzucona — termin wrócił do puli. Wybierz inny termin.') }
+      else setError('Płatność odrzucona — termin jest nadal zarezerwowany. Spróbuj zapłacić ponownie.')
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Płatność nie powiodła się.'),
   })

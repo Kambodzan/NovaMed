@@ -424,7 +424,8 @@ def public_pay(
     payments: PaymentsClient = Depends(get_payments_client),
 ):
     """Opłacenie rezerwacji gościa z linku (mock bramki: success/fail), bez logowania.
-    Sukces: TEMP_LOCK→CONFIRMED. Odmowa: TEMP_LOCK→FREE — termin wraca do puli."""
+    Sukces: TEMP_LOCK→CONFIRMED. Odmowa: termin zostaje TEMP_LOCK (trzymany), a gość
+    może spróbować ponownie z tego samego linku do końca okna blokady."""
     a = _by_token(token, db)
     if a.appointment_status != AppointmentStatus.TEMP_LOCK.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta nie oczekuje na płatność.")
@@ -450,17 +451,25 @@ def public_pay(
             payment=GuestPaymentOut(amount=float(payment.amount), provider_ref=payment.provider_ref, payment_status="PAID"),
         )
 
+    # Odmowa NIE kasuje rezerwacji gościa: termin zostaje TEMP_LOCK (z linkiem/tokenem),
+    # otwieramy nową próbę płatności (zachowany created_at → okno blokady bez zmian).
     payment.payment_status = "FAILED"
-    pid = a.patient_id
-    a.appointment_status = AppointmentStatus.FREE.value
-    a.patient_id = None
-    restore_blocked(db, a)
-    a.confirmation_token = None
-    a.lock_expires_at = None
-    notify(db, pid, "Płatność odrzucona",
-           "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
+    try:
+        retry_ref = payments.create_payment(
+            amount=float(payment.amount), reference=f"appointment-{a.appointment_id}")
+    except IntegrationError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    retry = Payment(
+        appointment_id=a.appointment_id, amount=payment.amount,
+        payment_status="PENDING", provider_ref=retry_ref, created_at=payment.created_at,
+    )
+    db.add(retry)
+    db.flush()
+    notify(db, a.patient_id, "Płatność odrzucona",
+           "Operator odrzucił płatność, ale termin jest nadal zarezerwowany — spróbuj "
+           "zapłacić ponownie z linku do końca okna blokady.")
     db.commit()
     return GuestBookOut(
         appointment=appointment_out(db, a),
-        payment=GuestPaymentOut(amount=float(payment.amount), provider_ref=payment.provider_ref, payment_status="FAILED"),
+        payment=GuestPaymentOut(amount=float(retry.amount), provider_ref=retry.provider_ref, payment_status="PENDING"),
     )

@@ -161,14 +161,21 @@ def test_gosc_platny_slot_oplaca_online(client, setup):
     assert pay.json()["payment"]["payment_status"] == "PAID"
 
 
-def test_gosc_platny_odmowa_zwalnia_termin(client, setup):
+def test_gosc_platny_odmowa_pozwala_powtorzyc(client, setup):
+    """Odmowa płatności gościa NIE kasuje rezerwacji — termin zostaje TEMP_LOCK (z tym
+    samym linkiem), otwiera się nowa próba PENDING, a gość może spróbować ponownie."""
     paid = make_slot(client, setup, hour=13, price=150)
     verify_phone(client, GUEST["phone_number"], "BOOKING")
     token = client.post("/public/book", json={**GUEST, "appointment_id": paid["appointment_id"]}).json()["payment"]["pay_token"]
     pay = client.post(f"/public/visit/{token}/pay", json={"outcome": "failure"})
     assert pay.status_code == 200
-    assert pay.json()["appointment"]["appointment_status"] == "FREE"   # termin wraca do puli
-    assert pay.json()["payment"]["payment_status"] == "FAILED"
+    assert pay.json()["appointment"]["appointment_status"] == "TEMP_LOCK"  # termin nadal trzymany
+    assert pay.json()["payment"]["payment_status"] == "PENDING"            # nowa próba
+    # ten sam link działa do ponowienia — tym razem sukces
+    again = client.post(f"/public/visit/{token}/pay", json={"outcome": "success"})
+    assert again.status_code == 200
+    assert again.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert again.json()["payment"]["payment_status"] == "PAID"
 
 
 def test_hold_blokuje_termin_i_release_zwalnia(client, setup):

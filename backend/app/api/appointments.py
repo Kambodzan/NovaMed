@@ -203,8 +203,10 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
     # bez dodatkowego zapytania dla zwykłych terminów NFZ
     locked_until = payment_status = None
     if a.appointment_status == AppointmentStatus.TEMP_LOCK.value or a.price is not None:
+        # aktywna płatność to oczekująca (PENDING) — po odmowie i ponowieniu jest obok
+        # starej FAILED z tym samym created_at, więc PENDING musi mieć pierwszeństwo
         pay = db.scalar(select(Payment).where(Payment.appointment_id == a.appointment_id)
-                        .order_by(Payment.created_at.desc()))
+                        .order_by((Payment.payment_status == "PENDING").desc(), Payment.created_at.desc()))
         if pay is not None:
             payment_status = pay.payment_status
             if pay.payment_status == "PENDING":
@@ -792,7 +794,9 @@ def pay_appointment(
     payments: PaymentsClient = Depends(get_payments_client),
 ):
     """Finalizacja płatności (mock symuluje autoryzację klienta u operatora).
-    Sukces: TEMP_LOCK→CONFIRMED. Odmowa: TEMP_LOCK→FREE — termin wraca do puli."""
+    Sukces: TEMP_LOCK→CONFIRMED. Odmowa: termin zostaje TEMP_LOCK (trzymany dla
+    pacjenta) i otwierana jest nowa próba płatności — pacjent może spróbować ponownie
+    do końca okna blokady; po jego upływie sweep zwalnia termin do puli."""
     a = get_appointment_or_404(appointment_id, db)
     if a.patient_id not in allowed_patient_ids(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja rezerwacja.")
@@ -819,15 +823,27 @@ def pay_appointment(
         notify(db, user.user_id, "Wizyta opłacona i potwierdzona",
                f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}.")
     else:
+        # Odmowa NIE kasuje rezerwacji: termin zostaje TEMP_LOCK (trzymany dla pacjenta),
+        # nakładające się sloty pozostają zablokowane, listy oczekujących nie ruszamy.
+        # Bramka nie pozwala potwierdzić tej samej płatności dwa razy (odmowa jest
+        # terminalna), więc otwieramy NOWĄ próbę — z zachowanym created_at, żeby okno
+        # blokady TEMP_LOCK nie wydłużało się przez kolejne odmowy.
         payment.payment_status = "FAILED"
-        assert_transition(a.appointment_status, AppointmentStatus.FREE)
-        a.appointment_status = AppointmentStatus.FREE.value
-        a.patient_id = None
-        a.notify_earlier = False
-        restore_blocked(db, a)  # czas lekarza wolny → nakładające się usługi wracają do puli
+        try:
+            retry_ref = payments.create_payment(
+                amount=float(payment.amount), reference=f"appointment-{a.appointment_id}")
+        except IntegrationError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+        payment = Payment(
+            appointment_id=a.appointment_id, amount=payment.amount,
+            payment_status="PENDING", provider_ref=retry_ref,
+            created_at=payment.created_at,  # zachowane pierwotne okno blokady
+        )
+        db.add(payment)
+        db.flush()
         notify(db, user.user_id, "Płatność odrzucona",
-               "Operator odrzucił płatność. Termin wrócił do puli — spróbuj ponownie lub wybierz inny.")
-        notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
+               "Operator odrzucił płatność, ale termin jest nadal dla Ciebie zarezerwowany "
+               "— spróbuj zapłacić ponownie do końca okna blokady.")
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),
