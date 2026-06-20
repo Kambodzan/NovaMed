@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from: str = ""          # numer nadawcy z Twilio, E.164 (np. +1...)
     sms_default_country: str = "48"  # domyślny kierunkowy dla numerów bez „+"
+    # DEV: przekieruj WSZYSTKIE SMS na jeden numer testowy (np. autora) — żeby realny
+    # SMS dotarł niezależnie od numeru wpisanego w formularzu (Twilio trial dostarcza
+    # tylko na zweryfikowane numery). Pusty = brak przekierowania. E.164, np. +48500000000.
+    sms_redirect_to: str = ""
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     # dev: front otwierany z adresów LAN (testy z innych urządzeń w sieci lokalnej)

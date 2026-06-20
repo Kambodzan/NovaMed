@@ -76,6 +76,18 @@ class NullSmsClient:
         pass
 
 
+class RedirectSmsClient:
+    """DEV: przekierowuje każdy SMS na jeden numer testowy (np. autora). Dzięki temu
+    realny SMS dociera niezależnie od numeru wpisanego w formularzu — oryginalny
+    adresat trafia do treści, żeby było widać, do kogo „naprawdę" szedł."""
+
+    def __init__(self, inner: SmsClient, redirect_to: str):
+        self.inner, self.redirect_to = inner, redirect_to
+
+    def send(self, *, to: str, message: str) -> None:
+        self.inner.send(to=self.redirect_to, message=f"[do {to}] {message}")
+
+
 # moduł trzyma jeden klient; testy podmieniają przez set_sms_client()
 _client: SmsClient | None = None
 
@@ -90,6 +102,9 @@ def get_sms_client() -> SmsClient:
             _client = TwilioSmsClient(settings.twilio_account_sid, settings.twilio_auth_token, settings.twilio_from)
         else:
             _client = HttpSmsClient()  # mock-serwis :8106
+        # DEV: przekierowanie wszystkich SMS na numer testowy (jeśli ustawione)
+        if settings.sms_redirect_to:
+            _client = RedirectSmsClient(_client, settings.sms_redirect_to)
     return _client
 
 
