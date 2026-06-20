@@ -2,7 +2,7 @@
 // grafiku dnia (/clinics/{id}/day), żeby od wejścia widać było obłożenie.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, ChevronRight, Clock, FlaskConical, Users, Video } from 'lucide-react'
+import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CheckCircle2, ChevronRight, Clock, FlaskConical, Users, Video } from 'lucide-react'
 import { Button, Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { pushToast } from '../../lib/toast'
@@ -144,7 +144,7 @@ export function Pulpit() {
                 </Button>
               )} />
               {unconfirmed.length === 0 ? (
-                <p className="rounded-2xl bg-emerald-50 px-4 py-6 text-center text-sm font-bold text-emerald-700">Wszystkie dzisiejsze wizyty potwierdzone 👌</p>
+                <p className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-4 py-6 text-center text-sm font-bold text-emerald-700"><CheckCircle2 size={15} className="text-emerald-600" /> Wszystkie dzisiejsze wizyty potwierdzone</p>
               ) : (
                 <>
                   <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-amber-800">

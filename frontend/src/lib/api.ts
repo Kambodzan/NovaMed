@@ -41,6 +41,21 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     try {
       const data = await resp.json()
       if (typeof data.detail === 'string') detail = data.detail
+      else if (Array.isArray(data.detail)) {
+        // 422 z FastAPI: detail to lista błędów walidacji (Pydantic). Zamiast surowego
+        // „Błąd 422" pokazujemy, które pola są niepoprawne — po polsku.
+        const FIELD_PL: Record<string, string> = {
+          email: 'e-mail', phone_number: 'telefon', pesel: 'PESEL', birth_date: 'data urodzenia',
+          first_name: 'imię', last_name: 'nazwisko', password: 'hasło', reason: 'powód',
+        }
+        const raw: string[] = (data.detail as Array<{ loc?: unknown[] }>)
+          .map(e => Array.isArray(e.loc) ? String(e.loc[e.loc.length - 1]) : '')
+          .filter(f => f && f !== 'body')
+        const fields = [...new Set(raw)].map(f => FIELD_PL[f] ?? f)
+        detail = fields.length
+          ? `Sprawdź poprawność danych: ${fields.join(', ')}.`
+          : 'Sprawdź poprawność wprowadzonych danych.'
+      }
     } catch { /* odpowiedź bez JSON-a */ }
     // wygaśnięcie sesji w trakcie pracy — AuthProvider nasłuchuje i wylogowuje
     if (resp.status === 401) window.dispatchEvent(new CustomEvent('novamed:unauthorized'))
