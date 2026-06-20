@@ -3,6 +3,7 @@
 // ZASADA RESTRAINT: max 1 akcja primary + 1 secondary na kafel.
 
 import { useEffect, useRef, type ReactNode, type ButtonHTMLAttributes } from 'react'
+import { X } from 'lucide-react'
 import { useI18n } from './lib/i18n'
 
 export const cx = (...parts: Array<string | false | undefined>) =>
@@ -258,9 +259,17 @@ export function Modal({ title, overline, children, onClose, footer, wide }: {
           wide ? 'max-w-3xl' : 'max-w-lg')}
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-6 pt-5 pb-4">
-          {overline && <Overline className="mb-1">{overline}</Overline>}
-          <h3 className="text-lg font-extrabold text-gray-900">{title}</h3>
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4">
+          <div className="min-w-0">
+            {overline && <Overline className="mb-1">{overline}</Overline>}
+            <h3 className="text-lg font-extrabold text-gray-900">{title}</h3>
+          </div>
+          <button
+            type="button" onClick={onClose} aria-label="Zamknij"
+            className="-mt-1 -mr-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={18} />
+          </button>
         </div>
         <div className="max-h-[65vh] overflow-y-auto px-6 pb-2">{children}</div>
         {footer && <div className="flex justify-end gap-2 px-6 py-4">{footer}</div>}
