@@ -10,6 +10,7 @@ import { Badge, Button, Field, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import { birthFromPesel } from '../../lib/pesel'
+import { PhoneInput } from '../../components/PhoneInput'
 import type { AppointmentOut, DocumentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
@@ -234,7 +235,7 @@ export function UmowWizyte() {
                   return { ...f, pesel, ...(derived ? { birth_date: derived } : {}) }
                 })} /></Field>
                 <Field label="Data urodzenia"><DatePicker value={newForm.birth_date} max={new Date().toISOString().slice(0, 10)} onChange={v => setNewForm(f => ({ ...f, birth_date: v }))} /></Field>
-                <Field label="Telefon" hint="na SMS-y"><input className={inputCls} value={newForm.phone_number} placeholder="601 234 567" onChange={e => setNewForm(f => ({ ...f, phone_number: e.target.value }))} /></Field>
+                <Field label="Telefon" hint="na SMS-y"><PhoneInput value={newForm.phone_number} onChange={v => setNewForm(f => ({ ...f, phone_number: v }))} /></Field>
                 <Field label="E-mail (opcjonalnie)" hint="do przejęcia konta"><input className={inputCls} type="email" value={newForm.email} onChange={e => setNewForm(f => ({ ...f, email: e.target.value }))} /></Field>
                 <div className="sm:col-span-2"><Button disabled={!newValid || register.isPending} onClick={() => register.mutate()}><UserPlus size={15} /> {register.isPending ? 'Zakładanie…' : 'Załóż i wybierz'}</Button></div>
               </div>

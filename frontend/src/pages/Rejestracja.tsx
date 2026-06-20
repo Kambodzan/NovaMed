@@ -8,6 +8,7 @@ import { DEV_MODE, useAuth } from '../lib/auth'
 import { api } from '../lib/api'
 import { birthFromPesel, peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
+import { PhoneInput } from '../components/PhoneInput'
 import { PhoneOtp } from '../components/PhoneOtp'
 
 const STEPS = ['Konto', 'Twoje dane', 'Kontakt i zgody', 'Podsumowanie']
@@ -169,8 +170,8 @@ export function Rejestracja() {
         {step === 3 && (
           <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (!phoneNeedsVerify) setStep(4) }}>
             <Field label="Telefon (opcjonalnie)" hint="na ten numer wyślemy SMS-y z przypomnieniami — potwierdzamy go kodem">
-              <input className={inputCls} value={profile.phone_number} placeholder="601 234 567"
-                onChange={e => { setProfile(p => ({ ...p, phone_number: e.target.value })); setPhoneVerified(false) }} />
+              <PhoneInput value={profile.phone_number}
+                onChange={v => { setProfile(p => ({ ...p, phone_number: v })); setPhoneVerified(false) }} />
             </Field>
             {profile.phone_number.trim() && (
               <PhoneOtp phone={profile.phone_number} purpose="REGISTRATION" verified={phoneVerified} onVerified={() => setPhoneVerified(true)} />
