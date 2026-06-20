@@ -281,6 +281,7 @@ class ServiceIn(BaseModel):
     duration_min: int = Field(default=15, ge=5, le=240)
     price: float | None = Field(default=None, ge=0)   # NULL = NFZ/bezpłatna
     referral_required: bool = False
+    allow_online: bool = False   # czy usługę można odbyć jako teleporadę (konsultacja: tak)
     description: str | None = Field(default=None, max_length=1000)
 
 
@@ -299,7 +300,7 @@ def service_out(s: Service) -> ServiceOut:
     return ServiceOut(
         service_id=s.service_id, clinic_id=s.clinic_id, name=s.name, specialization=s.specialization,
         duration_min=s.duration_min, price=float(s.price) if s.price is not None else None,
-        referral_required=s.referral_required, description=s.description, active=s.active,
+        referral_required=s.referral_required, allow_online=s.allow_online, description=s.description, active=s.active,
         doctor_ids=[ds.doctor_id for ds in s.doctors],
     )
 

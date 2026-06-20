@@ -14,6 +14,7 @@ export interface ServiceOut {
   duration_min: number
   price: number | null
   referral_required: boolean
+  allow_online: boolean
   description: string | null
   active: boolean
   doctor_ids: string[]
@@ -115,6 +116,7 @@ function ServiceForm({ clinicId, service, onClose, onSaved }: {
     duration_min: String(service?.duration_min ?? 20),
     price: service?.price != null ? String(service.price) : '',
     referral_required: service?.referral_required ?? false,
+    allow_online: service?.allow_online ?? false,
     description: service?.description ?? '',
   })
   const [error, setError] = useState<string | null>(null)
@@ -124,7 +126,7 @@ function ServiceForm({ clinicId, service, onClose, onSaved }: {
       const body = {
         name: form.name.trim(), specialization: form.specialization.trim() || null,
         duration_min: Number(form.duration_min), price: form.price ? Number(form.price) : null,
-        referral_required: form.referral_required, description: form.description.trim() || null,
+        referral_required: form.referral_required, allow_online: form.allow_online, description: form.description.trim() || null,
       }
       return service
         ? api(`/clinics/${clinicId}/services/${service.service_id}`, { method: 'PATCH', body })
@@ -155,11 +157,18 @@ function ServiceForm({ clinicId, service, onClose, onSaved }: {
           <textarea className={cx(inputCls, 'h-16 py-2 sm:col-span-2')} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
         </Field>
       </div>
-      <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-2xl bg-gray-50 px-4 py-2.5">
-        <input type="checkbox" className="h-4 w-4 accent-(--color-primary)" checked={form.referral_required}
-          onChange={e => setForm(f => ({ ...f, referral_required: e.target.checked }))} />
-        <span className="text-sm font-semibold text-gray-700">Wymaga skierowania</span>
-      </label>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl bg-gray-50 px-4 py-2.5">
+          <input type="checkbox" className="h-4 w-4 accent-(--color-primary)" checked={form.referral_required}
+            onChange={e => setForm(f => ({ ...f, referral_required: e.target.checked }))} />
+          <span className="text-sm font-semibold text-gray-700">Wymaga skierowania</span>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl bg-gray-50 px-4 py-2.5">
+          <input type="checkbox" className="h-4 w-4 accent-(--color-primary)" checked={form.allow_online}
+            onChange={e => setForm(f => ({ ...f, allow_online: e.target.checked }))} />
+          <span className="text-sm font-semibold text-gray-700">Możliwa teleporada (wideo)</span>
+        </label>
+      </div>
       {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
     </Modal>
   )

@@ -289,6 +289,7 @@ def create_slots(
         eff_name = service.name
         eff_price = float(service.price) if service.price is not None else None
         eff_referral = service.referral_required
+        eff_allow_online = service.allow_online  # slot dziedziczy „czy teleporada" z usługi
         eff_duration: int | None = service.duration_min
         interval = service.duration_min or 15
     else:
@@ -299,6 +300,7 @@ def create_slots(
         eff_name = body.service_name
         eff_price = body.price
         eff_referral = (body.price is None) if body.service_name else False
+        eff_allow_online = body.allow_online  # wizyta lekarska: wybór z body; badanie pracowniane i tak STATIONARY
         eff_duration = None
         interval = (doctor.slot_duration_min if doctor and doctor.slot_duration_min else clinic.slot_interval_min) or 15
 
@@ -340,8 +342,8 @@ def create_slots(
             appointment_datetime=dt,
             appointment_status=AppointmentStatus.FREE.value,
             appointment_type=body.appointment_type.value,
-            # slot ONLINE jest z definicji online; STATIONARY niesie wybór allow_online
-            allow_online=body.allow_online if body.appointment_type == AppointmentType.STATIONARY else True,
+            # slot ONLINE jest z definicji online; STATIONARY dziedziczy allow_online z usługi/body
+            allow_online=eff_allow_online if body.appointment_type == AppointmentType.STATIONARY else True,
             price=eff_price,
             service_name=eff_name,
             referral_required=eff_referral,
@@ -553,11 +555,9 @@ def book_appointment(
         if body.reason:
             a.appointment_notes = body.reason.strip()[:500]
         a.notify_earlier = body.notify_earlier
-        if body.online and a.service_name is None:  # badania zawsze stacjonarnie
-            # teleporada dozwolona tylko gdy slot jest online albo na nią zezwala
-            if a.appointment_type != AppointmentType.ONLINE.value and not a.allow_online:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                                    detail="Ten termin jest dostępny wyłącznie stacjonarnie.")
+        # teleporada to wybór pacjenta — dozwolony, gdy slot na nią zezwala (allow_online;
+        # konsultacja-usługa też, badanie/USG nie). Gdy nie zezwala, prośbę ignorujemy.
+        if body.online and a.allow_online:
             a.appointment_type = AppointmentType.ONLINE.value
 
     # eWUŚ — automatyczna weryfikacja przy rejestracji wizyty; awaria nie blokuje rezerwacji

@@ -31,31 +31,33 @@ def login(email: str) -> dict:
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
-# usługi implikowane przez specjalizację: (nazwa, czas, cena|None=NFZ, skierowanie, opis, czy_dodatkowa)
+# usługi implikowane przez specjalizację:
+#   (nazwa, czas, cena|None=NFZ, skierowanie, opis, czy_dodatkowa, teleporada)
 # „dodatkowa" = USG/echo/pakiet (nakłada się z konsultacją); reszta to konsultacja-baza.
+# „teleporada" = czy usługę można odbyć jako wideo — konsultacje TAK, badania/pakiet NIE.
 CATALOG = {
     "Kardiolog": [
-        ("Konsultacja kardiologiczna", 20, None, True, None, False),
-        ("Echo serca (USG)", 20, 150, False, "Badanie echokardiograficzne serca.", True),
+        ("Konsultacja kardiologiczna", 20, None, True, None, False, True),
+        ("Echo serca (USG)", 20, 150, False, "Badanie echokardiograficzne serca.", True, False),
         ("Konsultacja kardiologiczna + echo serca", 40, 250, False,
-         "Konsultacja kardiologa wraz z badaniem echo serca w jednej wizycie.", True),
+         "Konsultacja kardiologa wraz z badaniem echo serca w jednej wizycie.", True, False),
     ],
     "Internista": [
-        ("Konsultacja internistyczna", 15, None, False, None, False),
-        ("USG jamy brzusznej", 30, 180, False, "Badanie USG narządów jamy brzusznej.", True),
+        ("Konsultacja internistyczna", 15, None, False, None, False, True),
+        ("USG jamy brzusznej", 30, 180, False, "Badanie USG narządów jamy brzusznej.", True, False),
     ],
     "Diabetolog": [
-        ("Konsultacja diabetologiczna", 20, None, True, None, False),
+        ("Konsultacja diabetologiczna", 20, None, True, None, False, True),
     ],
     "Endokrynolog": [
-        ("Konsultacja endokrynologiczna", 20, None, True, None, False),
-        ("USG tarczycy", 20, 160, False, "Badanie USG tarczycy.", True),
+        ("Konsultacja endokrynologiczna", 20, None, True, None, False, True),
+        ("USG tarczycy", 20, 160, False, "Badanie USG tarczycy.", True, False),
     ],
 }
 
-DAY_BASES = [2, 3, 6, 9]     # offsety dni; przesuwane per placówka (lekarz w 2 placówkach
-CLINIC_DAY_STRIDE = 10       #   = rozłączne dni, więc nie jest „dostępny" w dwóch miejscach naraz)
-CONSULT_HOURS = [9, 10, 11]  # godziny konsultacji-bazy
+DAY_BASES = list(range(1, 11))  # gęsta pula: ~10 dni per placówka (przesuwane stride'em)
+CLINIC_DAY_STRIDE = 10          # lekarz w 2 placówkach = rozłączne dni (nie „dostępny" w dwóch naraz)
+CONSULT_HOURS = [9, 10, 11, 12, 13, 14]  # godziny konsultacji-bazy (gęsto, na każdy dzień)
 OVERLAP_HOUR = 10            # o tej godz. dokładamy usługi dodatkowe → współrezerwacja
 EXTRA_HOUR = 13             # dedykowana godzina usług dodatkowych (bez nakładania)
 
@@ -108,19 +110,20 @@ def main():
         wanted: dict[str, dict] = {}
         for d in doctors:
             for spec in d["specializations"]:
-                for (name, dur, price, ref, desc, extra) in CATALOG.get(spec, []):
+                for (name, dur, price, ref, desc, extra, online) in CATALOG.get(spec, []):
                     w = wanted.setdefault(name, {"dur": dur, "price": price, "ref": ref,
-                                                 "desc": desc, "extra": extra, "doctor_ids": set()})
+                                                 "desc": desc, "extra": extra, "online": online, "doctor_ids": set()})
                     w["doctor_ids"].add(d["doctor_id"])
 
         svc_id: dict[str, str] = {}
         for name, w in wanted.items():
+            body = {"name": name, "duration_min": w["dur"], "price": w["price"],
+                    "referral_required": w["ref"], "allow_online": w["online"], "description": w["desc"]}
             s = existing.get(name)
             if s is None:
-                s = c.post(f"{API}/clinics/{cid}/services", headers=adm, json={
-                    "name": name, "duration_min": w["dur"], "price": w["price"],
-                    "referral_required": w["ref"], "description": w["desc"],
-                }).json()
+                s = c.post(f"{API}/clinics/{cid}/services", headers=adm, json=body).json()
+            else:  # idempotencja po zmianie katalogu — zaktualizuj flagi (np. teleporada)
+                c.patch(f"{API}/clinics/{cid}/services/{s['service_id']}", headers=adm, json=body)
             svc_id[name] = s["service_id"]
             c.put(f"{API}/clinics/{cid}/services/{s['service_id']}/doctors", headers=adm,
                   json={"doctor_ids": list(w["doctor_ids"])})

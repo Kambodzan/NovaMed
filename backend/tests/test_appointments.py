@@ -108,8 +108,8 @@ def test_wyszukiwanie_po_specjalizacji(client, setup, factory):
 
 
 def test_tryb_slotu_online_dozwolony_lub_nie(client, setup):
-    """Slot stacjonarny może (domyślnie) ALBO nie może być wykonany jako teleporada
-    (allow_online). Próba online na slocie tylko-stacjonarnym → 409."""
+    """Teleporada to wybór pacjenta dozwolony tylko, gdy slot na nią zezwala (allow_online).
+    Na slocie tylko-stacjonarnym prośba o online jest IGNOROWANA (zostaje stacjonarnie)."""
     cid = setup["clinic"].clinic_id
     did = str(setup["doctor"].user_id)
     reg = auth_header(setup["reg_token"])
@@ -125,10 +125,30 @@ def test_tryb_slotu_online_dozwolony_lub_nie(client, setup):
     only_stat = slot(11, False)
     assert only_stat["allow_online"] is False
     r = client.post(f"/appointments/{only_stat['appointment_id']}/book", json={"online": True}, headers=pat)
-    assert r.status_code == 409 and "stacjonarnie" in r.json()["detail"]
+    assert r.status_code == 200 and r.json()["appointment"]["appointment_type"] == "STATIONARY"
 
     can_online = slot(12, True)
     r = client.post(f"/appointments/{can_online['appointment_id']}/book", json={"online": True}, headers=pat)
+    assert r.status_code == 200 and r.json()["appointment"]["appointment_type"] == "ONLINE"
+
+
+def test_usluga_konsultacja_dziedziczy_teleporade(client, setup, db_session):
+    """Slot usługowy dziedziczy allow_online z usługi — konsultacja-usługa z teleporadą
+    może być wybrana jako wideo (badanie/USG miałoby allow_online=False)."""
+    from app.models import DoctorService, Service
+    svc = Service(clinic_id=setup["clinic"].clinic_id, name="Konsultacja kardiologiczna",
+                  duration_min=20, price=None, referral_required=False, allow_online=True, active=True)
+    db_session.add(svc)
+    db_session.flush()
+    db_session.add(DoctorService(doctor_id=setup["doctor"].user_id, service_id=svc.service_id))
+    db_session.commit()
+    dt = (datetime.now() + timedelta(days=4)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots", headers=auth_header(setup["reg_token"]),
+                       json={"doctor_id": str(setup["doctor"].user_id), "service_id": str(svc.service_id),
+                             "datetimes": [dt.isoformat()]}).json()[0]
+    assert slot["allow_online"] is True and slot["service_name"] == "Konsultacja kardiologiczna"
+    r = client.post(f"/appointments/{slot['appointment_id']}/book", json={"online": True},
+                    headers=auth_header(setup["patient_token"]))
     assert r.status_code == 200 and r.json()["appointment"]["appointment_type"] == "ONLINE"
 
 

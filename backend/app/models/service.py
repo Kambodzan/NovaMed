@@ -20,6 +20,9 @@ class Service(Base):
     duration_min: Mapped[int] = mapped_column(Integer, default=15)   # czas usługi = krok siatki terminów
     price: Mapped[float | None] = mapped_column(Numeric(8, 2))       # NULL = NFZ/bezpłatna
     referral_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    # czy usługę można odbyć jako teleporadę (konsultacja: tak; badanie USG/echo: nie).
+    # Slot usługowy dziedziczy tę flagę → pacjent może wybrać wideo („albo/albo"). #46
+    allow_online: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     description: Mapped[str | None] = mapped_column(Text)            # np. składniki pakietu
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -928,7 +928,7 @@ export function Umow() {
                     )}
                   </div>
                 )}
-                {slot.appointment_type !== 'ONLINE' && !slot.service_name && slot.allow_online && (
+                {slot.appointment_type !== 'ONLINE' && slot.allow_online && (
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
                     <input
                       type="checkbox"
