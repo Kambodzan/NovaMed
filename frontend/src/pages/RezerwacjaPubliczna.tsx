@@ -419,6 +419,7 @@ function PublicCard({ c, onPick, addrOf, disabled }: {
   const [showReviews, setShowReviews] = useState(false)
   const [svc, setSvc] = useState('')
   const [off, setOff] = useState(0)   // paginacja dni (3 na stronę) — strzałki prawo/lewo
+  const [showAll, setShowAll] = useState(false)   // rozwiń wszystkie godziny dnia (nie tylko 5)
   const nearest = c.days[0][1][0]
   // usługi (typy wizyt) lekarza — gość wybiera usługę, potem godzinę (przy badaniach
   // karta to już jedna usługa, więc selektor się nie pokaże)
@@ -464,7 +465,7 @@ function PublicCard({ c, onPick, addrOf, disabled }: {
           {services.length > 1 && (
             <div className="mb-3 flex flex-wrap gap-1.5">
               {services.map(s => (
-                <button key={s.key} onClick={() => { setSvc(s.key); setOff(0) }}
+                <button key={s.key} onClick={() => { setSvc(s.key); setOff(0); setShowAll(false) }}
                   className={cx('flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition-colors',
                     sel?.key === s.key ? 'bg-primary text-white' : 'tile-shadow bg-surface text-gray-600 hover:text-primary')}>
                   {s.label}
@@ -505,7 +506,7 @@ function PublicCard({ c, onPick, addrOf, disabled }: {
                   {dayNo(day + 'T00:00:00')} {monthShort(day + 'T00:00:00')}
                 </p>
                 <div className="flex flex-col gap-1">
-                  {list.slice(0, 5).map(s => (
+                  {(showAll ? list : list.slice(0, 5)).map(s => (
                     <button key={s.appointment_id} onClick={() => onPick(s)} disabled={disabled}
                       title={addrOf(s.clinic_name) ?? s.clinic_name}
                       className="group cursor-pointer rounded-lg bg-surface px-1 py-1.5 text-center text-xs font-bold text-primary shadow-sm hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
@@ -515,6 +516,12 @@ function PublicCard({ c, onPick, addrOf, disabled }: {
                       </span>
                     </button>
                   ))}
+                  {!showAll && list.length > 5 && (
+                    <button onClick={() => setShowAll(true)}
+                      className="cursor-pointer rounded-lg py-0.5 text-xs font-extrabold text-primary hover:underline">
+                      +{list.length - 5}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
