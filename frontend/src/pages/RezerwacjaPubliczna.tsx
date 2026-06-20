@@ -10,6 +10,7 @@ import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } fro
 import { api, ApiError } from '../lib/api'
 import { birthFromPesel, peselValid } from '../lib/pesel'
 import { DatePicker } from '../components/DatePicker'
+import { PhoneInput } from '../components/PhoneInput'
 import { PhoneOtp } from '../components/PhoneOtp'
 import { RatingBadge, DoctorReviewsModal } from '../components/DoctorReviews'
 import { dayNo, formatDatePL, formatTime, monthShort } from '../lib/format'
@@ -224,7 +225,7 @@ export function RezerwacjaPubliczna() {
               <Field label="Data urodzenia"><DatePicker required value={form.birth_date} max={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, birth_date: v }))} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Telefon" hint="tu wyślemy kod potwierdzający"><input className={inputCls} required minLength={7} value={form.phone_number} onChange={e => { setForm(f => ({ ...f, phone_number: e.target.value })); setPhoneVerified(false) }} /></Field>
+              <Field label="Telefon" hint="tu wyślemy kod potwierdzający"><PhoneInput required value={form.phone_number} onChange={v => { setForm(f => ({ ...f, phone_number: v })); setPhoneVerified(false) }} /></Field>
               <Field label="E-mail"><input type="email" className={inputCls} required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
             </div>
             <PhoneOtp phone={form.phone_number} purpose="BOOKING" verified={phoneVerified} onVerified={() => setPhoneVerified(true)} />
