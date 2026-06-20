@@ -102,8 +102,11 @@ def get_sms_client() -> SmsClient:
             _client = TwilioSmsClient(settings.twilio_account_sid, settings.twilio_auth_token, settings.twilio_from)
         else:
             _client = HttpSmsClient()  # mock-serwis :8106
-        # DEV: przekierowanie wszystkich SMS na numer testowy (jeśli ustawione)
-        if settings.sms_redirect_to:
+        # DEV-only: przekierowanie wszystkich SMS na numer testowy. Spięte z dev_mode —
+        # na produkcji (DEV_MODE=false) jest IGNOROWANE nawet gdy SMS_REDIRECT_TO zostanie
+        # ustawione, żeby SMS-y nigdy przypadkiem nie poszły na numer testowy zamiast do
+        # pacjenta. Prod = po prostu DEV_MODE=false; nic więcej nie trzeba odkręcać.
+        if settings.dev_mode and settings.sms_redirect_to:
             _client = RedirectSmsClient(_client, settings.sms_redirect_to)
     return _client
 
