@@ -2,6 +2,7 @@
 # domenowej. Mock-first: w dev loguje + trzyma outbox; realnie SMTP (sekrety w .env).
 import logging
 import smtplib
+from email.header import Header
 from email.mime.text import MIMEText
 from typing import Protocol
 
@@ -33,7 +34,9 @@ class SmtpEmailClient:
 
     def send(self, *, to: str, subject: str, body: str) -> None:
         msg = MIMEText(body, "plain", "utf-8")
-        msg["Subject"], msg["From"], msg["To"] = subject, self.sender or self.user, to
+        # Temat z polskimi znakami musi iść jako RFC 2047 (=?utf-8?…?=), inaczej krzaki
+        msg["Subject"] = Header(subject, "utf-8")
+        msg["From"], msg["To"] = self.sender or self.user, to
         try:
             with smtplib.SMTP(self.host, self.port, timeout=8) as s:
                 s.starttls()
