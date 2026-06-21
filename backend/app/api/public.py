@@ -306,8 +306,8 @@ def guest_book(
         appointment_id=a.appointment_id, amount=a.price, payment_status="PENDING",
         provider_ref=provider_ref, created_at=datetime.now(),
     ))
-    notify(db, guest.user_id, "Rezerwacja oczekuje na płatność",
-           f"Zarezerwowaliśmy: {visit_label(db, a)}. Dokończ płatność {float(a.price):.2f} zł, aby potwierdzić wizytę.")
+    # Brak powiadomienia "dokończ płatność": gość płaci od razu na ekranie rezerwacji,
+    # a porzucony hold zwalnia sweep. Mail leci dopiero po udanej płatności (CONFIRMED).
     db.commit()
     return GuestBookOut(
         appointment=appointment_out(db, a),
