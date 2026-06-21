@@ -26,7 +26,7 @@ from app.api.family import pesel_valid
 from app.core.config import settings
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
-from app.domain.confirm import confirm_link, ensure_confirm_token
+from app.domain.confirm import audience_links, confirm_link, ensure_confirm_token
 from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain import messages
@@ -282,9 +282,10 @@ def guest_book(
         if is_paid:  # płatność na miejscu — rozliczana w okienku placówki
             db.add(Payment(appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
                            provider_ref="NA_MIEJSCU", created_at=datetime.now(), paid_at=datetime.now()))
+        join, manage = audience_links(db, a, online=False)  # ta gałąź to zawsze stacjonarna (online → płatność)
         notify(db, guest.user_id, *messages.visit_confirmed(
-            visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a)),
-            on_site_amount=float(a.price) if is_paid else None))
+            visit_label(db, a), join_link=join, manage_link=manage,
+            on_site_amount=float(a.price) if is_paid else None), email=True)
         db.commit()
         return GuestBookOut(
             appointment=appointment_out(db, a),
@@ -391,7 +392,7 @@ def public_cancel(token: str, db: Session = Depends(get_db)):
     if pay is not None:
         pay.payment_status = "REFUNDED"
         refunded = True
-    notify(db, patient_id, *messages.visit_cancelled(label, refunded=refunded))
+    notify(db, patient_id, *messages.visit_cancelled(label, refunded=refunded), email=True)
     db.commit()
     return public_visit(token, db)
 
@@ -471,10 +472,9 @@ def public_pay(
         payment.payment_status = "PAID"
         payment.paid_at = datetime.now()
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        join, manage = audience_links(db, a, online=a.appointment_type == AppointmentType.ONLINE.value)
         notify(db, a.patient_id, *messages.visit_paid_confirmed(
-            visit_label(db, a), float(payment.amount),
-            link=confirm_link(ensure_confirm_token(a)),
-            online=a.appointment_type == AppointmentType.ONLINE.value))
+            visit_label(db, a), float(payment.amount), join_link=join, manage_link=manage), email=True)
         db.commit()
         return GuestBookOut(
             appointment=appointment_out(db, a),

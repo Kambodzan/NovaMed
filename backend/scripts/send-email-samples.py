@@ -49,36 +49,26 @@ def build_samples(db):
     s_label, s_link = stat or ("Konsultacja kardiologiczna (prywatnie), pon. 6 lipca 2026, 12:00, Zdrowa Rodzina — Piastów", "https://example/potwierdz/BRAK-WIZYTY")
     t_label, t_link = tele or ("Konsultacja internistyczna (prywatnie), pon. 6 lipca 2026, 14:00 — teleporada (wideo)", "https://example/potwierdz/BRAK-WIZYTY")
 
-    # (label_odbiorcy, (title, body)) — treści z messages.* lub inline dla wariantów spoza tego modułu
+    # TYLKO zdarzenia z whitelisty e-mail (reszta zostaje w aplikacji/SMS).
+    # (label_odbiorcy, (title, body)); treści z messages.* — zero driftu z produkcją.
     return [
-        # --- rezerwacja / płatność (messages.*) ---
-        ("pacjent-nfz", messages.visit_confirmed(s_label, manage_link=s_link)),
-        ("pacjent-na-miejscu", messages.visit_confirmed(s_label, manage_link=s_link, on_site_amount=200.0)),
-        ("oplacona-stacjonarna", messages.visit_paid_confirmed(s_label, 200.0, link=s_link, online=False)),
-        ("oplacona-teleporada", messages.visit_paid_confirmed(t_label, 180.0, link=t_link, online=True)),
-        ("platnosc-odrzucona", messages.payment_declined()),
-        ("rezerwacja-wygasla", messages.reservation_expired(s_label, 10)),
-        # --- zmiany wizyty (messages.*) ---
-        ("odwolana-ze-zwrotem", messages.visit_cancelled(s_label, refunded=True)),
-        ("odwolana-bez-zwrotu", messages.visit_cancelled(s_label, refunded=False)),
+        # --- potwierdzenia (co/gdzie/kiedy; link tylko: teleporada albo gość-bez-konta) ---
+        ("potwierdzona-zalogowany", messages.visit_confirmed(s_label)),                       # bez linka (zarządza w aplikacji)
+        ("potwierdzona-gosc", messages.visit_confirmed(s_label, manage_link=s_link)),         # gość → link do zarządzania
+        ("potwierdzona-na-miejscu", messages.visit_confirmed(s_label, on_site_amount=200.0)),
+        ("oplacona-teleporada", messages.visit_paid_confirmed(t_label, 180.0, join_link=t_link)),  # link do wideo
+        ("oplacona-gosc-stacjonarna", messages.visit_paid_confirmed(s_label, 200.0, manage_link=s_link)),
+        # --- zmiany wizyty ---
         ("przelozona", messages.visit_rescheduled(s_label)),
-        # --- przypomnienia (messages.*) ---
-        ("przypomnienie-dzien-przed", messages.visit_reminder("dr Anna Kowalczyk", DT, online=False)),
-        ("przypomnienie-teleporada", messages.visit_reminder("dr Piotr Zieliński", DT.replace(hour=14), online=True)),
-        ("potwierdz-obecnosc", messages.confirm_request("dr Anna Kowalczyk", DT, link=s_link, clinic_name="Zdrowa Rodzina — Piastów")),
-        # --- pozostałe pojedyncze warianty (poza messages.*; jedno źródło w kodzie) ---
-        ("wczesniejszy-termin", ("Zwolnił się wcześniejszy termin",
-            "U dr Anna Kowalczyk zwolnił się termin 06.07.2026 12:00 — wcześniej niż Twoja wizyta (20.07 09:00). "
-            "Jeśli Ci pasuje, wejdź w Moje wizyty → Zmień termin (do 24 h przed wizytą, terminy bezpłatne).")),
-        ("oczekiwanie-wolny", ("Wolny termin — koniec oczekiwania", "Zwolnił się termin: Kardiolog. Zarezerwuj go w zakładce „Umów wizytę”.")),
-        ("oczekiwanie-nowe", ("Nowe terminy — koniec oczekiwania", "Pojawiły się nowe terminy: Kardiolog. Zarezerwuj wizytę w zakładce „Umów wizytę”.")),
+        ("odwolana-ze-zwrotem", messages.visit_cancelled(s_label, refunded=True)),
+        # --- przypomnienia (link tylko dla teleporady) ---
+        ("przypomnienie", messages.visit_reminder("dr Anna Kowalczyk", DT)),
+        ("przypomnienie-teleporada", messages.visit_reminder("dr Piotr Zieliński", DT.replace(hour=14), join_link=t_link)),
+        # --- coś nowego/ważnego wpada na konto ---
         ("nowy-dokument", ("Nowy dokument: e-recepta", "W Twojej dokumentacji pojawił się nowy dokument (e-recepta). Kod: 4821.")),
-        ("dokument-anulowany", ("Dokument anulowany", "Twój dokument (e-recepta) został anulowany przez lekarza. Powód: błędna dawka.")),
         ("nowy-wynik", ("Nowy wynik badania", "Wynik badania (morfologia krwi) jest już dostępny w Twojej dokumentacji.")),
-        ("wynik-do-opisania-lekarz", ("Wynik badania do opisania", "Dotarł wynik (morfologia krwi) — Marek Testowy. Sprawdź w zakładce Dokumenty.")),
         # --- konto rodzinne: powiadomienie podopiecznego (prefiks trafia do opiekuna) ---
-        ("podopieczny", (messages.visit_confirmed(s_label, manage_link=s_link)[0],
-                         f"[Zosia Testowa] {messages.visit_confirmed(s_label, manage_link=s_link)[1]}")),
+        ("podopieczny", (messages.visit_confirmed(s_label)[0], f"[Zosia Testowa] {messages.visit_confirmed(s_label)[1]}")),
     ]
 
 

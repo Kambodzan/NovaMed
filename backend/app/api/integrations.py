@@ -74,7 +74,7 @@ def lab_sync(
         src.document_status = DocumentStatus.REALIZED.value
         test = r.get("test_type", "laboratoryjne")
         notify(db, src.patient_id, "Nowy wynik badania",
-               f"Wynik badania ({test}) jest już dostępny w Twojej dokumentacji.")
+               f"Wynik badania ({test}) jest już dostępny w Twojej dokumentacji.", email=True)
         # wynik trafia też do lekarza ZLECAJĄCEGO — „skrzynka wyników do opisania"
         if src.doctor_id is not None:
             patient = db.get(Patient, src.patient_id)

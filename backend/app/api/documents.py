@@ -217,7 +217,7 @@ def notify_new_document(db: Session, doc: MedicalDocument, code: str | None = No
     label = DOC_LABELS.get(doc.document_type, "dokument")
     extra = f" Kod: {code}." if code else ""
     notify(db, doc.patient_id, f"Nowy dokument: {label}",
-           f"W Twojej dokumentacji pojawił się nowy dokument ({label}).{extra}")
+           f"W Twojej dokumentacji pojawił się nowy dokument ({label}).{extra}", email=True)
 
 
 # ---------- wystawianie (lekarz) ----------

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
-from app.domain.confirm import confirm_link, ensure_confirm_token
+from app.domain.confirm import audience_links, confirm_link, ensure_confirm_token
 from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
 from app.domain.tenancy import assert_staff_can_access_patient, assert_staff_in_clinic
@@ -574,8 +574,9 @@ def book_appointment(
         a.appointment_status = AppointmentStatus.CONFIRMED.value
         a.lock_expires_at = None
         block_overlapping(db, a)  # lekarz zajęty → nakładające się usługi znikają z puli
+        join, manage = audience_links(db, a, online=a.appointment_type == AppointmentType.ONLINE.value)
         notify(db, patient_id, *messages.visit_confirmed(
-            visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a))))
+            visit_label(db, a), join_link=join, manage_link=manage), email=True)
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
 
@@ -592,9 +593,9 @@ def book_appointment(
         db.add(onsite)
         db.flush()
         block_overlapping(db, a)
+        join, manage = audience_links(db, a, online=False)  # płatność na miejscu → nigdy online
         notify(db, patient_id, *messages.visit_confirmed(
-            visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a)),
-            on_site_amount=float(a.price)))
+            visit_label(db, a), join_link=join, manage_link=manage, on_site_amount=float(a.price)), email=True)
         db.commit()
         return BookOut(appointment=appointment_out(db, a), payment=PaymentInfoOut(
             payment_id=onsite.payment_id, provider_ref="NA_MIEJSCU", amount=float(a.price), payment_status="PAID"))
@@ -775,8 +776,9 @@ def book_for_patient(
             appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
             provider_ref="RECEPCJA", created_at=datetime.now(), paid_at=datetime.now(),
         ))
+    join, manage = audience_links(db, a, online=a.appointment_type == AppointmentType.ONLINE.value)
     notify(db, body.patient_id, *messages.visit_confirmed(
-        visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a))))
+        visit_label(db, a), join_link=join, manage_link=manage), email=True)
     db.commit()
     return appointment_out(db, a)
 
@@ -844,10 +846,9 @@ def pay_appointment(
         payment.paid_at = datetime.now()
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        join, manage = audience_links(db, a, online=a.appointment_type == AppointmentType.ONLINE.value)
         notify(db, user.user_id, *messages.visit_paid_confirmed(
-            visit_label(db, a), float(payment.amount),
-            link=confirm_link(ensure_confirm_token(a)),
-            online=a.appointment_type == AppointmentType.ONLINE.value))
+            visit_label(db, a), float(payment.amount), join_link=join, manage_link=manage), email=True)
     else:
         # Odmowa NIE kasuje rezerwacji: termin zostaje TEMP_LOCK (trzymany dla pacjenta),
         # nakładające się sloty pozostają zablokowane, listy oczekujących nie ruszamy.
@@ -973,7 +974,7 @@ def cancel_appointment(
             paid.payment_status = "REFUNDED"
             refunded = True
     if a.patient_id:
-        notify(db, a.patient_id, *messages.visit_cancelled(visit_label(db, a), refunded=refunded))
+        notify(db, a.patient_id, *messages.visit_cancelled(visit_label(db, a), refunded=refunded), email=True)
 
     # zwrot terminu do puli, jeśli wizyta jeszcze przed czasem
     if hours_left > 0:
@@ -1055,7 +1056,9 @@ def perform_reschedule(db: Session, old: Appointment, new: Appointment) -> Appoi
     new.appointment_notes = old.appointment_notes  # powód wizyty też (lekarz nie traci wywiadu)
     # każde przełożenie → informacyjny SMS o nowym terminie, BEZ confirm-linku
     if old.patient_id:
-        notify(db, old.patient_id, *messages.visit_rescheduled(visit_label(db, new)))
+        join, manage = audience_links(db, new, online=new.appointment_type == AppointmentType.ONLINE.value)
+        notify(db, old.patient_id, *messages.visit_rescheduled(
+            visit_label(db, new), join_link=join, manage_link=manage), email=True)
     return new
 
 

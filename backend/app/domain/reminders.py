@@ -33,8 +33,9 @@ def send_due_reminders(db: Session) -> int:
     for a in rows:
         doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
         who = doctor_user.username if doctor_user else f"badanie {a.service_name}"
+        join = confirm_link(ensure_confirm_token(a)) if a.appointment_type == "ONLINE" else None
         notify(db, a.patient_id, *messages.visit_reminder(
-            who, a.appointment_datetime, online=a.appointment_type == "ONLINE"))
+            who, a.appointment_datetime, join_link=join), email=True)
         a.reminder_sent = True
     db.commit()
     return len(rows)

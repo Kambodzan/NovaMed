@@ -178,6 +178,32 @@ def test_teleporada_zawsze_platna_online(client, setup, db_session, integration_
                       headers=auth_header(setup["patient_token"]))
     assert pay.status_code == 200 and pay.json()["appointment"]["appointment_status"] == "CONFIRMED"
     assert integration_fakes.email.sent, "potwierdzenie powinno pójść też e-mailem"
+    assert "teleporad" in integration_fakes.email.sent[-1]["body"].lower(), "mail teleporady niesie link do wideo"
+
+
+def test_email_whitelista_odrzucona_platnosc_bez_maila(client, setup, db_session, integration_fakes):
+    """E-mail to whitelista: odrzucona płatność NIE idzie mailem (zostaje in-app),
+    w przeciwieństwie do potwierdzenia/opłacenia."""
+    from app.models import DoctorService, Service
+    svc = Service(clinic_id=setup["clinic"].clinic_id, name="Konsultacja online",
+                  duration_min=20, price=200, referral_required=False, allow_online=True, active=True)
+    db_session.add(svc)
+    db_session.flush()
+    db_session.add(DoctorService(doctor_id=setup["doctor"].user_id, service_id=svc.service_id))
+    db_session.commit()
+    dt = (datetime.now() + timedelta(days=6)).replace(hour=10, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots", headers=auth_header(setup["reg_token"]),
+                       json={"doctor_id": str(setup["doctor"].user_id), "service_id": str(svc.service_id),
+                             "datetimes": [dt.isoformat()]}).json()[0]
+    client.post(f"/appointments/{slot['appointment_id']}/book",
+                json={"online": True}, headers=auth_header(setup["patient_token"]))
+    integration_fakes.email.sent.clear()
+    fail = client.post(f"/appointments/{slot['appointment_id']}/pay", json={"outcome": "failure"},
+                       headers=auth_header(setup["patient_token"]))
+    assert fail.status_code == 200
+    assert not integration_fakes.email.sent, "odrzucona płatność nie powinna iść mailem"
+    notifs = client.get("/notifications/my", headers=auth_header(setup["patient_token"])).json()
+    assert any(n["notification_title"] == "Płatność odrzucona" for n in notifs), "ale in-app powiadomienie zostaje"
 
 
 def test_lekarz_z_wieloma_specjalizacjami(client, factory):
