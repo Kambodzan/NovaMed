@@ -8,16 +8,20 @@ from app.integrations.sms import get_sms_client
 from app.models import AppUser, Notification, Patient
 
 
-def notify(db: Session, user_id: UUID, title: str, content: str, *, email: bool = False) -> None:
+def notify(db: Session, user_id: UUID, title: str, content: str, *,
+           email: bool = False, sms: bool = True) -> None:
     """Dopisuje powiadomienie w ramach bieżącej transakcji wywołującego.
     SMS wysyłany od razu (poza transakcją DB) — jego awaria niczego nie psuje.
     Powiadomienia podopiecznego (konta rodzinne) trafiają do opiekuna —
     podopieczny nie loguje się sam.
 
-    Kanał e-mail jest WHITELISTĄ: domyślnie wyłączony, włącza go `email=True`
-    tylko przy zdarzeniach wartych skrzynki (potwierdzenie/zmiana/przypomnienie
-    wizyty, link do teleporady, nowy dokument). Reszta zostaje w aplikacji + SMS —
-    inaczej mail puchnie od proceduralnych powiadomień (odrzucona płatność itp.)."""
+    Kanały poza in-app są zawężane wg wartości zdarzenia:
+    - **in-app** (dzwonek) — ZAWSZE (pełna historia).
+    - **SMS** (`sms`, domyślnie True) — szeroki, ale wyłączany dla przejściowego
+      szumu, który adresat i tak widzi na ekranie (odrzucona płatność, wygasła
+      rezerwacja) lub który jest kolejką pracy personelu (wynik do opisania).
+    - **e-mail** (`email`, domyślnie False) — WHITELISTA: tylko rzeczy trwałe/ważne
+      (potwierdzenie/zmiana/przypomnienie wizyty, link do teleporady, nowy dokument)."""
     patient = db.get(Patient, user_id)
     if patient is not None and patient.guardian_id is not None:
         content = f"[{patient.first_name} {patient.last_name}] {content}"
@@ -29,7 +33,7 @@ def notify(db: Session, user_id: UUID, title: str, content: str, *, email: bool 
         is_read=False,
     ))
     user = db.get(AppUser, user_id)
-    if user is not None and user.phone_number and user.notify_sms:
+    if sms and user is not None and user.phone_number and user.notify_sms:
         get_sms_client().send(to=user.phone_number, message=f"NovaMed: {title}. {content}")
     # e-mail — tylko dla zdarzeń z whitelisty (email=True); best-effort, gdy konto ma adres
     if email and user is not None and user.email:

@@ -181,9 +181,9 @@ def test_teleporada_zawsze_platna_online(client, setup, db_session, integration_
     assert "teleporad" in integration_fakes.email.sent[-1]["body"].lower(), "mail teleporady niesie link do wideo"
 
 
-def test_email_whitelista_odrzucona_platnosc_bez_maila(client, setup, db_session, integration_fakes):
-    """E-mail to whitelista: odrzucona płatność NIE idzie mailem (zostaje in-app),
-    w przeciwieństwie do potwierdzenia/opłacenia."""
+def test_whitelista_odrzucona_platnosc_tylko_in_app(client, setup, db_session, integration_fakes):
+    """Odrzucona płatność to przejściowy szum widoczny na ekranie: NIE idzie ani
+    mailem, ani SMS-em — zostaje tylko in-app (dzwonek)."""
     from app.models import DoctorService, Service
     svc = Service(clinic_id=setup["clinic"].clinic_id, name="Konsultacja online",
                   duration_min=20, price=200, referral_required=False, allow_online=True, active=True)
@@ -198,10 +198,12 @@ def test_email_whitelista_odrzucona_platnosc_bez_maila(client, setup, db_session
     client.post(f"/appointments/{slot['appointment_id']}/book",
                 json={"online": True}, headers=auth_header(setup["patient_token"]))
     integration_fakes.email.sent.clear()
+    integration_fakes.sms.sent.clear()
     fail = client.post(f"/appointments/{slot['appointment_id']}/pay", json={"outcome": "failure"},
                        headers=auth_header(setup["patient_token"]))
     assert fail.status_code == 200
     assert not integration_fakes.email.sent, "odrzucona płatność nie powinna iść mailem"
+    assert not integration_fakes.sms.sent, "odrzucona płatność nie powinna iść SMS-em"
     notifs = client.get("/notifications/my", headers=auth_header(setup["patient_token"])).json()
     assert any(n["notification_title"] == "Płatność odrzucona" for n in notifs), "ale in-app powiadomienie zostaje"
 

@@ -96,7 +96,7 @@ def release_expired_temp_locks(db: Session) -> int:
         a.notify_earlier = False
         restore_blocked(db, a)
         if patient_id:
-            notify(db, patient_id, *messages.reservation_expired(label, settings.temp_lock_minutes))
+            notify(db, patient_id, *messages.reservation_expired(label, settings.temp_lock_minutes), sms=False)
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
 
     # porzucone HOLD-y: ktoś otworzył formularz rezerwacji i nie dokończył (TEMP_LOCK

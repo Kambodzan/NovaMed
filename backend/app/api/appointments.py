@@ -868,7 +868,7 @@ def pay_appointment(
         )
         db.add(payment)
         db.flush()
-        notify(db, user.user_id, *messages.payment_declined())
+        notify(db, user.user_id, *messages.payment_declined(), sms=False)
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),

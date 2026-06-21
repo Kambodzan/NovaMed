@@ -495,7 +495,7 @@ def public_pay(
     )
     db.add(retry)
     db.flush()
-    notify(db, a.patient_id, *messages.payment_declined())
+    notify(db, a.patient_id, *messages.payment_declined(), sms=False)
     db.commit()
     return GuestBookOut(
         appointment=appointment_out(db, a),

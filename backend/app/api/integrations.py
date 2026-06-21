@@ -80,7 +80,7 @@ def lab_sync(
             patient = db.get(Patient, src.patient_id)
             who = f"{patient.first_name} {patient.last_name}" if patient else "pacjenta"
             notify(db, src.doctor_id, "Wynik badania do opisania",
-                   f"Dotarł wynik ({test}) — {who}. Sprawdź w zakładce Dokumenty.")
+                   f"Dotarł wynik ({test}) — {who}. Sprawdź w zakładce Dokumenty.", sms=False)
         log_access(db, actor=user, action="IMPORT_LAB_RESULT", patient_id=src.patient_id,
                    detail=f"wynik z laboratorium ({test})")
         imported += 1
