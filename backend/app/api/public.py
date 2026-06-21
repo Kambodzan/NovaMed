@@ -87,6 +87,7 @@ class GuestBookIn(BaseModel):
     # wizyta płatna: "online" (bramka — płatność jest dowodem realności, bez SMS) albo
     # "onsite" (rozliczenie w okienku — wtedy wymagamy potwierdzenia numeru kodem SMS)
     payment_mode: Literal["online", "onsite"] = "online"
+    online: bool = False  # gość chce teleporadę (wideo) — tylko na slotach allow_online; zawsze płatna online
     hold_token: str | None = None  # token miękkiej rezerwacji slotu (z /public/slots/{id}/hold)
 
     @field_validator("pesel")
@@ -251,13 +252,18 @@ def guest_book(
         ))
 
     is_paid = a.price is not None
-    pay_online = is_paid and body.payment_mode == "online"
+    # teleporada (wideo) tylko gdy slot na nią pozwala i jest płatna — bo jest ZAWSZE
+    # płatna z góry online (na miejscu się nie da: pacjenta nie ma w placówce).
+    is_online = body.online and a.allow_online and is_paid
+    pay_online = is_paid and (body.payment_mode == "online" or is_online)
     # Numer potwierdzamy kodem SMS, gdy NIE płacimy online: NFZ i płatność na miejscu nie
     # mają bariery płatności, więc dowodem kontroli nad numerem (anty-spam) jest kod SMS.
     # Przy płatności online dowodem realności rezerwującego jest sama udana płatność.
     if not pay_online:
         require_verified_phone(db, body.phone_number, "BOOKING")
     a.patient_id = guest.user_id
+    if is_online:
+        a.appointment_type = AppointmentType.ONLINE.value  # teleporada — slot staje się wideo
     a.lock_expires_at = None  # hold zamienia się w realną rezerwację (płatność/CONFIRMED)
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]
@@ -467,8 +473,12 @@ def public_pay(
         payment.payment_status = "PAID"
         payment.paid_at = datetime.now()
         a.appointment_status = AppointmentStatus.CONFIRMED.value
+        link = confirm_link(ensure_confirm_token(a))
+        is_online = a.appointment_type == AppointmentType.ONLINE.value
         notify(db, a.patient_id, "Wizyta opłacona i potwierdzona",
-               f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}.")
+               f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}. "
+               + (f"Dołącz do teleporady (wideo) z tego linku o wyznaczonej godzinie: {link}"
+                  if is_online else f"Zarządzaj wizytą (przełóż/odwołaj): {link}"))
         db.commit()
         return GuestBookOut(
             appointment=appointment_out(db, a),

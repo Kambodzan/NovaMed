@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileSignature, HeartPulse, MapPin, Search } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileSignature, HeartPulse, MapPin, Search, Video } from 'lucide-react'
 import { Avatar, Button, EmptyState, Field, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { birthFromPesel, peselValid } from '../lib/pesel'
@@ -29,6 +29,7 @@ export function RezerwacjaPubliczna() {
   const [done, setDone] = useState<AppointmentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [externalRef, setExternalRef] = useState(false)
+  const [online, setOnline] = useState(false)   // gość chce teleporadę (slot allow_online) — zawsze płatna online
   const [p1Code, setP1Code] = useState('')   // kod e-skierowania z P1
   const [consent, setConsent] = useState(false)
   const [otpCode, setOtpCode] = useState('')          // 6-cyfrowy kod SMS wpisywany przez gościa
@@ -58,7 +59,7 @@ export function RezerwacjaPubliczna() {
   const hold = useMutation({
     mutationFn: (s: AppointmentOut) => api<{ hold_token: string; expires_at: string }>(
       `/public/slots/${s.appointment_id}/hold`, { method: 'POST' }),
-    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setExternalRef(false); setError(null); setFormStep('data'); setOtpCode(''); setDevCode(null) },
+    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setExternalRef(false); setOnline(false); setError(null); setFormStep('data'); setOtpCode(''); setDevCode(null) },
     onError: (e) => {
       setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć rezerwacji terminu.')
       void qc.invalidateQueries({ queryKey: ['public-slots'] })  // ktoś zajął — odśwież listę
@@ -116,6 +117,7 @@ export function RezerwacjaPubliczna() {
         // NFZ (termin bez ceny) — papierowe oświadczenie nie daje refundacji; tylko kod P1.
         external_referral: slot!.price != null && externalRef,
         p1_referral_code: p1Code.trim() || null,
+        online,  // teleporada (wideo) — wymusza płatność online z góry
         payment_mode: mode,  // online → bramka (bez SMS); onsite → potwierdzenie SMS + zapłata w okienku
         hold_token: holdToken,
       },
@@ -200,9 +202,16 @@ export function RezerwacjaPubliczna() {
             <p className="text-lg font-extrabold text-gray-900">Rezerwacja potwierdzona</p>
             <p className="text-sm font-medium text-gray-600">
               {done.service_name ?? done.doctor_name} — {formatDatePL(done.appointment_datetime)}, {formatTime(done.appointment_datetime)}
-              <br />{done.clinic_name}
+              <br />{done.appointment_type === 'ONLINE'
+                ? <span className="inline-flex items-center gap-1 font-semibold text-primary"><Video size={13} /> Teleporada (wideo)</span>
+                : done.clinic_name}
               {done.price != null && <><br />{paidOnSite ? `Opłata ${done.price} zł — na miejscu w placówce.` : `Opłacono online: ${done.price} zł.`}</>}
             </p>
+            {done.appointment_type === 'ONLINE' && (
+              <p className="rounded-2xl bg-primary-soft px-4 py-2.5 text-sm font-semibold text-primary">
+                Link do wideo wysłaliśmy SMS-em i e-mailem — dołącz z niego o wyznaczonej godzinie.
+              </p>
+            )}
             <p className="text-sm font-medium text-gray-500">
               Załóż konto e-mailem <b>{form.email}</b>, aby zarządzać wizytą online —
               historia rezerwacji przejdzie na Twoje konto.
@@ -261,7 +270,7 @@ export function RezerwacjaPubliczna() {
 
           {/* KROK 1 — dane (potwierdzenie SMS jest osobnym krokiem dalej) */}
           {formStep === 'data' && (
-          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (dataValid) { if (slot.price != null) setFormStep('pay'); else goToOtp() } }}>
+          <form className="space-y-3" onSubmit={e => { e.preventDefault(); if (dataValid) { if (online) book.mutate('online'); else if (slot.price != null) setFormStep('pay'); else goToOtp() } }}>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Imię"><input className={inputCls} required value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} /></Field>
               <Field label="Nazwisko"><input className={inputCls} required value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></Field>
@@ -314,6 +323,21 @@ export function RezerwacjaPubliczna() {
                 )}
               </div>
             )}
+            {slot.appointment_type !== 'ONLINE' && slot.allow_online && slot.price != null && (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-primary-soft/60 px-4 py-3">
+                <input type="checkbox" checked={online} onChange={e => setOnline(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-(--color-primary)" />
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+                  <Video size={15} className="shrink-0 text-primary" />
+                  Wolę teleporadę (wideo) — bez przychodzenia do placówki
+                </span>
+              </label>
+            )}
+            {online && (
+              <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+                Teleporada wymaga opłaty {slot.price} zł z góry online — po kliknięciu „Dalej" przejdziesz do płatności kartą. Link do wideo dostaniesz po zaksięgowaniu.
+              </p>
+            )}
             <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-gray-50 px-4 py-3">
               <input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)}
                 className="mt-0.5 h-4 w-4 accent-(--color-primary)" />
@@ -321,7 +345,7 @@ export function RezerwacjaPubliczna() {
                 Wyrażam zgodę na przetwarzanie danych w celu realizacji wizyty (RODO). <span className="text-red-600">*</span>
               </span>
             </label>
-            <Button size="lg" className="w-full" type="submit" disabled={!dataValid}>Dalej</Button>
+            <Button size="lg" className="w-full" type="submit" disabled={!dataValid || (online && book.isPending)}>{online ? 'Dalej — do płatności' : 'Dalej'}</Button>
           </form>
           )}
 

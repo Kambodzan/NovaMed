@@ -578,8 +578,10 @@ def book_appointment(
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
 
-    # płatność na miejscu — potwierdzamy od razu (jak NFZ/recepcja), rozliczenie w okienku
-    if body and body.pay_on_site:
+    # płatność na miejscu — potwierdzamy od razu (jak NFZ/recepcja), rozliczenie w okienku.
+    # Teleporada (online) NIE może być „na miejscu" — pacjenta nie ma w placówce, więc zawsze
+    # płaci z góry online → taki termin pomija tę gałąź i idzie do bramki niżej.
+    if body and body.pay_on_site and a.appointment_type != AppointmentType.ONLINE.value:
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
         a.patient_id = patient_id
         a.appointment_status = AppointmentStatus.CONFIRMED.value

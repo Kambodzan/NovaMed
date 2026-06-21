@@ -34,26 +34,27 @@ def login(email: str) -> dict:
 # usługi implikowane przez specjalizację:
 #   (nazwa, czas, cena|None=NFZ, skierowanie, opis, czy_dodatkowa, teleporada)
 # „dodatkowa" = USG/echo/pakiet (nakłada się z konsultacją); reszta to konsultacja-baza.
-# „teleporada" = czy usługę można odbyć jako wideo — konsultacje TAK, badania/pakiet NIE.
+# „teleporada" = czy usługę można odbyć jako wideo. Teleporada jest ZAWSZE płatna z góry
+# (online), więc dajemy ją tylko na PRYWATNYCH konsultacjach; NFZ i badania → bez wideo.
 CATALOG = {
     "Kardiolog": [
-        ("Konsultacja kardiologiczna", 20, None, True, None, False, True),
+        ("Konsultacja kardiologiczna", 20, None, True, None, False, False),
         ("Konsultacja kardiologiczna (prywatnie)", 20, 200, False, "Wizyta prywatna — bez skierowania.", False, True),
         ("Echo serca (USG)", 20, 150, False, "Badanie echokardiograficzne serca.", True, False),
         ("Konsultacja kardiologiczna + echo serca", 40, 250, False,
          "Konsultacja kardiologa wraz z badaniem echo serca w jednej wizycie.", True, False),
     ],
     "Internista": [
-        ("Konsultacja internistyczna", 15, None, False, None, False, True),
+        ("Konsultacja internistyczna", 15, None, False, None, False, False),
         ("Konsultacja internistyczna (prywatnie)", 15, 150, False, "Wizyta prywatna — bez skierowania.", False, True),
         ("USG jamy brzusznej", 30, 180, False, "Badanie USG narządów jamy brzusznej.", True, False),
     ],
     "Diabetolog": [
-        ("Konsultacja diabetologiczna", 20, None, True, None, False, True),
+        ("Konsultacja diabetologiczna", 20, None, True, None, False, False),
         ("Konsultacja diabetologiczna (prywatnie)", 20, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
     ],
     "Endokrynolog": [
-        ("Konsultacja endokrynologiczna", 20, None, True, None, False, True),
+        ("Konsultacja endokrynologiczna", 20, None, True, None, False, False),
         ("Konsultacja endokrynologiczna (prywatnie)", 20, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
         ("USG tarczycy", 20, 160, False, "Badanie USG tarczycy.", True, False),
     ],

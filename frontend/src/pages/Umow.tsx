@@ -946,7 +946,7 @@ export function Umow() {
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 accent-(--color-primary)"
                       checked={online}
-                      onChange={e => setOnline(e.target.checked)}
+                      onChange={e => { setOnline(e.target.checked); if (e.target.checked) setPayMode('online') }}
                     />
                     <span className="text-sm font-semibold text-gray-700">
                       {t('Wolę teleporadę (wideo) — bez przychodzenia do placówki')}
@@ -977,6 +977,12 @@ export function Umow() {
                   </span>
                 </label>
                 {slot.price ? (
+                  online ? (
+                    <p className="flex items-start gap-2 rounded-2xl bg-primary-soft px-4 py-3 text-sm font-semibold text-primary">
+                      <Video size={16} className="mt-0.5 shrink-0" />
+                      {t('Teleporada — opłata {amount} zł z góry online (kartą). Po zaksięgowaniu dostaniesz link do wideo.', { amount: String(slot.price) })}
+                    </p>
+                  ) : (
                   <div className="space-y-2">
                     <p className="text-xs font-extrabold tracking-wider text-gray-500 uppercase">{t('Płatność')} · {slot.price} zł</p>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -993,6 +999,7 @@ export function Umow() {
                       ))}
                     </div>
                   </div>
+                  )
                 ) : (
                   <p className="text-sm font-medium text-gray-500">
                     {t('Wizyta w ramach NFZ — bezpłatna. Bezpłatne odwołanie do 24 godzin przed terminem.')}

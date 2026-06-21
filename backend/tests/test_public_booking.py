@@ -202,6 +202,23 @@ def test_gosc_platny_na_miejscu_wymaga_sms_i_potwierdza(client, setup):
     assert r.json()["payment"]["payment_status"] == "PAID" and r.json()["payment"]["pay_token"] is None
 
 
+def test_gosc_teleporada_online_platna_z_mailem(client, setup, integration_fakes):
+    """Gość bierze teleporadę (online=true) na slocie allow_online+płatnym → wizyta ONLINE,
+    idzie do płatności online bez OTP; po zapłacie potwierdzenie ma link do teleporady i
+    wychodzi też e-mailem."""
+    slot = make_slot(client, setup, hour=11, price=200, allow_online=True)
+    r = client.post("/public/book", json={**GUEST, "appointment_id": slot["appointment_id"], "online": True})
+    assert r.status_code == 200, r.text  # bez verify_phone — płatność jest dowodem
+    assert r.json()["appointment"]["appointment_type"] == "ONLINE"
+    assert r.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
+    token = r.json()["payment"]["pay_token"]
+    integration_fakes.email.sent.clear()
+    pay = client.post(f"/public/visit/{token}/pay", json={"outcome": "success"})
+    assert pay.status_code == 200 and pay.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert integration_fakes.email.sent, "potwierdzenie powinno pójść e-mailem"
+    assert "teleporad" in integration_fakes.email.sent[-1]["body"].lower()
+
+
 def test_gosc_platny_online_nie_wymaga_sms(client, setup):
     """Płatność online: sama płatność jest dowodem realności → SMS NIE jest wymagany;
     rezerwacja idzie do TEMP_LOCK + płatność PENDING (bramka), jak dotąd."""

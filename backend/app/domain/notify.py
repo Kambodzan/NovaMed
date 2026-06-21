@@ -1,8 +1,9 @@
 # Powiadomienia domenowe (UC-P7): zapis do tabeli notification przy zdarzeniach
-# + kanał SMS (best-effort, na numer z konta; mock bramki w mocks/sms).
+# + kanały SMS i e-mail (best-effort; mock bramki w dev). Adres/numer z konta.
 from uuid import UUID
 from sqlalchemy.orm import Session
 
+from app.integrations.email import get_email_client
 from app.integrations.sms import get_sms_client
 from app.models import AppUser, Notification, Patient
 
@@ -25,3 +26,6 @@ def notify(db: Session, user_id: UUID, title: str, content: str) -> None:
     user = db.get(AppUser, user_id)
     if user is not None and user.phone_number and user.notify_sms:
         get_sms_client().send(to=user.phone_number, message=f"NovaMed: {title}. {content}")
+    # e-mail — drugi kanał (poza SMS); best-effort, gdy konto ma adres
+    if user is not None and user.email:
+        get_email_client().send(to=user.email, subject=f"NovaMed: {title}", body=content)

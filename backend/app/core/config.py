@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # SMS dotarł niezależnie od numeru wpisanego w formularzu (Twilio trial dostarcza
     # tylko na zweryfikowane numery). Pusty = brak przekierowania. E.164, np. +48500000000.
     sms_redirect_to: str = ""
+    # E-mail (powiadomienia/potwierdzenia). "mock" = log+outbox (dev), "smtp" = realna dostawa.
+    email_provider: str = "mock"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""          # nadawca, np. "NovaMed <noreply@novamed.dev>"
+    email_redirect_to: str = ""  # DEV: przekieruj wszystkie maile na ten adres (jak sms_redirect_to)
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     # dev: front otwierany z adresów LAN (testy z innych urządzeń w sieci lokalnej)

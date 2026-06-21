@@ -311,6 +311,8 @@ const EN: Record<string, string> = {
   'Wcześniejsze dni': 'Earlier days',
   'Kolejne dni': 'Later days',
   'Wolę teleporadę (wideo) — bez przychodzenia do placówki': 'I prefer a video visit — no need to come in',
+  'Teleporada — opłata {amount} zł z góry online (kartą). Po zaksięgowaniu dostaniesz link do wideo.':
+    'Video visit — {amount} zł paid upfront online (by card). You will get the video link once payment clears.',
   'online': 'online',
   'To jest termin teleporady (wideo) — wizyta odbędzie się online, bez przychodzenia do placówki.':
     'This is a video appointment slot — the visit will take place online, without coming to the clinic.',

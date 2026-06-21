@@ -152,6 +152,34 @@ def test_usluga_konsultacja_dziedziczy_teleporade(client, setup, db_session):
     assert r.status_code == 200 and r.json()["appointment"]["appointment_type"] == "ONLINE"
 
 
+def test_teleporada_zawsze_platna_online(client, setup, db_session, integration_fakes):
+    """Teleporada (online) jest ZAWSZE płatna z góry online — nawet z pay_on_site=true idzie
+    do bramki (TEMP_LOCK), nie potwierdza się jako „na miejscu". Po zapłacie → też e-mail."""
+    from app.models import DoctorService, Service
+    svc = Service(clinic_id=setup["clinic"].clinic_id, name="Konsultacja kardiologiczna (prywatnie)",
+                  duration_min=20, price=200, referral_required=False, allow_online=True, active=True)
+    db_session.add(svc)
+    db_session.flush()
+    db_session.add(DoctorService(doctor_id=setup["doctor"].user_id, service_id=svc.service_id))
+    db_session.commit()
+    dt = (datetime.now() + timedelta(days=5)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{setup['clinic'].clinic_id}/slots", headers=auth_header(setup["reg_token"]),
+                       json={"doctor_id": str(setup["doctor"].user_id), "service_id": str(svc.service_id),
+                             "datetimes": [dt.isoformat()]}).json()[0]
+    # mimo pay_on_site=true → teleporada idzie do bramki online (TEMP_LOCK), nie „na miejscu"
+    r = client.post(f"/appointments/{slot['appointment_id']}/book",
+                    json={"online": True, "pay_on_site": True}, headers=auth_header(setup["patient_token"]))
+    assert r.status_code == 200
+    assert r.json()["appointment"]["appointment_type"] == "ONLINE"
+    assert r.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
+    assert r.json()["payment"]["payment_status"] == "PENDING"
+    integration_fakes.email.sent.clear()
+    pay = client.post(f"/appointments/{slot['appointment_id']}/pay", json={"outcome": "success"},
+                      headers=auth_header(setup["patient_token"]))
+    assert pay.status_code == 200 and pay.json()["appointment"]["appointment_status"] == "CONFIRMED"
+    assert integration_fakes.email.sent, "potwierdzenie powinno pójść też e-mailem"
+
+
 def test_lekarz_z_wieloma_specjalizacjami(client, factory):
     """Lekarz z kilkoma specjalizacjami jest znajdowany pod KAŻDĄ z nich,
     a slot wystawia pełną listę specjalizacji (UC-P3)."""
