@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.domain.appointments import AppointmentStatus
 from app.domain.coreservation import restore_blocked
+from app.domain import messages
 from app.domain.notify import notify
 from app.domain.confirm import confirm_link, ensure_confirm_token
 from app.models import Appointment, AppUser, Clinic, Payment
@@ -32,13 +33,8 @@ def send_due_reminders(db: Session) -> int:
     for a in rows:
         doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
         who = doctor_user.username if doctor_user else f"badanie {a.service_name}"
-        notify(
-            db, a.patient_id,
-            "Przypomnienie o wizycie",
-            f"Jutro masz wizytę: {who}, "
-            f"{a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}"
-            f"{' (teleporada — połączysz się z portalu)' if a.appointment_type == 'ONLINE' else ''}.",
-        )
+        notify(db, a.patient_id, *messages.visit_reminder(
+            who, a.appointment_datetime, online=a.appointment_type == "ONLINE"))
         a.reminder_sent = True
     db.commit()
     return len(rows)
@@ -66,12 +62,8 @@ def send_confirmation_requests(db: Session) -> int:
             continue
         who = (db.get(AppUser, a.doctor_id).username if a.doctor_id else a.service_name)
         link = confirm_link(ensure_confirm_token(a))
-        notify(
-            db, a.patient_id,
-            "Potwierdź swoją wizytę",
-            f"Wizyta: {who}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')} ({clinic.clinic_name}). "
-            f"Potwierdź lub odwołaj jednym kliknięciem: {link}",
-        )
+        notify(db, a.patient_id, *messages.confirm_request(
+            who, a.appointment_datetime, link=link, clinic_name=clinic.clinic_name))
         a.confirmation_requested = True
         sent += 1
     db.commit()
@@ -103,9 +95,7 @@ def release_expired_temp_locks(db: Session) -> int:
         a.notify_earlier = False
         restore_blocked(db, a)
         if patient_id:
-            notify(db, patient_id, "Rezerwacja wygasła",
-                   f"Płatność za wizytę ({label}) nie została dokończona w {settings.temp_lock_minutes} min "
-                   "— termin wrócił do puli. Jeśli nadal chcesz, zarezerwuj go ponownie.")
+            notify(db, patient_id, *messages.reservation_expired(label, settings.temp_lock_minutes))
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
 
     # porzucone HOLD-y: ktoś otworzył formularz rezerwacji i nie dokończył (TEMP_LOCK

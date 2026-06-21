@@ -21,6 +21,7 @@ from app.domain.appointments import (
     AppointmentType,
     assert_transition,
 )
+from app.domain import messages
 from app.domain.notify import notify
 from app.domain.referrals import consume_p1_referral, verify_p1_referral
 from app.integrations.base import IntegrationError
@@ -573,8 +574,8 @@ def book_appointment(
         a.appointment_status = AppointmentStatus.CONFIRMED.value
         a.lock_expires_at = None
         block_overlapping(db, a)  # lekarz zajęty → nakładające się usługi znikają z puli
-        notify(db, patient_id, "Wizyta potwierdzona",
-               f"Twoja wizyta: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
+        notify(db, patient_id, *messages.visit_confirmed(
+            visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a))))
         db.commit()
         return BookOut(appointment=appointment_out(db, a))
 
@@ -591,8 +592,9 @@ def book_appointment(
         db.add(onsite)
         db.flush()
         block_overlapping(db, a)
-        notify(db, patient_id, "Wizyta potwierdzona",
-               f"Twoja wizyta: {visit_label(db, a)}. Opłata {float(a.price):.2f} zł do uregulowania na miejscu w placówce.")
+        notify(db, patient_id, *messages.visit_confirmed(
+            visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a)),
+            on_site_amount=float(a.price)))
         db.commit()
         return BookOut(appointment=appointment_out(db, a), payment=PaymentInfoOut(
             payment_id=onsite.payment_id, provider_ref="NA_MIEJSCU", amount=float(a.price), payment_status="PAID"))
@@ -773,8 +775,8 @@ def book_for_patient(
             appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
             provider_ref="RECEPCJA", created_at=datetime.now(), paid_at=datetime.now(),
         ))
-    notify(db, body.patient_id, "Wizyta potwierdzona",
-           f"Zarejestrowaliśmy Twoją wizytę: {visit_label(db, a)}. Przypomnimy Ci o niej dzień wcześniej.")
+    notify(db, body.patient_id, *messages.visit_confirmed(
+        visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a))))
     db.commit()
     return appointment_out(db, a)
 
@@ -842,8 +844,10 @@ def pay_appointment(
         payment.paid_at = datetime.now()
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
         a.appointment_status = AppointmentStatus.CONFIRMED.value
-        notify(db, user.user_id, "Wizyta opłacona i potwierdzona",
-               f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}.")
+        notify(db, user.user_id, *messages.visit_paid_confirmed(
+            visit_label(db, a), float(payment.amount),
+            link=confirm_link(ensure_confirm_token(a)),
+            online=a.appointment_type == AppointmentType.ONLINE.value))
     else:
         # Odmowa NIE kasuje rezerwacji: termin zostaje TEMP_LOCK (trzymany dla pacjenta),
         # nakładające się sloty pozostają zablokowane, listy oczekujących nie ruszamy.
@@ -863,9 +867,7 @@ def pay_appointment(
         )
         db.add(payment)
         db.flush()
-        notify(db, user.user_id, "Płatność odrzucona",
-               "Operator odrzucił płatność, ale termin jest nadal dla Ciebie zarezerwowany "
-               "— spróbuj zapłacić ponownie do końca okna blokady.")
+        notify(db, user.user_id, *messages.payment_declined())
     db.commit()
     return BookOut(
         appointment=appointment_out(db, a),
@@ -971,9 +973,7 @@ def cancel_appointment(
             paid.payment_status = "REFUNDED"
             refunded = True
     if a.patient_id:
-        notify(db, a.patient_id, "Wizyta odwołana",
-               f"Wizyta {visit_label(db, a)} została odwołana."
-               + (f" Zwrot {float(a.price):.0f} zł nastąpi tą samą metodą płatności." if refunded else ""))
+        notify(db, a.patient_id, *messages.visit_cancelled(visit_label(db, a), refunded=refunded))
 
     # zwrot terminu do puli, jeśli wizyta jeszcze przed czasem
     if hours_left > 0:
@@ -1055,8 +1055,7 @@ def perform_reschedule(db: Session, old: Appointment, new: Appointment) -> Appoi
     new.appointment_notes = old.appointment_notes  # powód wizyty też (lekarz nie traci wywiadu)
     # każde przełożenie → informacyjny SMS o nowym terminie, BEZ confirm-linku
     if old.patient_id:
-        notify(db, old.patient_id, "Wizyta przełożona",
-               f"Nowy termin Twojej wizyty: {visit_label(db, new)}.")
+        notify(db, old.patient_id, *messages.visit_rescheduled(visit_label(db, new)))
     return new
 
 
@@ -1225,9 +1224,7 @@ def remind_unconfirmed(
     for a in rows:
         who = db.get(AppUser, a.doctor_id).username if a.doctor_id else a.service_name
         link = confirm_link(ensure_confirm_token(a))
-        notify(db, a.patient_id, "Przypomnienie: potwierdź wizytę",
-               f"Wizyta: {who}, {a.appointment_datetime.strftime('%d.%m.%Y %H:%M')}. "
-               f"Potwierdź lub odwołaj jednym kliknięciem: {link}")
+        notify(db, a.patient_id, *messages.confirm_request(who, a.appointment_datetime, link=link))
         a.confirmation_requested = True
         sent += 1
     db.commit()

@@ -29,6 +29,7 @@ from app.domain.appointments import AppointmentStatus, AppointmentType
 from app.domain.confirm import confirm_link, ensure_confirm_token
 from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
+from app.domain import messages
 from app.domain.notify import notify
 from app.domain.otp import require_verified_phone, send_otp, verify_otp
 from app.integrations.base import IntegrationError
@@ -281,11 +282,9 @@ def guest_book(
         if is_paid:  # płatność na miejscu — rozliczana w okienku placówki
             db.add(Payment(appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
                            provider_ref="NA_MIEJSCU", created_at=datetime.now(), paid_at=datetime.now()))
-        link = confirm_link(ensure_confirm_token(a))
-        notify(db, guest.user_id, "Wizyta potwierdzona",
-               f"Twoja rezerwacja: {visit_label(db, a)}. "
-               + (f"Opłata {float(a.price):.2f} zł na miejscu. " if is_paid else "")
-               + f"Zarządzaj wizytą (przełóż/odwołaj): {link}")
+        notify(db, guest.user_id, *messages.visit_confirmed(
+            visit_label(db, a), manage_link=confirm_link(ensure_confirm_token(a)),
+            on_site_amount=float(a.price) if is_paid else None))
         db.commit()
         return GuestBookOut(
             appointment=appointment_out(db, a),
@@ -392,8 +391,7 @@ def public_cancel(token: str, db: Session = Depends(get_db)):
     if pay is not None:
         pay.payment_status = "REFUNDED"
         refunded = True
-    notify(db, patient_id, "Wizyta odwołana",
-           f"Odwołałeś wizytę: {label}." + (" Zwrot opłaty nastąpi tą samą metodą." if refunded else ""))
+    notify(db, patient_id, *messages.visit_cancelled(label, refunded=refunded))
     db.commit()
     return public_visit(token, db)
 
@@ -473,12 +471,10 @@ def public_pay(
         payment.payment_status = "PAID"
         payment.paid_at = datetime.now()
         a.appointment_status = AppointmentStatus.CONFIRMED.value
-        link = confirm_link(ensure_confirm_token(a))
-        is_online = a.appointment_type == AppointmentType.ONLINE.value
-        notify(db, a.patient_id, "Wizyta opłacona i potwierdzona",
-               f"Płatność {float(payment.amount):.2f} zł zaksięgowana. Wizyta: {visit_label(db, a)}. "
-               + (f"Dołącz do teleporady (wideo) z tego linku o wyznaczonej godzinie: {link}"
-                  if is_online else f"Zarządzaj wizytą (przełóż/odwołaj): {link}"))
+        notify(db, a.patient_id, *messages.visit_paid_confirmed(
+            visit_label(db, a), float(payment.amount),
+            link=confirm_link(ensure_confirm_token(a)),
+            online=a.appointment_type == AppointmentType.ONLINE.value))
         db.commit()
         return GuestBookOut(
             appointment=appointment_out(db, a),
@@ -499,9 +495,7 @@ def public_pay(
     )
     db.add(retry)
     db.flush()
-    notify(db, a.patient_id, "Płatność odrzucona",
-           "Operator odrzucił płatność, ale termin jest nadal zarezerwowany — spróbuj "
-           "zapłacić ponownie z linku do końca okna blokady.")
+    notify(db, a.patient_id, *messages.payment_declined())
     db.commit()
     return GuestBookOut(
         appointment=appointment_out(db, a),
