@@ -334,26 +334,39 @@ function GabinetyModal({ clinicId, clinicName, onClose }: { clinicId: string; cl
     onSuccess: () => { setErr(null); void qc.invalidateQueries({ queryKey: ['clinic-doctors', clinicId] }) },
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Nie udało się zapisać gabinetu.'),
   })
+  const [q, setQ] = useState('')
+  const filtered = (docs ?? []).filter(d => !q.trim() || fold(d.name).includes(fold(q.trim())))
   return (
     <Modal title="Gabinety lekarzy" overline={clinicName} onClose={onClose} footer={<Button onClick={onClose}>Gotowe</Button>}>
       <p className="mb-3 text-sm font-medium text-gray-500">Gdzie dziś który lekarz przyjmuje — numer podpowiada się przy meldowaniu pacjenta.</p>
       {!docs ? <Loading /> : docs.length === 0 ? (
         <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Brak lekarzy w tej placówce.</p>
       ) : (
-        <div className="space-y-1.5">
-          {docs.map(d => (
-            <div key={`${d.doctor_id}:${d.room ?? ''}`} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-3.5 py-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-extrabold text-primary">{initials(d.name)}</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gray-900">{d.name}</span>
-              <span className="shrink-0 text-xs font-bold text-gray-400">gab.</span>
-              <div className="w-20 shrink-0">
-                <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="—"
-                  aria-label={`Gabinet — ${d.name}`} className={cx(inputCls, 'w-full text-center')}
-                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v }) }} />
-              </div>
+        <>
+          <div className="relative mb-2">
+            <Search size={14} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
+            <input className={cx(inputCls, 'w-full pl-9 pr-8 text-sm')} placeholder="Szukaj lekarza…" value={q} onChange={e => setQ(e.target.value)} />
+            {q && <button onClick={() => setQ('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-500 hover:text-gray-700"><X size={13} /></button>}
+          </div>
+          {filtered.length === 0 ? (
+            <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Brak lekarza dla frazy.</p>
+          ) : (
+            <div className="max-h-[55vh] space-y-1.5 overflow-y-auto pr-1">
+              {filtered.map(d => (
+                <div key={d.doctor_id} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-3.5 py-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-extrabold text-primary">{initials(d.name)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gray-900">{d.name}</span>
+                  <span className="shrink-0 text-xs font-bold text-gray-400">gab.</span>
+                  <div className="w-20 shrink-0">
+                    <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="—"
+                      aria-label={`Gabinet — ${d.name}`} className={cx(inputCls, 'w-full text-center')}
+                      onBlur={e => { const v = e.target.value.trim() || null; if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v }) }} />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
       {err && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{err}</p>}
     </Modal>

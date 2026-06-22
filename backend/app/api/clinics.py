@@ -187,6 +187,9 @@ def list_clinic_doctors(
         .join(AppUser, AppUser.user_id == Doctor.doctor_id)
         .join(StaffClinic, StaffClinic.user_id == Doctor.doctor_id)
         .where(StaffClinic.clinic_id == clinic_id, StaffClinic.end_date.is_(None))
+        # stała kolejność alfabetyczna — bez tego UPDATE (np. gabinetu) potrafił
+        # przestawić wiersze i lista „skakała" w UI
+        .order_by(AppUser.username)
     ).all()
     return [
         DoctorOut(
