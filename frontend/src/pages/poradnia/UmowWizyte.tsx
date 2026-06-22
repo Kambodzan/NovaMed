@@ -5,14 +5,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarCheck, Check, Clock, MapPin, Pencil, Search, UserPlus, Video, X } from 'lucide-react'
+import { Building2, CalendarCheck, Check, Clock, MapPin, Pencil, Search, UserPlus, Video, X } from 'lucide-react'
 import { Badge, Button, Field, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import { birthFromPesel } from '../../lib/pesel'
 import { PhoneInput } from '../../components/PhoneInput'
 import type { AppointmentOut, DocumentOut } from '../../lib/types'
-import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
+import { useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
 import { Select } from '../../components/Select'
 
@@ -45,7 +45,7 @@ function StepHead({ n, title, done, summary, onEdit }: { n: number; title: strin
 
 export function UmowWizyte() {
   const queryClient = useQueryClient()
-  const { clinics, clinic, setClinicId } = useClinicSelection()
+  const { clinic } = useClinicSelection()
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
 
@@ -60,6 +60,7 @@ export function UmowWizyte() {
   const [dayFilter, setDayFilter] = useState('')
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [holdToken, setHoldToken] = useState<string | null>(null)
+  const [asOnline, setAsOnline] = useState(false)  // teleporada na slocie stacjonarnym z allow_online (#4)
   // wejście z Kalendarza: { slot } = konkretny wybrany termin; { doctorId, day } = preselekcja filtra
   const navState = useLocation().state as { slot?: AppointmentOut; doctorId?: string | null; day?: string } | null
   useEffect(() => { if (navState?.slot) setSlot(navState.slot) }, [navState?.slot])
@@ -95,6 +96,11 @@ export function UmowWizyte() {
   // NFZ (termin bez ceny) — refundacja wymaga e-skierowania w P1; jedyną ścieżką jest kod.
   // Płatne — pełna elastyczność (skierowanie z NovaMed / kod P1 / papierowe oświadczenie).
   const isNfz = !slot?.price
+  // teleporada (#4): slot ONLINE jest nią z definicji; slot stacjonarny z allow_online
+  // można umówić jako teleporadę (wybór recepcji, spójnie z panelem pacjenta)
+  const slotIsOnline = slot?.appointment_type === 'ONLINE'
+  const canChooseModality = !!slot && !slotIsOnline && !!slot.allow_online
+  const isOnline = slotIsOnline || (canChooseModality && asOnline)
   const { data: patientDocs } = useQuery({
     queryKey: ['patient-docs', picked?.patient_id],
     queryFn: () => api<DocumentOut[]>(`/patients/${picked!.patient_id}/documents`),
@@ -119,14 +125,14 @@ export function UmowWizyte() {
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [slots, query, dayFilter])
 
-  const resetAll = () => { setPicked(null); setNewForm(NEW_PATIENT); setQ(''); setMode('existing'); setSlot(null); setHoldToken(null); setReason(''); setReferralChoice('') }
+  const resetAll = () => { setPicked(null); setNewForm(NEW_PATIENT); setQ(''); setMode('existing'); setSlot(null); setHoldToken(null); setAsOnline(false); setReason(''); setReferralChoice('') }
 
   // miękka rezerwacja slotu przy wyborze — blokuje termin dla
   // innej rejestracji/pacjenta, dopóki nie dokończymy umawiania
   const hold = useMutation({
     mutationFn: (s: AppointmentOut) => api<{ hold_token: string; expires_at: string }>(
       `/appointments/${s.appointment_id}/hold`, { method: 'POST' }),
-    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setError(null) },
+    onSuccess: (res, s) => { setHoldToken(res.hold_token); setSlot(s); setAsOnline(false); setError(null) },
     onError: (e) => {
       setError(e instanceof ApiError ? e.message : 'Nie udało się zarezerwować terminu.')
       void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] })
@@ -155,6 +161,7 @@ export function UmowWizyte() {
       method: 'POST',
       body: {
         patient_id: picked!.patient_id, reason: reason.trim() || undefined,
+        online: isOnline,
         external_referral: needsReferral && !isNfz && referralChoice === 'external',
         p1_referral_code: needsReferral && (isNfz || referralChoice === 'p1') && p1Code.trim() ? p1Code.trim() : undefined,
         referral_document_id: needsReferral && !isNfz && referralChoice && referralChoice !== 'external' && referralChoice !== 'p1' ? referralChoice : undefined,
@@ -162,7 +169,7 @@ export function UmowWizyte() {
       },
     }),
     onSuccess: (a) => {
-      setDone(`Umówiono: ${picked!.name} — ${formatDatePL(a.appointment_datetime)}, ${formatTime(a.appointment_datetime)} (${a.doctor_name}).`)
+      setDone(`Umówiono: ${picked!.name} — ${formatDatePL(a.appointment_datetime)}, ${formatTime(a.appointment_datetime)} · ${a.doctor_name}${a.appointment_type === 'ONLINE' ? ' · teleporada' : ''}.`)
       void queryClient.invalidateQueries({ queryKey: ['clinic-slots'] })
       void queryClient.invalidateQueries({ queryKey: ['clinic-day'] })
       resetAll()
@@ -178,10 +185,9 @@ export function UmowWizyte() {
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="fade-up">
         <PageHeader
-          overline={clinic?.clinic_name ?? '…'}
+          overline="Rejestracja"
           title="Umów wizytę"
           sub="Rezerwacja w imieniu pacjenta (telefon / okienko) — UC-PP1"
-          action={<ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />}
         />
       </div>
 
@@ -248,7 +254,43 @@ export function UmowWizyte() {
       <Tile className={cx('p-5', !picked && 'pointer-events-none opacity-50')} delay={90}>
         <StepHead n={2} title="Wolny termin" done={!!slot}
           summary={slot ? `${formatDatePL(slot.appointment_datetime)}, ${formatTime(slot.appointment_datetime)} · ${slot.doctor_name}` : undefined}
-          onEdit={() => { releaseHold(); setSlot(null) }} />
+          onEdit={() => { releaseHold(); setSlot(null); setAsOnline(false) }} />
+        {slot && (
+          <div className="mt-3 space-y-1.5 rounded-2xl bg-gray-50 p-4 text-sm">
+            <p className="flex items-center gap-2 font-extrabold text-gray-900">
+              <CalendarCheck size={15} className="text-primary" /> {formatDatePL(slot.appointment_datetime)}, {formatTime(slot.appointment_datetime)}
+            </p>
+            <p className="flex items-center gap-2 text-gray-600">
+              {isOnline ? <Video size={14} /> : <MapPin size={14} />}
+              <span><span className="font-bold text-gray-900">{slot.doctor_id ? slot.doctor_name : 'Pracownia (badanie)'}</span>
+                {slot.service_name ? ` · ${slot.service_name}` : ''} · {slot.price ? `${slot.price} zł` : 'NFZ'}</span>
+            </p>
+            {/* gdzie się to dzieje — nazwa + adres placówki (slot może być z innej placówki sieci) */}
+            <p className="flex items-start gap-2 text-gray-600">
+              <Building2 size={14} className="mt-0.5 shrink-0" />
+              <span><span className="font-bold text-gray-900">{slot.clinic_name}</span>{slot.clinic_address ? <><br />{slot.clinic_address}</> : ''}</span>
+            </p>
+            {slotIsOnline ? (
+              <p className="flex items-center gap-1.5 pt-1 text-xs font-bold text-primary"><Video size={13} /> Teleporada (wideo) — link trafi do pacjenta</p>
+            ) : canChooseModality && (
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-xs font-semibold text-gray-500">Forma:</span>
+                <div className="flex rounded-full bg-gray-200/70 p-0.5">
+                  {[['stac', 'Stacjonarna'], ['tele', 'Teleporada']].map(([v, label]) => {
+                    const on = (v === 'tele') === asOnline
+                    return (
+                      <button key={v} type="button" onClick={() => setAsOnline(v === 'tele')}
+                        className={cx('cursor-pointer rounded-full px-3 py-1 text-xs font-extrabold transition-colors',
+                          on ? 'bg-surface text-primary tile-shadow' : 'text-gray-500 hover:text-gray-900')}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {picked && !slot && (
           <div className="mt-3">
             <div className="mb-3 flex flex-wrap gap-2">

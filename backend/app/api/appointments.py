@@ -753,6 +753,7 @@ class BookForIn(BaseModel):
     external_referral: bool = False
     referral_document_id: UUID | None = None  # e-skierowanie z NovaMed (badanie NFZ)
     p1_referral_code: str | None = Field(default=None, max_length=20)  # kod e-skierowania z P1
+    online: bool = False  # recepcja umawia teleporadę (slot stacjonarny z allow_online)
     hold_token: str | None = None  # token miękkiej rezerwacji slotu
 
 
@@ -807,6 +808,10 @@ def book_for_patient(
             a.external_referral = True
     if body.reason:
         a.appointment_notes = body.reason.strip()[:500]
+    # teleporada to wybór przy umawianiu — dozwolony, gdy slot na nią zezwala (allow_online),
+    # spójnie z pacjenckim /book (body.online). Pracownia/badanie i tak zostaje stacjonarne.
+    if body.online and a.allow_online:
+        a.appointment_type = AppointmentType.ONLINE.value
     try:
         patient.insurance_status = ewus.verify(pesel=patient.pesel)
     except IntegrationError:

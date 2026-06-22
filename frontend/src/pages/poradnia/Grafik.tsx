@@ -25,8 +25,9 @@ const dayLabel = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString
 const shortDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const EXAM = '__exam'
-// kolory placówek do trybu „cała sieć" (z dala od primary-teal, by nie mylić z akcją)
-const CLINIC_DOTS = ['bg-indigo-500', 'bg-amber-500', 'bg-rose-500', 'bg-sky-500', 'bg-violet-500', 'bg-orange-500', 'bg-lime-500', 'bg-fuchsia-500']
+// kolor placówki = równomiernie rozłożony odcień HSL — gwarantuje BRAK duplikatów dla
+// dowolnej liczby placówek (legenda i tak pokazuje aktualne mapowanie kolor→adres)
+const clinicHsl = (i: number, n: number) => `hsl(${Math.round((i * 360) / Math.max(n, 1))} 64% 48%)`
 
 export function Grafik() {
   const navigate = useNavigate()
@@ -41,6 +42,9 @@ export function Grafik() {
   const [showAdd, setShowAdd] = useState(false)
   // wybór rodzaju wizyty, gdy o jednej godzinie jest kilka wolnych slotów (różne usługi)
   const [chooser, setChooser] = useState<{ time: string; options: AppointmentOut[] } | null>(null)
+  // tryb sieci: klik w placówkę w legendzie włącza/wyłącza ją na grafiku
+  const [hiddenClinics, setHiddenClinics] = useState<Set<string>>(new Set())
+  const toggleClinic = (id: string) => setHiddenClinics(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   const { data: doctors } = useQuery({
     queryKey: ['clinic-doctors', clinic?.clinic_id],
@@ -55,41 +59,45 @@ export function Grafik() {
   })
 
   const free = useMemo(() => (slots ?? []).filter(s => s.appointment_status === 'FREE'), [slots])
+
+  // placówki sieci z kolorem + adresem — z PEŁNEJ puli (legenda pokazuje wszystkie,
+  // też wyłączone, żeby dało się je z powrotem włączyć)
+  const clinicMeta = useMemo(() => {
+    const byId = new Map<string, { name: string; address: string | null; city: string | null }>()
+    for (const s of free) if (!byId.has(s.clinic_id)) byId.set(s.clinic_id, { name: s.clinic_name, address: s.clinic_address ?? null, city: s.clinic_city ?? null })
+    const sorted = [...byId.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
+    const m = new Map<string, { name: string; address: string | null; city: string | null; color: string }>()
+    sorted.forEach(([id, info], i) => m.set(id, { ...info, color: clinicHsl(i, sorted.length) }))
+    return m
+  }, [free])
+
+  // placówki wyłączone w legendzie znikają z grafiku (tylko tryb sieci)
+  const shown = useMemo(() => free.filter(s => !hiddenClinics.has(s.clinic_id)), [free, hiddenClinics])
   const nextFree = useMemo(() => {
     const m = new Map<string, string>()
-    for (const s of free) {
+    for (const s of shown) {
       const k = s.doctor_id ?? EXAM
       const cur = m.get(k)
       if (!cur || s.appointment_datetime < cur) m.set(k, s.appointment_datetime)
     }
     return m
-  }, [free])
-
-  // placówki sieci z kolorem + adresem (do legendy i kropek na pigułkach)
-  const clinicMeta = useMemo(() => {
-    const byId = new Map<string, { name: string; address: string | null; city: string | null }>()
-    for (const s of free) if (!byId.has(s.clinic_id)) byId.set(s.clinic_id, { name: s.clinic_name, address: s.clinic_address ?? null, city: s.clinic_city ?? null })
-    const sorted = [...byId.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
-    const m = new Map<string, { name: string; address: string | null; city: string | null; dot: string }>()
-    sorted.forEach(([id, info], i) => m.set(id, { ...info, dot: CLINIC_DOTS[i % CLINIC_DOTS.length] }))
-    return m
-  }, [free])
+  }, [shown])
 
   // lekarze do wyboru: w trybie placówki — wszyscy jej lekarze (też bez wolnych);
   // w trybie sieci — ci, którzy mają gdziekolwiek wolny termin (z danych slotów)
   const picks = useMemo<Pick[]>(() => {
     if (scope === 'network') {
       const m = new Map<string, Pick>()
-      for (const s of free) {
+      for (const s of shown) {
         const key = s.doctor_id ?? EXAM
         if (!m.has(key)) m.set(key, { key, label: s.doctor_id ? s.doctor_name : 'Pracownia (badania)', specs: s.specializations })
       }
       return [...m.values()].sort((a, b) => (a.key === EXAM ? 1 : 0) - (b.key === EXAM ? 1 : 0) || a.label.localeCompare(b.label))
     }
     const out: Pick[] = (doctors ?? []).map(d => ({ key: d.doctor_id, label: d.name, specs: d.specializations }))
-    if (free.some(s => s.doctor_id == null)) out.push({ key: EXAM, label: 'Pracownia (badania)', specs: [] })
+    if (shown.some(s => s.doctor_id == null)) out.push({ key: EXAM, label: 'Pracownia (badania)', specs: [] })
     return out
-  }, [scope, free, doctors])
+  }, [scope, shown, doctors])
 
   // wyszukiwarka: lekarz lub specjalizacja („chcę do kardiologa")
   const filtered = useMemo(() => {
@@ -103,7 +111,7 @@ export function Grafik() {
   const byDay = useMemo(() => {
     const m = new Map<string, AppointmentOut[]>()
     if (!active) return m
-    for (const s of free) {
+    for (const s of shown) {
       if ((s.doctor_id ?? EXAM) !== active.key) continue
       const day = s.appointment_datetime.slice(0, 10)
       if (day < days[0] || day > days[6]) continue
@@ -111,7 +119,7 @@ export function Grafik() {
     }
     for (const arr of m.values()) arr.sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))
     return m
-  }, [free, active, days])
+  }, [shown, active, days])
 
   // wybór lekarza skacze tygodniem do jego najbliższego wolnego (od razu widać kiedy)
   const pickDoctor = (key: string) => {
@@ -162,6 +170,23 @@ export function Grafik() {
         </div>
       )}
 
+      {/* legenda placówek (tryb sieci) — kolor → nazwa + adres; klik = włącz/wyłącz */}
+      {scope === 'network' && clinicMeta.size > 0 && (
+        <div className="flex flex-wrap gap-x-2 gap-y-1.5 rounded-2xl bg-surface px-3 py-2.5 tile-shadow fade-up">
+          {[...clinicMeta.entries()].map(([id, c]) => {
+            const off = hiddenClinics.has(id)
+            return (
+              <button key={id} onClick={() => toggleClinic(id)} title={off ? 'Pokaż tę placówkę' : 'Ukryj tę placówkę'}
+                className={cx('flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-gray-100', off && 'opacity-40')}>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+                <span className={cx('font-extrabold text-gray-900', off && 'line-through')}>{c.name}</span>
+                {c.address && <span className="text-gray-500">· {c.address}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {(scope === 'clinic' && (!clinic || doctors === undefined)) || slots === undefined ? <Loading /> : picks.length === 0 ? (
         <Tile className="p-5">
           <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />} title="Brak lekarzy z wolnymi terminami"
@@ -199,18 +224,6 @@ export function Grafik() {
               <span className="text-sm font-extrabold text-gray-900">{active?.label}</span>
               <span className="text-xs font-semibold text-gray-500">— wolne okienka, klik = umów pacjenta</span>
             </div>
-            {/* legenda placówek — kolor → nazwa + adres (kropki na pigułkach niżej) */}
-            {scope === 'network' && clinicMeta.size > 0 && (
-              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5 rounded-2xl bg-gray-50 px-3.5 py-2.5">
-                {[...clinicMeta.values()].map(c => (
-                  <span key={c.name} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
-                    <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full', c.dot)} />
-                    <span className="font-extrabold text-gray-900">{c.name}</span>
-                    {c.address && <span>· {c.address}</span>}
-                  </span>
-                ))}
-              </div>
-            )}
             <div className="space-y-1.5">
               {days.map(d => {
                 const list = byDay.get(d) ?? []
@@ -233,7 +246,7 @@ export function Grafik() {
                           return (
                             <button key={s0.appointment_id} onClick={() => multi ? setChooser({ time: t, options: opts }) : book(s0)}
                               className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-extrabold text-gray-900 ring-1 ring-gray-200 transition-colors hover:bg-primary hover:text-white hover:ring-primary">
-                              {scope === 'network' && <span className={cx('h-2 w-2 shrink-0 rounded-full', clinicMeta.get(s0.clinic_id)?.dot ?? 'bg-gray-300')} title={s0.clinic_name} />}
+                              {scope === 'network' && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: clinicMeta.get(s0.clinic_id)?.color ?? '#9ca3af' }} title={s0.clinic_name} />}
                               {!multi && (s0.appointment_type === 'ONLINE' ? <Video size={12} /> : <MapPin size={12} />)}
                               {t}
                               {multi && <ChevronDown size={12} className="opacity-60" />}
