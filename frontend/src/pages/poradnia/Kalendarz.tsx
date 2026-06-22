@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarRange, Check, ChevronLeft, ChevronRight, Plus, Search, Settings2, Video, X } from 'lucide-react'
+import { CalendarRange, Check, ChevronLeft, ChevronRight, DoorOpen, MapPin, Plus, Search, Settings2, UserCheck, Video, X } from 'lucide-react'
 import { Button, EmptyState, Field, Loading, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -26,7 +26,7 @@ const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
 import { ServicesManager, type ServiceOut } from '../../components/ServicesManager'
 
-interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
 
 export function Kalendarz() {
   const queryClient = useQueryClient()
@@ -41,6 +41,7 @@ export function Kalendarz() {
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<AppointmentOut | null>(null)
   const [modal, setModal] = useState<'add' | 'settings' | null>(null)
+  const [view, setView] = useState<'agenda' | 'grid'>('agenda')
   const [error, setError] = useState<string | null>(null)
 
   const { data: items } = useQuery({
@@ -106,6 +107,19 @@ export function Kalendarz() {
     onSuccess: () => { setDetail(null); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się usunąć terminu.'),
   })
+  // meldowanie pacjenta jednym klikiem (gabinet z konfiguracji lekarza)
+  const arrive = useMutation({
+    mutationFn: ({ id, checked_in }: { id: string; checked_in?: boolean }) =>
+      api<AppointmentOut>(`/appointments/${id}/arrival`, { method: 'POST', body: { checked_in: checked_in ?? true } }),
+    onSuccess: (a) => { setDetail(d => (d?.appointment_id === a.appointment_id ? a : d)); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zameldować pacjenta.'),
+  })
+  const doctorRoom = (id: string | null | undefined) => (doctors ?? []).find(d => d.doctor_id === id)?.room ?? null
+  // agenda dnia: umówieni pacjenci chronologicznie (po filtrze lekarza/specjalizacji)
+  const agenda = useMemo(() => visible
+    .filter(a => a.patient_id && a.appointment_status !== 'CANCELLED')
+    .sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime)), [visible])
+  const waitingCount = agenda.filter(a => a.checked_in_at && a.appointment_status === 'CONFIRMED').length
 
   const doCancel = async (a: AppointmentOut) => {
     if (await confirm({ title: 'Odwołać wizytę?', message: `${a.patient_name} — ${formatTime(a.appointment_datetime)}. Pacjent dostanie powiadomienie.`, tone: 'danger', confirmLabel: 'Odwołaj' }))
@@ -118,9 +132,20 @@ export function Kalendarz() {
         <PageHeader
           overline={clinic?.clinic_name ?? '…'}
           title="Kalendarz lekarzy"
-          sub={items ? `${formatDatePL(day + 'T00:00:00')} · ${taken} zajętych · ${free} wolnych` : 'Kto ma co o której — obłożenie dnia'}
+          sub={items
+            ? `${formatDatePL(day + 'T00:00:00')} · ${taken} zajętych · ${free} wolnych${waitingCount ? ` · ${waitingCount} czeka` : ''}`
+            : 'Kto ma co o której — obłożenie dnia'}
           action={
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-full bg-gray-100 p-0.5">
+                {(['agenda', 'grid'] as const).map(v => (
+                  <button key={v} onClick={() => setView(v)}
+                    className={cx('cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
+                      view === v ? 'bg-surface text-primary tile-shadow' : 'text-gray-500 hover:text-gray-900')}>
+                    {v === 'agenda' ? 'Agenda' : 'Siatka'}
+                  </button>
+                ))}
+              </div>
               <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
               <div className="flex items-center gap-1">
                 <button onClick={() => shiftDay(-1)} aria-label="Poprzedni dzień" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100"><ChevronLeft size={16} /></button>
@@ -153,6 +178,61 @@ export function Kalendarz() {
             title={q ? 'Brak lekarzy dla filtra' : 'Brak lekarzy w placówce'}
             hint={q ? 'Zmień frazę wyszukiwania.' : 'Przypisz lekarzy do placówki w Panelu Admina.'} />
         </Tile>
+      ) : view === 'agenda' ? (
+        agenda.length === 0 ? (
+          <Tile className="p-5">
+            <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />}
+              title={q ? 'Brak umówionych dla filtra' : 'Brak umówionych wizyt tego dnia'}
+              hint={free > 0 ? `${free} wolnych terminów — przełącz na „Siatkę", żeby nimi zarządzać.` : 'Dodaj terminy, aby umawiać pacjentów.'} />
+          </Tile>
+        ) : (
+          <Tile className="p-3 sm:p-4">
+            <ul className="space-y-1.5">
+              {agenda.map(a => {
+                const live = a.appointment_status === 'IN_PROGRESS'
+                const paused = a.appointment_status === 'PAUSED'
+                const done = FINISHED.includes(a.appointment_status)
+                const online = a.appointment_type === 'ONLINE'
+                const room = a.room ?? doctorRoom(a.doctor_id)
+                const waiting = !!a.checked_in_at && a.appointment_status === 'CONFIRMED'
+                const canCheckIn = a.appointment_status === 'CONFIRMED' && !online && !waiting
+                return (
+                  <li key={a.appointment_id} className={cx('flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-4 py-2.5',
+                    live ? 'bg-primary-soft ring-1 ring-primary' : paused ? 'bg-amber-50 ring-1 ring-amber-200'
+                      : done ? 'bg-gray-50 opacity-60' : waiting ? 'bg-primary-soft/50' : 'bg-gray-50')}>
+                    <span className="w-12 shrink-0 text-base font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{formatTime(a.appointment_datetime)}</span>
+                    <button onClick={() => { setError(null); setDetail(a) }} className="flex min-w-0 flex-1 cursor-pointer flex-col text-left">
+                      <span className="truncate text-sm font-extrabold text-gray-900">{a.patient_name}</span>
+                      <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-500">
+                        {online ? <Video size={12} /> : <MapPin size={12} />} {a.doctor_id ? a.doctor_name : a.service_name}
+                        {a.doctor_id && a.service_name ? ` · ${a.service_name}` : ''}{room ? ` · gab. ${room}` : ''}
+                      </span>
+                    </button>
+                    {a.appointment_status === 'CONFIRMED' && a.confirmation_requested && !waiting && (
+                      <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold',
+                        a.patient_confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                        {a.patient_confirmed ? 'potw.' : 'bez potw.'}
+                      </span>
+                    )}
+                    {(live || paused || done) && <StatusBadge status={a.appointment_status} />}
+                    {waiting ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold text-white">
+                        <UserCheck size={12} /> czeka{room ? ` · gab. ${room}` : ''}
+                        <button type="button" aria-label="Cofnij meldunek" disabled={arrive.isPending}
+                          onClick={() => arrive.mutate({ id: a.appointment_id, checked_in: false })}
+                          className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-white/20"><X size={11} /></button>
+                      </span>
+                    ) : canCheckIn ? (
+                      <Button size="sm" variant="secondary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
+                        <DoorOpen size={13} /> Przyszedł
+                      </Button>
+                    ) : null}
+                  </li>
+                )
+              })}
+            </ul>
+          </Tile>
+        )
       ) : (
         <Tile className="overflow-x-auto p-0">
           {times.length === 0 && (
@@ -170,7 +250,7 @@ export function Kalendarz() {
                 const nf = nextFree.get(c.key)
                 return (
                   <div key={c.key} className="w-44 shrink-0 px-3 py-2.5">
-                    <p className="truncate text-sm font-extrabold text-gray-900">{c.label}</p>
+                    <p className="truncate text-sm font-extrabold text-gray-900">{c.label}{doctorRoom(c.key) ? <span className="ml-1 font-bold text-gray-400">· gab. {doctorRoom(c.key)}</span> : null}</p>
                     {c.specs.length > 0 && <p className="truncate text-[11px] font-semibold text-gray-500">{c.specs.join(' · ')}</p>}
                     {!nf ? (
                       <p className="text-[10px] font-bold text-gray-300">brak wolnych terminów</p>
@@ -194,6 +274,7 @@ export function Kalendarz() {
                   const live = a.appointment_status === 'IN_PROGRESS'
                   const paused = a.appointment_status === 'PAUSED'
                   const done = FINISHED.includes(a.appointment_status)
+                  const waiting = !!a.checked_in_at && a.appointment_status === 'CONFIRMED'
                   return (
                     <div key={c.key} className="w-44 shrink-0 px-1.5 py-1.5">
                       <button onClick={() => { setError(null); setDetail(a) }}
@@ -201,6 +282,7 @@ export function Kalendarz() {
                           isFree ? 'border border-dashed border-gray-200 text-gray-500 hover:border-primary hover:text-primary'
                             : live ? 'bg-primary-soft ring-1 ring-primary'
                             : paused ? 'bg-amber-50 ring-1 ring-amber-200'
+                            : waiting ? 'bg-primary-soft ring-1 ring-primary/40'
                             : done ? 'bg-gray-50 opacity-60' : 'bg-gray-50 hover:bg-gray-100')}>
                         {a.appointment_type === 'ONLINE' && <Video size={11} className="shrink-0 opacity-60" />}
                         {isFree ? (
@@ -208,7 +290,9 @@ export function Kalendarz() {
                         ) : (
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-bold text-gray-900">{a.patient_name ?? a.service_name}</span>
-                            {a.appointment_status === 'CONFIRMED' && (
+                            {waiting ? (
+                              <span className="flex items-center gap-0.5 text-[10px] font-extrabold text-primary"><UserCheck size={10} /> czeka{a.room ? ` · gab. ${a.room}` : ''}</span>
+                            ) : a.appointment_status === 'CONFIRMED' && (
                               a.patient_confirmed
                                 ? <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-600"><Check size={10} /> potwierdzona</span>
                                 : a.confirmation_requested
@@ -265,6 +349,20 @@ export function Kalendarz() {
                   </p>
                 )}
                 {detail.notes && <p><span className="font-semibold text-gray-500">Powód:</span> {detail.notes}</p>}
+                {detail.appointment_status === 'CONFIRMED' && detail.appointment_type !== 'ONLINE' && (
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5">
+                    <span><span className="font-semibold text-gray-500">Meldunek: </span>
+                      {detail.checked_in_at
+                        ? <span className="font-bold text-primary">pacjent czeka{(detail.room ?? doctorRoom(detail.doctor_id)) ? ` · gab. ${detail.room ?? doctorRoom(detail.doctor_id)}` : ''}</span>
+                        : <span className="text-gray-500">jeszcze nie zameldowany</span>}
+                    </span>
+                    {detail.checked_in_at ? (
+                      <Button size="sm" variant="ghost" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id, checked_in: false })}>Cofnij</Button>
+                    ) : (
+                      <Button size="sm" variant="secondary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id })}><DoorOpen size={13} /> Przyszedł</Button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -455,6 +553,12 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }),
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać długości wizyty.'),
   })
+  const setRoom = useMutation({
+    mutationFn: ({ id, room }: { id: string; room: string | null }) =>
+      api(`/clinics/${clinic.clinic_id}/doctors/${id}/room`, { method: 'PATCH', body: { room } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }),
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać gabinetu.'),
+  })
 
   return (
     <Modal title="Ustawienia placówki" wide onClose={onClose}
@@ -483,22 +587,28 @@ function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; 
 
       {docs && docs.length > 0 && (
         <div className="mt-5">
-          <p className="text-sm font-extrabold text-gray-900">Długość wizyt per lekarz</p>
+          <p className="text-sm font-extrabold text-gray-900">Lekarze: długość wizyty i gabinet</p>
           <p className="mb-2 text-xs font-medium text-gray-500">
-            Puste = siatka placówki ({intervalMin} min). Zmiana zapisuje się po wyjściu z pola.
+            Długość pusta = siatka placówki ({intervalMin} min). Gabinet podpowiada się recepcji przy meldowaniu pacjenta. Zapis po wyjściu z pola.
           </p>
           <div className="space-y-1.5">
             {docs.map(d => (
-              <div key={`${d.doctor_id}:${d.slot_duration_min ?? ''}`} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3.5 py-2">
+              <div key={`${d.doctor_id}:${d.slot_duration_min ?? ''}:${d.room ?? ''}`} className="flex items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2">
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{d.name}</span>
                 <input type="number" min="5" max="120" step="5" defaultValue={d.slot_duration_min ?? ''}
-                  placeholder={String(intervalMin)} className={`${inputCls} w-24 text-center`}
+                  placeholder={String(intervalMin)} aria-label="długość wizyty [min]" className={`${inputCls} w-20 text-center`}
                   onBlur={e => {
                     const v = e.target.value.trim()
                     const num = v === '' ? null : Number(v)
                     if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
                   }} />
                 <span className="text-xs font-bold text-gray-500">min</span>
+                <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="gab."
+                  aria-label="gabinet" className={`${inputCls} w-20 text-center`}
+                  onBlur={e => {
+                    const v = e.target.value.trim() || null
+                    if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v })
+                  }} />
               </div>
             ))}
           </div>

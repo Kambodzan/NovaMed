@@ -9,7 +9,7 @@ import { ClinicSelect, useClinicSelection, type ClinicLite } from '../../compone
 import { ServicesManager } from '../../components/ServicesManager'
 import { api, ApiError } from '../../lib/api'
 
-interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
 
 export function AdminPlacowki() {
   const { clinics, clinic, setClinicId } = useClinicSelection()
@@ -54,6 +54,12 @@ function ClinicPanel({ clinic }: { clinic: ClinicLite }) {
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać długości wizyty.'),
   })
+  const setRoom = useMutation({
+    mutationFn: ({ id, room }: { id: string; room: string | null }) =>
+      api(`/clinics/${clinic.clinic_id}/doctors/${id}/room`, { method: 'PATCH', body: { room } }),
+    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }) },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać gabinetu.'),
+  })
 
   return (
     <>
@@ -86,22 +92,28 @@ function ClinicPanel({ clinic }: { clinic: ClinicLite }) {
 
       {docs && docs.length > 0 && (
         <div className="mt-6">
-          <p className="text-sm font-extrabold text-gray-900">Długość wizyt per lekarz</p>
+          <p className="text-sm font-extrabold text-gray-900">Lekarze: długość wizyty i gabinet</p>
           <p className="mb-2 text-xs font-medium text-gray-500">
-            Puste = siatka placówki ({intervalMin} min). Zmiana zapisuje się po wyjściu z pola.
+            Długość pusta = siatka placówki ({intervalMin} min). Gabinet podpowiada się recepcji przy meldowaniu. Zapis po wyjściu z pola.
           </p>
           <div className="space-y-1.5">
             {docs.map(d => (
-              <div key={`${d.doctor_id}:${d.slot_duration_min ?? ''}`} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3.5 py-2">
+              <div key={`${d.doctor_id}:${d.slot_duration_min ?? ''}:${d.room ?? ''}`} className="flex items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2">
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{d.name}</span>
                 <input type="number" min="5" max="120" step="5" defaultValue={d.slot_duration_min ?? ''}
-                  placeholder={String(intervalMin)} className={`${inputCls} w-24 text-center`}
+                  placeholder={String(intervalMin)} aria-label="długość wizyty [min]" className={`${inputCls} w-20 text-center`}
                   onBlur={e => {
                     const v = e.target.value.trim()
                     const num = v === '' ? null : Number(v)
                     if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
                   }} />
                 <span className="text-xs font-bold text-gray-500">min</span>
+                <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="gab."
+                  aria-label="gabinet" className={`${inputCls} w-20 text-center`}
+                  onBlur={e => {
+                    const v = e.target.value.trim() || null
+                    if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v })
+                  }} />
               </div>
             ))}
           </div>

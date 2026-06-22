@@ -275,7 +275,15 @@ def mark_arrival(
                             detail="Zameldować można tylko potwierdzoną wizytę z pacjentem.")
     if body.checked_in:
         a.checked_in_at = datetime.now()
-        a.room = (body.room or "").strip() or None
+        room = (body.room or "").strip() or None
+        # brak gabinetu w żądaniu → bierzemy stały gabinet lekarza w tej placówce
+        # (recepcja melduje jednym kliknięciem, nie wpisuje numeru)
+        if room is None and a.doctor_id:
+            sc = db.scalar(select(StaffClinic).where(
+                StaffClinic.clinic_id == a.clinic_id, StaffClinic.user_id == a.doctor_id,
+                StaffClinic.end_date.is_(None)))
+            room = sc.room if sc else None
+        a.room = room
     else:
         a.checked_in_at = None
         a.room = None

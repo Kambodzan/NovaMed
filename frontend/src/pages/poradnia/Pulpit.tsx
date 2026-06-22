@@ -1,10 +1,9 @@
 // Pulpit rejestracji — przegląd dnia placówki + szybkie akcje. Liczy się z
 // grafiku dnia (/clinics/{id}/day), żeby od wejścia widać było obłożenie.
-import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CheckCircle2, ChevronRight, Clock, DoorOpen, FlaskConical, UserCheck, Users, Video, X } from 'lucide-react'
-import { Button, Loading, Modal, Overline, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
+import { Button, Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { pushToast } from '../../lib/toast'
 import { formatTime } from '../../lib/format'
@@ -37,14 +36,13 @@ export function Pulpit() {
   const { clinics, clinic, setClinicId } = useClinicSelection()
   const navigate = useNavigate()
   const today = todayIso()
-  const [arriveFor, setArriveFor] = useState<AppointmentOut | null>(null)
-  const [room, setRoom] = useState('')
 
-  // meldowanie pacjenta (recepcja → lekarz): „przyszedł" + gabinet, oraz cofnięcie
+  // meldowanie pacjenta (recepcja → lekarz) JEDNYM klikiem — gabinet bierze się
+  // ze stałej konfiguracji lekarza (recepcja nic nie wpisuje); cofnięcie = checked_in:false
   const arrive = useMutation({
-    mutationFn: ({ id, room, checked_in }: { id: string; room?: string; checked_in?: boolean }) =>
-      api(`/appointments/${id}/arrival`, { method: 'POST', body: { room: room || null, checked_in: checked_in ?? true } }),
-    onSuccess: () => { setArriveFor(null); setRoom(''); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) },
+    mutationFn: ({ id, checked_in }: { id: string; checked_in?: boolean }) =>
+      api(`/appointments/${id}/arrival`, { method: 'POST', body: { checked_in: checked_in ?? true } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }),
     onError: (e) => pushToast(e instanceof ApiError ? e.message : 'Nie udało się zameldować pacjenta.', 'error'),
   })
 
@@ -150,7 +148,8 @@ export function Pulpit() {
                               className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-primary/15"><X size={11} /></button>
                           </span>
                         ) : (
-                          <Button size="sm" variant="secondary" onClick={() => { setArriveFor(a); setRoom('') }}>
+                          <Button size="sm" variant="secondary" disabled={arrive.isPending}
+                            onClick={() => arrive.mutate({ id: a.appointment_id })}>
                             <DoorOpen size={13} /> Przyszedł
                           </Button>
                         )
@@ -194,30 +193,6 @@ export function Pulpit() {
         </>
       )}
 
-      {arriveFor && (
-        <Modal
-          overline={`${arriveFor.patient_name} · ${formatTime(arriveFor.appointment_datetime)}`}
-          title="Pacjent przyszedł"
-          onClose={() => setArriveFor(null)}
-          footer={<>
-            <Button variant="secondary" onClick={() => setArriveFor(null)}>Anuluj</Button>
-            <Button disabled={arrive.isPending} onClick={() => arrive.mutate({ id: arriveFor.appointment_id, room })}>
-              <UserCheck size={15} /> {arrive.isPending ? 'Meldowanie…' : 'Zamelduj'}
-            </Button>
-          </>}
-        >
-          <div className="space-y-3 pb-1">
-            <p className="text-sm font-medium text-gray-600">Lekarz <b>{arriveFor.doctor_name}</b> zobaczy, że pacjent czeka. Podaj gabinet, do którego ma się skierować.</p>
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-bold text-gray-700">Gabinet (opcjonalnie)</span>
-              <input className={cx(inputCls, 'font-extrabold tracking-wider')} value={room} placeholder="np. 5"
-                maxLength={20} autoFocus
-                onChange={e => setRoom(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') arrive.mutate({ id: arriveFor.appointment_id, room }) }} />
-            </label>
-          </div>
-        </Modal>
-      )}
     </div>
   )
 }

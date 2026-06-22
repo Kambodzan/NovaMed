@@ -222,15 +222,28 @@ def test_meldowanie_pacjenta_przez_recepcje(client, factory):
                        json={"doctor_id": str(doc_user.user_id), "datetimes": [dt.isoformat()]}).json()[0]
     aid = slot["appointment_id"]
     client.post(f"/appointments/{aid}/book", headers=auth_header(pat))
-    # melduje + gabinet 5
+    # melduje z jawnym gabinetem 5
     r = client.post(f"/appointments/{aid}/arrival", headers=auth_header(reg), json={"room": "5"})
     assert r.status_code == 200 and r.json()["room"] == "5" and r.json()["checked_in_at"]
     # cofnięcie meldunku
     r2 = client.post(f"/appointments/{aid}/arrival", headers=auth_header(reg), json={"checked_in": False})
     assert r2.json()["checked_in_at"] is None and r2.json()["room"] is None
-    # pielęgniarka nie zamelduje (front-desk only)
+
+    # gabinet ze STAŁEJ konfiguracji lekarza: kierownik ustawia, recepcja melduje bez wpisywania
+    kier_user, kier = factory.user("kierownik"); factory.employ(clinic, kier_user.user_id)
+    assert client.patch(f"/clinics/{clinic.clinic_id}/doctors/{doc_user.user_id}/room",
+                        headers=auth_header(kier), json={"room": "12"}).status_code == 200
+    r3 = client.post(f"/appointments/{aid}/arrival", headers=auth_header(reg), json={})  # bez room
+    assert r3.json()["room"] == "12"
+    # gabinet widoczny w liście lekarzy placówki
+    docs = client.get(f"/clinics/{clinic.clinic_id}/doctors", headers=auth_header(reg)).json()
+    assert next(d for d in docs if d["doctor_id"] == str(doc_user.user_id))["room"] == "12"
+
+    # pielęgniarka nie zamelduje, rejestracja nie ustawi gabinetu (governance)
     _, nurse = factory.user("pielegniarka")
     assert client.post(f"/appointments/{aid}/arrival", headers=auth_header(nurse), json={}).status_code == 403
+    assert client.patch(f"/clinics/{clinic.clinic_id}/doctors/{doc_user.user_id}/room",
+                        headers=auth_header(reg), json={"room": "9"}).status_code == 403
 
 
 def test_lekarz_z_wieloma_specjalizacjami(client, factory):

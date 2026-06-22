@@ -63,6 +63,7 @@ class StaffClinic(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"))
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
+    room: Mapped[str | None] = mapped_column(String(20))  # gabinet lekarza w tej placówce
 
     clinic: Mapped["Clinic"] = relationship()
     user = relationship("AppUser")

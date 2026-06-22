@@ -60,11 +60,16 @@ class DoctorOut(BaseModel):
     specializations: list[str] = []
     academic_title: str | None
     slot_duration_min: int | None = None  # długość wizyty [min]; None = siatka placówki
+    room: str | None = None               # stały gabinet w tej placówce
 
 
 class DoctorVisitLengthIn(BaseModel):
     # None = przywróć domyślną siatkę placówki; inaczej własna długość wizyty lekarza
     slot_duration_min: int | None = Field(default=None, ge=5, le=120)
+
+
+class DoctorRoomIn(BaseModel):
+    room: str | None = Field(default=None, max_length=20)
 
 
 class PatientAssignIn(BaseModel):
@@ -178,7 +183,7 @@ def list_clinic_doctors(
 ):
     get_clinic_or_404(clinic_id, db)
     rows = db.execute(
-        select(Doctor, AppUser)
+        select(Doctor, AppUser, StaffClinic)
         .join(AppUser, AppUser.user_id == Doctor.doctor_id)
         .join(StaffClinic, StaffClinic.user_id == Doctor.doctor_id)
         .where(StaffClinic.clinic_id == clinic_id, StaffClinic.end_date.is_(None))
@@ -187,9 +192,9 @@ def list_clinic_doctors(
         DoctorOut(
             doctor_id=d.doctor_id, name=u.username,
             specializations=list(d.specialization_names), academic_title=d.academic_title,
-            slot_duration_min=d.slot_duration_min,
+            slot_duration_min=d.slot_duration_min, room=sc.room,
         )
-        for d, u in rows
+        for d, u, sc in rows
     ]
 
 
@@ -217,6 +222,28 @@ def set_doctor_visit_length(
     doctor.slot_duration_min = body.slot_duration_min
     db.commit()
     return {"doctor_id": str(doctor_id), "slot_duration_min": doctor.slot_duration_min}
+
+
+@router.patch("/{clinic_id}/doctors/{doctor_id}/room")
+def set_doctor_room(
+    clinic_id: UUID,
+    doctor_id: UUID,
+    body: DoctorRoomIn,
+    user: AppUser = Depends(require_roles("kierownik", "administrator")),
+    db: Session = Depends(get_db),
+):
+    """Stały gabinet lekarza w tej placówce — ustawia kierownik/administrator. Używany
+    przy meldowaniu pacjenta przez recepcję (nie wpisuje go ręcznie). Per placówka,
+    bo lekarz może przyjmować w różnych gabinetach w różnych placówkach."""
+    get_clinic_or_404(clinic_id, db)
+    assert_staff_in_clinic(db, user, clinic_id)
+    sc = db.scalar(select(StaffClinic).where(
+        StaffClinic.clinic_id == clinic_id, StaffClinic.user_id == doctor_id, StaffClinic.end_date.is_(None)))
+    if sc is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Lekarz nie jest przypisany do tej placówki.")
+    sc.room = (body.room or "").strip() or None
+    db.commit()
+    return {"doctor_id": str(doctor_id), "room": sc.room}
 
 
 @router.post("/{clinic_id}/patients", status_code=status.HTTP_201_CREATED)
