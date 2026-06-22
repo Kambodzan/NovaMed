@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarPlus, ClipboardList, RefreshCw } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, ClipboardList, RefreshCw } from 'lucide-react'
 import { Button, EmptyState, Field, Modal, Overline, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL } from '../../lib/format'
-import type { DocumentOut } from '../../lib/types'
+import type { DocumentOut, ProcedureOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
 import { TimePicker } from '../../components/TimePicker'
 
@@ -25,6 +25,15 @@ export function Skierowania() {
     refetchInterval: 20000,
     refetchOnWindowFocus: true,
   })
+
+  // zabiegi już zaplanowane na wybrany dzień — żeby ostrzec o zajętej godzinie
+  // (NIE blokujemy: kilka zastrzyków na tę samą godzinę to norma)
+  const { data: dayProcs } = useQuery({
+    queryKey: ['procedures-day', date],
+    queryFn: () => api<ProcedureOut[]>(`/procedures/day?day=${date}`),
+    enabled: !!planFor,
+  })
+  const clash = (dayProcs ?? []).filter(p => p.procedure_status === 'PLANNED' && p.procedure_datetime.slice(11, 16) === time)
 
   const openPlan = (r: DocumentOut) => {
     setPlanFor(r); setMode('single'); setCount(5); setIntervalDays(1); setError(null)
@@ -129,6 +138,13 @@ export function Skierowania() {
               </Field>
               <Field label="Godzina"><TimePicker value={time} onChange={setTime} /></Field>
             </div>
+
+            {clash.length > 0 && (
+              <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-semibold text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+                Masz już na {time} {clash.length === 1 ? 'zabieg' : `${clash.length} zabiegi`} ({clash[0].patient_name}{clash.length > 1 ? ' i in.' : ''}). Możesz dodać kolejny — to tylko przypomnienie.
+              </p>
+            )}
 
             {mode === 'series' && (
               <>

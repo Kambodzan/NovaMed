@@ -7,6 +7,7 @@ import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { ProcedureOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
+import { TimePicker } from '../../components/TimePicker'
 import { confirm } from '../../lib/confirm'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -68,6 +69,17 @@ export function Zabiegi() {
     setRsTime(p.procedure_datetime.slice(11, 16))
     setError(null)
   }
+
+  // zabiegi na docelowy dzień przekładania — ostrzeżenie o zajętej godzinie (bez blokady)
+  const { data: rsDayProcs } = useQuery({
+    queryKey: ['procedures-day', rsDate],
+    queryFn: () => api<ProcedureOut[]>(`/procedures/day?day=${rsDate}`),
+    enabled: !!rescheduleFor && !!rsDate,
+  })
+  const rsClash = (rsDayProcs ?? []).filter(p =>
+    p.procedure_status === 'PLANNED'
+    && p.procedure_id !== rescheduleFor?.procedure_id
+    && p.procedure_datetime.slice(11, 16) === rsTime)
 
   const planned = (procedures ?? []).filter(p => p.procedure_status === 'PLANNED').length
   const done = (procedures ?? []).filter(p => p.procedure_status === 'DONE').length
@@ -205,9 +217,13 @@ export function Zabiegi() {
         >
           <div className="grid grid-cols-2 gap-3 pb-2">
             <Field label="Nowa data"><DatePicker value={rsDate} min={todayIso()} onChange={setRsDate} /></Field>
-            <Field label="Godzina">
-              <input type="time" className={inputCls} value={rsTime} onChange={e => setRsTime(e.target.value)} />
-            </Field>
+            <Field label="Godzina"><TimePicker value={rsTime} onChange={setRsTime} /></Field>
+            {rsClash.length > 0 && (
+              <p className="col-span-2 flex items-start gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-semibold text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+                Masz już na {rsTime} {rsClash.length === 1 ? 'zabieg' : `${rsClash.length} zabiegi`} ({rsClash[0].patient_name}{rsClash.length > 1 ? ' i in.' : ''}). Przełożenie jest OK — to tylko przypomnienie.
+              </p>
+            )}
             {error && <p className="col-span-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
           </div>
         </Modal>

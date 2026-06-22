@@ -229,3 +229,4 @@ def test_zalegle_zabiegi(client, nursing_setup, db_session):
     client.post(f"/procedures/{proc['procedure_id']}/complete",
                 json={"notes": "Wykonano z opóźnieniem."}, headers=auth_header(s["nurse_token"]))
     assert client.get("/procedures/overdue", headers=auth_header(s["nurse_token"])).json() == []
+
