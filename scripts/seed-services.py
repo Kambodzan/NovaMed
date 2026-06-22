@@ -36,12 +36,14 @@ def login(email: str) -> dict:
 # „dodatkowa" = USG/echo/pakiet (nakłada się z konsultacją); reszta to konsultacja-baza.
 # „teleporada" = czy usługę można odbyć jako wideo. Teleporada jest ZAWSZE płatna z góry
 # (online), więc dajemy ją tylko na PRYWATNYCH konsultacjach; NFZ i badania → bez wideo.
+# UWAGA: czas usługi (2. pole) MUSI być wielokrotnością siatki placówki (atom) —
+# domyślnie 15 min, więc 15/30/45/60… Backend odrzuci nie-wielokrotność (422).
 CATALOG = {
     "Kardiolog": [
-        ("Konsultacja kardiologiczna", 20, None, True, None, False, False),
-        ("Konsultacja kardiologiczna (prywatnie)", 20, 200, False, "Wizyta prywatna — bez skierowania.", False, True),
-        ("Echo serca (USG)", 20, 150, False, "Badanie echokardiograficzne serca.", True, False),
-        ("Konsultacja kardiologiczna + echo serca", 40, 250, False,
+        ("Konsultacja kardiologiczna", 30, None, True, None, False, False),
+        ("Konsultacja kardiologiczna (prywatnie)", 30, 200, False, "Wizyta prywatna — bez skierowania.", False, True),
+        ("Echo serca (USG)", 30, 150, False, "Badanie echokardiograficzne serca.", True, False),
+        ("Konsultacja kardiologiczna + echo serca", 45, 250, False,
          "Konsultacja kardiologa wraz z badaniem echo serca w jednej wizycie.", True, False),
     ],
     "Internista": [
@@ -50,13 +52,13 @@ CATALOG = {
         ("USG jamy brzusznej", 30, 180, False, "Badanie USG narządów jamy brzusznej.", True, False),
     ],
     "Diabetolog": [
-        ("Konsultacja diabetologiczna", 20, None, True, None, False, False),
-        ("Konsultacja diabetologiczna (prywatnie)", 20, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
+        ("Konsultacja diabetologiczna", 30, None, True, None, False, False),
+        ("Konsultacja diabetologiczna (prywatnie)", 30, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
     ],
     "Endokrynolog": [
-        ("Konsultacja endokrynologiczna", 20, None, True, None, False, False),
-        ("Konsultacja endokrynologiczna (prywatnie)", 20, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
-        ("USG tarczycy", 20, 160, False, "Badanie USG tarczycy.", True, False),
+        ("Konsultacja endokrynologiczna", 30, None, True, None, False, False),
+        ("Konsultacja endokrynologiczna (prywatnie)", 30, 180, False, "Wizyta prywatna — bez skierowania.", False, True),
+        ("USG tarczycy", 30, 160, False, "Badanie USG tarczycy.", True, False),
     ],
 }
 

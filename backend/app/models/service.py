@@ -17,7 +17,7 @@ class Service(Base):
     clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinic.clinic_id"))
     name: Mapped[str] = mapped_column(String(120))
     specialization: Mapped[str | None] = mapped_column(String(100))  # do filtrowania w wyszukiwarce
-    duration_min: Mapped[int] = mapped_column(Integer, default=15)   # czas usługi = krok siatki terminów
+    duration_min: Mapped[int] = mapped_column(Integer, default=15)   # czas usługi = WIELOKROTNOŚĆ siatki placówki (atom)
     price: Mapped[float | None] = mapped_column(Numeric(8, 2))       # NULL = NFZ/bezpłatna
     referral_required: Mapped[bool] = mapped_column(Boolean, default=False)
     # czy usługę można odbyć jako teleporadę (konsultacja: tak; badanie USG/echo: nie).

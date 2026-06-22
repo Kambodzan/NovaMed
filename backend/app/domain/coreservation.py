@@ -8,20 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.appointments import AppointmentStatus
-from app.models import Appointment, Clinic, Doctor
+from app.models import Appointment, Clinic
 
 DEFAULT_DURATION_MIN = 15
 
 
 def _effective_minutes(db: Session, a: Appointment) -> int:
     """Czas trwania slotu: z usługi (`duration_min`), a dla zwykłej wizyty bez czasu —
-    efektywnie krok siatki lekarza/placówki (tyle realnie zajmuje wizyta)."""
+    siatka placówki (atom). Po cofnięciu #36 nie ma już długości per lekarz."""
     if a.duration_min:
         return a.duration_min
-    if a.doctor_id:
-        doc = db.get(Doctor, a.doctor_id)
-        if doc and doc.slot_duration_min:
-            return doc.slot_duration_min
     if a.clinic_id:
         c = db.get(Clinic, a.clinic_id)
         if c and c.slot_interval_min:
