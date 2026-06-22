@@ -1,12 +1,13 @@
 // Panel Poradni → Grafik: dostępność PER LEKARZ — „kiedy lekarz X ma wolny termin".
 // Druga oś recepcji obok Kalendarza (ten jest pacjent×dzień, ten lekarz×czas).
-// Na górze „najbliższy wolny" per lekarz (chcę jak najszybciej / do dr X), niżej
-// tydzień wybranego lekarza z klikalnymi wolnymi okienkami → umawianie.
+// Wyszukiwarka lekarz/specjalizacja („chcę do kardiologa"), tryb „cała sieć"
+// (lekarz nie ma u nas, ale jest w innej placówce jutro), tydzień z klikalnymi
+// wolnymi okienkami → umawianie. „Dodaj terminy" tylko kierownik.
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarRange, ChevronLeft, ChevronRight, MapPin, Plus, Video } from 'lucide-react'
-import { Button, EmptyState, Loading, PageHeader, Tile, cx } from '../../ui'
+import { Building2, CalendarRange, ChevronLeft, ChevronRight, MapPin, Plus, Search, Video, X } from 'lucide-react'
+import { Button, EmptyState, Loading, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { formatTime } from '../../lib/format'
@@ -15,12 +16,14 @@ import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DodajTerminy } from '../../components/DodajTerminy'
 
 interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
+interface Pick { key: string; label: string; specs: string[] }
 
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const todayIso = () => isoLocal(new Date())
 const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoLocal(d) }
 const dayLabel = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' })
 const shortDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })
+const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const EXAM = '__exam'
 
 export function Grafik() {
@@ -29,6 +32,8 @@ export function Grafik() {
   const { me } = useAuth()
   const canManage = me?.role === 'kierownik' || me?.role === 'administrator'
   const { clinics, clinic, setClinicId } = useClinicSelection()
+  const [scope, setScope] = useState<'clinic' | 'network'>('clinic')
+  const [q, setQ] = useState('')
   const [weekStart, setWeekStart] = useState(todayIso())
   const [doctorKey, setDoctorKey] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -38,13 +43,13 @@ export function Grafik() {
     queryFn: () => api<DoctorRow[]>(`/clinics/${clinic!.clinic_id}/doctors`),
     enabled: !!clinic,
   })
+  // sloty: ta placówka albo cała sieć (backend filtruje opcjonalnie po clinic_id)
   const { data: slots } = useQuery({
-    queryKey: ['clinic-slots', clinic?.clinic_id],
-    queryFn: () => api<AppointmentOut[]>(`/slots?clinic_id=${clinic!.clinic_id}`),
-    enabled: !!clinic,
+    queryKey: ['grafik-slots', scope, clinic?.clinic_id],
+    queryFn: () => api<AppointmentOut[]>(scope === 'network' ? '/slots' : `/slots?clinic_id=${clinic!.clinic_id}`),
+    enabled: scope === 'network' || !!clinic,
   })
 
-  // wolne sloty pogrupowane po lekarzu (+ Pracownia dla badań bez lekarza)
   const free = useMemo(() => (slots ?? []).filter(s => s.appointment_status === 'FREE'), [slots])
   const nextFree = useMemo(() => {
     const m = new Map<string, string>()
@@ -56,29 +61,43 @@ export function Grafik() {
     return m
   }, [free])
 
-  // kolumny wyboru: lekarze placówki + Pracownia (jeśli są wolne badania)
-  const picks = useMemo(() => {
-    const out: { key: string; label: string; specs: string[] }[] =
-      (doctors ?? []).map(d => ({ key: d.doctor_id, label: d.name, specs: d.specializations }))
+  // lekarze do wyboru: w trybie placówki — wszyscy jej lekarze (też bez wolnych);
+  // w trybie sieci — ci, którzy mają gdziekolwiek wolny termin (z danych slotów)
+  const picks = useMemo<Pick[]>(() => {
+    if (scope === 'network') {
+      const m = new Map<string, Pick>()
+      for (const s of free) {
+        const key = s.doctor_id ?? EXAM
+        if (!m.has(key)) m.set(key, { key, label: s.doctor_id ? s.doctor_name : 'Pracownia (badania)', specs: s.specializations })
+      }
+      return [...m.values()].sort((a, b) => (a.key === EXAM ? 1 : 0) - (b.key === EXAM ? 1 : 0) || a.label.localeCompare(b.label))
+    }
+    const out: Pick[] = (doctors ?? []).map(d => ({ key: d.doctor_id, label: d.name, specs: d.specializations }))
     if (free.some(s => s.doctor_id == null)) out.push({ key: EXAM, label: 'Pracownia (badania)', specs: [] })
     return out
-  }, [doctors, free])
+  }, [scope, free, doctors])
 
-  const activeKey = doctorKey ?? picks[0]?.key ?? null
+  // wyszukiwarka: lekarz lub specjalizacja („chcę do kardiologa")
+  const filtered = useMemo(() => {
+    const needle = fold(q.trim())
+    return needle ? picks.filter(p => fold(`${p.label} ${p.specs.join(' ')}`).includes(needle)) : picks
+  }, [picks, q])
+
+  const active = filtered.find(p => p.key === doctorKey) ?? filtered[0]
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
   // wolne okienka aktywnego lekarza w bieżącym tygodniu, pogrupowane po dniu
   const byDay = useMemo(() => {
     const m = new Map<string, AppointmentOut[]>()
-    if (!activeKey) return m
+    if (!active) return m
     for (const s of free) {
-      if ((s.doctor_id ?? EXAM) !== activeKey) continue
+      if ((s.doctor_id ?? EXAM) !== active.key) continue
       const day = s.appointment_datetime.slice(0, 10)
       if (day < days[0] || day > days[6]) continue
-      ;(m.get(day) ?? m.set(day, []).get(day)!).push(s)
+      const arr = m.get(day); if (arr) arr.push(s); else m.set(day, [s])
     }
     for (const arr of m.values()) arr.sort((a, b) => a.appointment_datetime.localeCompare(b.appointment_datetime))
     return m
-  }, [free, activeKey, days])
+  }, [free, active, days])
 
   // wybór lekarza skacze tygodniem do jego najbliższego wolnego (od razu widać kiedy)
   const pickDoctor = (key: string) => {
@@ -88,42 +107,64 @@ export function Grafik() {
   }
   const book = (slot: AppointmentOut) => navigate('/umow', { state: { slot } })
 
-  const active = picks.find(p => p.key === activeKey)
-
   return (
     <div className="space-y-6">
       <div className="fade-up">
         <PageHeader
-          overline={clinic?.clinic_name ?? '…'}
-          title="Grafik"
-          sub="Dostępność lekarzy — kiedy jest wolny termin"
+          overline={scope === 'network' ? 'Cała sieć placówek' : clinic?.clinic_name ?? '…'}
+          title="Grafik lekarzy"
+          sub="Dostępność — kiedy lekarz ma wolny termin"
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />
+              <div className="flex rounded-full bg-gray-100 p-0.5">
+                {(['clinic', 'network'] as const).map(s => (
+                  <button key={s} onClick={() => setScope(s)}
+                    className={cx('cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
+                      scope === s ? 'bg-surface text-primary tile-shadow' : 'text-gray-500 hover:text-gray-900')}>
+                    {s === 'clinic' ? 'Ta placówka' : 'Cała sieć'}
+                  </button>
+                ))}
+              </div>
+              {scope === 'clinic' && <ClinicSelect clinics={clinics} value={clinic?.clinic_id} onChange={setClinicId} />}
               <div className="flex items-center gap-1">
                 <button onClick={() => setWeekStart(w => addDays(w, -7))} aria-label="Poprzedni tydzień" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100"><ChevronLeft size={16} /></button>
                 <span className="min-w-28 text-center text-sm font-extrabold text-gray-900">{shortDate(days[0])} – {shortDate(days[6])}</span>
                 <button onClick={() => setWeekStart(w => addDays(w, 7))} aria-label="Następny tydzień" className="cursor-pointer rounded-full p-1.5 text-gray-500 hover:bg-gray-100"><ChevronRight size={16} /></button>
                 {weekStart !== todayIso() && <Button variant="ghost" size="sm" onClick={() => setWeekStart(todayIso())}>Ten tydzień</Button>}
               </div>
-              {canManage && clinic && <Button variant="secondary" size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Dodaj terminy</Button>}
+              {canManage && scope === 'clinic' && clinic && <Button variant="secondary" size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Dodaj terminy</Button>}
             </div>
           }
         />
       </div>
 
-      {!clinic || doctors === undefined || slots === undefined ? <Loading /> : picks.length === 0 ? (
+      {/* szukaj lekarza lub specjalizacji (chcę do kardiologa) */}
+      {picks.length > 0 && (
+        <div className="relative max-w-md fade-up">
+          <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
+          <input className={cx(inputCls, 'w-full pl-10 pr-8')} placeholder="Szukaj lekarza lub specjalizacji…"
+            value={q} onChange={e => setQ(e.target.value)} />
+          {q && <button onClick={() => setQ('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-500 hover:text-gray-700"><X size={14} /></button>}
+        </div>
+      )}
+
+      {(scope === 'clinic' && (!clinic || doctors === undefined)) || slots === undefined ? <Loading /> : picks.length === 0 ? (
         <Tile className="p-5">
-          <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />} title="Brak lekarzy w placówce"
-            hint="Przypisz lekarzy do placówki w Panelu Admina." />
+          <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />} title="Brak lekarzy z wolnymi terminami"
+            hint={scope === 'network' ? 'Brak wolnych terminów w całej sieci.' : 'Dodaj terminy albo sprawdź „Całą sieć".'} />
+        </Tile>
+      ) : filtered.length === 0 ? (
+        <Tile className="p-5">
+          <EmptyState icon={<Search size={26} strokeWidth={1.5} />} title="Brak lekarza dla frazy"
+            hint={scope === 'clinic' ? 'Spróbuj w „Całej sieci" — może przyjmuje w innej placówce.' : 'Zmień frazę wyszukiwania.'} />
         </Tile>
       ) : (
         <>
           {/* najbliższy wolny per lekarz — wybór lekarza + skok do jego terminu */}
           <div className="flex flex-wrap gap-2 fade-up">
-            {picks.map(p => {
+            {filtered.map(p => {
               const nf = nextFree.get(p.key)
-              const isActive = p.key === activeKey
+              const isActive = p.key === active?.key
               return (
                 <button key={p.key} onClick={() => pickDoctor(p.key)}
                   className={cx('flex min-w-44 flex-col items-start gap-0.5 rounded-2xl px-4 py-3 text-left transition-colors',
@@ -161,6 +202,9 @@ export function Grafik() {
                             {s.appointment_type === 'ONLINE' ? <Video size={12} /> : <MapPin size={12} />}
                             {formatTime(s.appointment_datetime)}
                             {s.price ? <span className="font-bold opacity-70">· {s.price} zł</span> : null}
+                            {scope === 'network' && s.clinic_id !== clinic?.clinic_id && (
+                              <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-700"><Building2 size={9} /> {s.clinic_name}</span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -175,9 +219,9 @@ export function Grafik() {
 
       {showAdd && clinic && (
         <DodajTerminy clinicId={clinic.clinic_id} defaultDay={weekStart} interval={clinic.slot_interval_min}
-          defaultDoctorId={activeKey && activeKey !== EXAM ? activeKey : undefined}
+          defaultDoctorId={active && active.key !== EXAM ? active.key : undefined}
           onClose={() => setShowAdd(false)}
-          onAdded={() => void queryClient.invalidateQueries({ queryKey: ['clinic-slots', clinic.clinic_id] })} />
+          onAdded={() => void queryClient.invalidateQueries({ queryKey: ['grafik-slots'] })} />
       )}
     </div>
   )

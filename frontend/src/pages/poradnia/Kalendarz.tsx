@@ -147,6 +147,14 @@ export function Kalendarz() {
           </span>
         )}
         {(live || paused || done) && <StatusBadge status={a.appointment_status} />}
+        {a.appointment_status === 'CONFIRMED' && (
+          <span className="flex shrink-0 items-center gap-0.5">
+            <button type="button" onClick={() => { setError(null); setRescheduleFor(a) }}
+              className="cursor-pointer rounded-full px-2.5 py-1 text-xs font-extrabold text-gray-600 hover:bg-gray-200/70">Przełóż</button>
+            <button type="button" disabled={cancel.isPending} onClick={() => void doCancel(a)}
+              className="cursor-pointer rounded-full px-2.5 py-1 text-xs font-extrabold text-red-600 hover:bg-red-50">Odwołaj</button>
+          </span>
+        )}
         {waiting ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold text-white">
             <UserCheck size={12} /> czeka{room ? ` · gab. ${room}` : ''}
