@@ -96,7 +96,12 @@ export function PacjentRecord() {
                     {formatDatePL(v.appointment_datetime)}, {formatTime(v.appointment_datetime)}
                   </p>
                   <p className="truncate text-xs font-medium text-gray-500">
-                    {v.doctor_id ? v.doctor_name : v.service_name} · {v.price ? `${v.price} zł` : 'NFZ'}
+                    {v.doctor_id ? v.doctor_name : v.service_name}{v.doctor_id && v.service_name ? ` · ${v.service_name}` : ''} · {v.price ? `${v.price} zł` : 'NFZ'}
+                  </p>
+                  <p className="mt-0.5 flex items-start gap-1 text-xs font-medium text-gray-500">
+                    {v.appointment_type === 'ONLINE'
+                      ? <><Video size={11} className="mt-0.5 shrink-0" /> Teleporada (wideo)</>
+                      : <><MapPin size={11} className="mt-0.5 shrink-0" /> <span><span className="font-bold text-gray-700">{v.clinic_name}</span>{v.clinic_address ? `, ${v.clinic_address}` : ''}</span></>}
                   </p>
                 </div>
                 {v.doctor_id && (
@@ -162,7 +167,7 @@ export function PacjentRecord() {
                           {formatDatePL(v.appointment_datetime)}, {formatTime(v.appointment_datetime)}
                         </p>
                         <p className="text-xs font-medium text-gray-500">
-                          {v.doctor_name} · {v.appointment_type === 'ONLINE' ? 'teleporada' : 'stacjonarna'}
+                          {v.doctor_name} · {v.appointment_type === 'ONLINE' ? 'teleporada' : v.clinic_name}
                           {expandable && !d!.note ? ' · brak noty' : ''}
                         </p>
                       </div>

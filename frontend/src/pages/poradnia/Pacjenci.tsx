@@ -9,8 +9,11 @@ import { Badge, Button, EmptyState, Loading, Modal, PageHeader, Tile, cx, inputC
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
 import { birthFromPesel } from '../../lib/pesel'
+import { confirm } from '../../lib/confirm'
+import { pushToast } from '../../lib/toast'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
+import { StaffReschedule } from '../../components/StaffReschedule'
 
 interface PatientRow {
   patient_id: string
@@ -121,17 +124,32 @@ export function PacjenciPlacowki() {
 }
 
 // ---- modal szczegółów pacjenta ----
-function ApptLine({ a, tone }: { a: AppointmentOut; tone?: 'primary' }) {
+function ApptLine({ a, tone, onReschedule, onCancel, busy }: {
+  a: AppointmentOut; tone?: 'primary'; onReschedule?: () => void; onCancel?: () => void; busy?: boolean
+}) {
   const online = a.appointment_type === 'ONLINE'
   return (
-    <div className={cx('flex items-center gap-3 rounded-2xl px-4 py-2.5', tone === 'primary' ? 'bg-primary-soft' : 'bg-gray-50')}>
-      <span className={cx('shrink-0 text-sm font-extrabold [font-variant-numeric:tabular-nums]', tone === 'primary' ? 'text-primary' : 'text-gray-900')}>
-        {formatDatePL(a.appointment_datetime)}<span className="ml-1 font-bold">{formatTime(a.appointment_datetime)}</span>
-      </span>
-      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-500">
-        {online ? <Video size={12} className="mr-1 inline" /> : <MapPin size={12} className="mr-1 inline" />}
-        {a.doctor_id ? a.doctor_name : a.service_name}{a.doctor_id && a.service_name ? ` · ${a.service_name}` : ''}
-      </span>
+    <div className={cx('rounded-2xl px-4 py-3', tone === 'primary' ? 'bg-primary-soft' : 'bg-gray-50')}>
+      <div className="flex items-center gap-2">
+        <span className={cx('shrink-0 text-sm font-extrabold [font-variant-numeric:tabular-nums]', tone === 'primary' ? 'text-primary' : 'text-gray-900')}>
+          {formatDatePL(a.appointment_datetime)}<span className="ml-1">{formatTime(a.appointment_datetime)}</span>
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{a.doctor_id ? a.doctor_name : (a.service_name ?? 'Pracownia')}</span>
+      </div>
+      {/* CO — usługa/typ wizyty */}
+      {a.doctor_id && a.service_name && <p className="mt-0.5 truncate text-xs font-medium text-gray-500">{a.service_name}</p>}
+      {/* GDZIE — placówka + adres (albo teleporada) */}
+      <p className="mt-0.5 flex items-start gap-1 text-xs font-medium text-gray-500">
+        {online
+          ? <><Video size={12} className="mt-0.5 shrink-0" /> Teleporada (wideo)</>
+          : <><MapPin size={12} className="mt-0.5 shrink-0" /> <span><span className="font-bold text-gray-700">{a.clinic_name}</span>{a.clinic_address ? `, ${a.clinic_address}` : ''}</span></>}
+      </p>
+      {(onReschedule || onCancel) && (
+        <div className="mt-2 flex gap-2">
+          {onReschedule && <button onClick={onReschedule} disabled={busy} className="cursor-pointer rounded-full bg-surface px-3 py-1 text-xs font-extrabold text-gray-700 tile-shadow hover:text-primary disabled:opacity-50">Przełóż</button>}
+          {onCancel && <button onClick={onCancel} disabled={busy} className="cursor-pointer rounded-full bg-surface px-3 py-1 text-xs font-extrabold text-red-600 tile-shadow hover:bg-red-50 disabled:opacity-50">Odwołaj</button>}
+        </div>
+      )}
     </div>
   )
 }
@@ -150,6 +168,22 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
     queryKey: ['patient-appts', patient.patient_id],
     queryFn: () => api<AppointmentOut[]>(`/patients/${patient.patient_id}/appointments`),
   })
+  const qc = useQueryClient()
+  const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
+  const refreshAppts = () => {
+    void qc.invalidateQueries({ queryKey: ['patient-appts', patient.patient_id] })
+    void qc.invalidateQueries({ queryKey: ['clinic-slots'] })
+    void qc.invalidateQueries({ queryKey: ['clinic-day'] })
+  }
+  const cancel = useMutation({
+    mutationFn: (id: string) => api(`/appointments/${id}/cancel`, { method: 'POST' }),
+    onSuccess: refreshAppts,
+    onError: (e) => pushToast(e instanceof ApiError ? e.message : 'Nie udało się odwołać wizyty.', 'error'),
+  })
+  const doCancel = async (a: AppointmentOut) => {
+    if (await confirm({ title: 'Odwołać wizytę?', message: `${formatDatePL(a.appointment_datetime)}, ${formatTime(a.appointment_datetime)} — ${a.doctor_name}. Pacjent dostanie powiadomienie.`, tone: 'danger', confirmLabel: 'Odwołaj' }))
+      cancel.mutate(a.appointment_id)
+  }
   const birth = birthFromPesel(patient.pesel)
   const list = appts ?? []
   const startToday = new Date(); startToday.setHours(0, 0, 0, 0)
@@ -163,6 +197,7 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
   const totalVisits = completed.length
 
   return (
+    <>
     <Modal title={`${patient.first_name} ${patient.last_name}`}
       overline={`PESEL ${patient.pesel}${birth ? ` · ${ageOf(birth)} l.` : ''}`}
       onClose={onClose} wide
@@ -200,11 +235,11 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
         <div>
           <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-extrabold tracking-wide text-gray-500 uppercase"><CalendarClock size={13} /> Najbliższa wizyta</p>
           {appts === undefined ? <p className="px-1 text-sm text-gray-400">Wczytywanie…</p>
-            : next ? <ApptLine a={next} tone="primary" />
+            : next ? <ApptLine a={next} tone="primary" busy={cancel.isPending} onReschedule={() => setRescheduleFor(next)} onCancel={() => void doCancel(next)} />
               : <p className="rounded-2xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500">Brak nadchodzących wizyt.</p>}
           {upcoming.length > 1 && (
             <div className="mt-1.5 space-y-1.5">
-              {upcoming.slice(1, 3).map(a => <ApptLine key={a.appointment_id} a={a} />)}
+              {upcoming.slice(1, 3).map(a => <ApptLine key={a.appointment_id} a={a} busy={cancel.isPending} onReschedule={() => setRescheduleFor(a)} onCancel={() => void doCancel(a)} />)}
               {upcoming.length > 3 && <p className="px-1 text-xs font-semibold text-gray-400">+ {upcoming.length - 3} kolejnych</p>}
             </div>
           )}
@@ -221,5 +256,10 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
         </div>
       </div>
     </Modal>
+    {rescheduleFor && (
+      <StaffReschedule visit={rescheduleFor} onClose={() => setRescheduleFor(null)}
+        onDone={() => { setRescheduleFor(null); refreshAppts() }} />
+    )}
+    </>
   )
 }
