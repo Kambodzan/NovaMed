@@ -229,12 +229,12 @@ def set_doctor_room(
     clinic_id: UUID,
     doctor_id: UUID,
     body: DoctorRoomIn,
-    user: AppUser = Depends(require_roles("kierownik", "administrator")),
+    user: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
     db: Session = Depends(get_db),
 ):
-    """Stały gabinet lekarza w tej placówce — ustawia kierownik/administrator. Używany
-    przy meldowaniu pacjenta przez recepcję (nie wpisuje go ręcznie). Per placówka,
-    bo lekarz może przyjmować w różnych gabinetach w różnych placówkach."""
+    """Stały gabinet lekarza w tej placówce — ustawia RECEPCJA (gdzie dziś który lekarz
+    siedzi to wiedza front-desku, nie administratora). Używany przy meldowaniu pacjenta
+    (nie wpisuje go ręcznie). Per placówka, bo lekarz może przyjmować w różnych gabinetach."""
     get_clinic_or_404(clinic_id, db)
     assert_staff_in_clinic(db, user, clinic_id)
     sc = db.scalar(select(StaffClinic).where(

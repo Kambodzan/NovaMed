@@ -239,11 +239,14 @@ def test_meldowanie_pacjenta_przez_recepcje(client, factory):
     docs = client.get(f"/clinics/{clinic.clinic_id}/doctors", headers=auth_header(reg)).json()
     assert next(d for d in docs if d["doctor_id"] == str(doc_user.user_id))["room"] == "12"
 
-    # pielęgniarka nie zamelduje, rejestracja nie ustawi gabinetu (governance)
+    # pielęgniarka nie zamelduje ani nie ustawi gabinetu (governance)
     _, nurse = factory.user("pielegniarka")
     assert client.post(f"/appointments/{aid}/arrival", headers=auth_header(nurse), json={}).status_code == 403
     assert client.patch(f"/clinics/{clinic.clinic_id}/doctors/{doc_user.user_id}/room",
-                        headers=auth_header(reg), json={"room": "9"}).status_code == 403
+                        headers=auth_header(nurse), json={"room": "9"}).status_code == 403
+    # gabinety ustawia RECEPCJA (gdzie dziś który lekarz siedzi — front-desk, nie admin)
+    assert client.patch(f"/clinics/{clinic.clinic_id}/doctors/{doc_user.user_id}/room",
+                        headers=auth_header(reg), json={"room": "9"}).status_code == 200
 
 
 def test_lekarz_z_wieloma_specjalizacjami(client, factory):

@@ -39,13 +39,6 @@ export function ClinicSettingsPanel({ clinic }: { clinic: ClinicLite }) {
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać długości wizyty.'),
   })
-  const setRoom = useMutation({
-    mutationFn: ({ id, room }: { id: string; room: string | null }) =>
-      api(`/clinics/${clinic.clinic_id}/doctors/${id}/room`, { method: 'PATCH', body: { room } }),
-    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }) },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać gabinetu.'),
-  })
-
   return (
     <>
     <Tile className="p-5">
@@ -77,9 +70,9 @@ export function ClinicSettingsPanel({ clinic }: { clinic: ClinicLite }) {
 
       {docs && docs.length > 0 && (
         <div className="mt-6">
-          <p className="text-sm font-extrabold text-gray-900">Lekarze: długość wizyty i gabinet</p>
+          <p className="text-sm font-extrabold text-gray-900">Lekarze: długość wizyty</p>
           <p className="mb-2 text-xs font-medium text-gray-500">
-            Długość pusta = siatka placówki ({intervalMin} min). Gabinet podpowiada się recepcji przy meldowaniu. Zapis po wyjściu z pola.
+            Długość pusta = siatka placówki ({intervalMin} min). Zapis po wyjściu z pola. Gabinety ustawia recepcja (Kalendarz → Gabinety).
           </p>
           <div className="space-y-1.5">
             {docs.map(d => (
@@ -93,12 +86,6 @@ export function ClinicSettingsPanel({ clinic }: { clinic: ClinicLite }) {
                     if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
                   }} />
                 <span className="text-xs font-bold text-gray-500">min</span>
-                <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="gab."
-                  aria-label="gabinet" className={`${inputCls} w-20 text-center`}
-                  onBlur={e => {
-                    const v = e.target.value.trim() || null
-                    if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v })
-                  }} />
               </div>
             ))}
           </div>
