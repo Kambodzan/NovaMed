@@ -14,6 +14,7 @@ import { confirm } from '../../lib/confirm'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
+import { TimePicker } from '../../components/TimePicker'
 import { Select } from '../../components/Select'
 
 const DAY_KEY = 'novamed-kalendarz-day'
@@ -277,12 +278,24 @@ export function Kalendarz() {
   )
 }
 
+// generuje godziny startu slotów od „from" (włącznie) do „to" (wyłącznie) co `step` min;
+// gdy zakres pusty/odwrotny → pojedynczy slot o godzinie „from"
+const slotTimes = (from: string, to: string, step: number): string[] => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const min = (s: string) => { const [h, m] = s.split(':').map(Number); return h * 60 + m }
+  const a = min(from), b = min(to)
+  if (b <= a || !step) return [from]
+  const out: string[] = []
+  for (let m = a; m < b; m += step) out.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`)
+  return out
+}
+
 // ---- modal: dodawanie terminów (dawne „Terminy") ----
 function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
   clinicId: string; defaultDay: string; interval: number; onClose: () => void; onAdded: () => void
 }) {
   const [form, setForm] = useState({
-    kind: 'visit', service: '', service_id: '', doctor_id: '', date: defaultDay, time: '09:00',
+    kind: 'visit', service: '', service_id: '', doctor_id: '', date: defaultDay, from: '09:00', to: '14:00',
     modality: 'STATIONARY', price: '', weeks: '1',
   })
   const [error, setError] = useState<string | null>(null)
@@ -304,16 +317,21 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
   const effInterval = form.kind === 'visit'
     ? (pickedService?.duration_min ?? selectedDoctor?.slot_duration_min ?? interval)
     : interval
+  // zakres Od–Do → wszystkie sloty dnia co krok siatki; × powtarzanie tygodniowe
+  const dayTimes = slotTimes(form.from, form.to, effInterval)
+  const weeks = Math.max(1, Number(form.weeks) || 1)
+  const totalSlots = dayTimes.length * weeks
 
   const add = useMutation({
     mutationFn: () => {
-      const weeks = Math.max(1, Number(form.weeks) || 1)
-      const base = new Date(`${form.date}T${form.time}:00`)
       const pad = (n: number) => String(n).padStart(2, '0')
-      const datetimes = Array.from({ length: weeks }, (_, i) => {
-        const d = new Date(base); d.setDate(d.getDate() + i * 7)
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${form.time}:00`
-      })
+      const datetimes: string[] = []
+      for (let w = 0; w < weeks; w++) {
+        for (const t of dayTimes) {
+          const d = new Date(`${form.date}T${t}:00`); d.setDate(d.getDate() + w * 7)
+          datetimes.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${t}:00`)
+        }
+      }
       return api(`/clinics/${clinicId}/slots`, {
         method: 'POST',
         body: {
@@ -330,9 +348,9 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
       })
     },
     onSuccess: () => {
-      const weeks = Math.max(1, Number(form.weeks) || 1)
       setError(null)
-      setOk(weeks > 1 ? `Dodano ${weeks} terminów (co tydzień od ${form.date}).` : `Dodano termin ${form.date} ${form.time}.`)
+      setOk(`Dodano ${totalSlots} ${totalSlots === 1 ? 'termin' : 'terminów'}` +
+        (weeks > 1 ? ` (${dayTimes.length}/dzień × ${weeks} tyg.).` : ` (${form.from}–${form.to}).`))
       onAdded()
     },
     onError: (e) => { setOk(null); setError(e instanceof ApiError ? e.message : 'Nie udało się dodać terminu.') },
@@ -342,7 +360,8 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
     <Modal title="Dodaj terminy" overline="nowe wolne sloty w kalendarzu lekarza / pracowni" onClose={onClose} wide
       footer={<>
         <Button variant="ghost" onClick={onClose}>Zamknij</Button>
-        <Button disabled={add.isPending || (form.kind === 'visit' && !doctorId)} onClick={() => add.mutate()}><Plus size={15} /> Dodaj</Button>
+        <Button disabled={add.isPending || (form.kind === 'visit' && !doctorId) || totalSlots < 1 || totalSlots > 400}
+          onClick={() => add.mutate()}><Plus size={15} /> Dodaj {totalSlots > 1 ? `(${totalSlots})` : ''}</Button>
       </>}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Rodzaj">
@@ -368,8 +387,11 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
           </Field>
         )}
         <Field label="Data"><DatePicker value={form.date} min={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, date: v }))} /></Field>
-        <Field label="Godzina" hint={form.kind === 'visit' && selectedDoctor?.slot_duration_min ? `wizyty co ${effInterval} min (ustawienie lekarza)` : `siatka co ${effInterval} min`}>
-          <input type="time" className={inputCls} value={form.time} step={effInterval * 60} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+        <Field label="Od" hint={form.kind === 'visit' && selectedDoctor?.slot_duration_min ? `co ${effInterval} min (lekarz)` : `co ${effInterval} min`}>
+          <TimePicker value={form.from} stepMin={effInterval} onChange={v => setForm(f => ({ ...f, from: v }))} />
+        </Field>
+        <Field label="Do" hint={`wygeneruje ${dayTimes.length} ${dayTimes.length === 1 ? 'termin' : 'terminów'}/dzień`}>
+          <TimePicker value={form.to} stepMin={effInterval} onChange={v => setForm(f => ({ ...f, to: v }))} />
         </Field>
         <Field label="Forma">
           <Select value={form.modality} onChange={v => setForm(f => ({ ...f, modality: v }))}
@@ -389,6 +411,7 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
             options={[{ value: '1', label: 'jednorazowo' }, ...[2, 3, 4, 6, 8, 12].map(n => ({ value: String(n), label: `co tydzień ×${n}` }))]} />
         </Field>
       </div>
+      {totalSlots > 400 && <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm font-bold text-amber-800">Za dużo terminów naraz ({totalSlots}) — zawęź zakres godzin albo powtarzanie (max 400).</p>}
       {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       {ok && <p className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700">{ok}</p>}
     </Modal>
