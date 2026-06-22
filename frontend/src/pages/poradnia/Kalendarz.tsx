@@ -321,6 +321,9 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
   const dayTimes = slotTimes(form.from, form.to, effInterval)
   const weeks = Math.max(1, Number(form.weeks) || 1)
   const totalSlots = dayTimes.length * weeks
+  // badanie pracowniane oraz usługa bez teleporady (np. echo serca) → tylko stacjonarnie
+  const stationaryOnly = form.kind === 'exam' || (!!pickedService && !pickedService.allow_online)
+  const effModality = stationaryOnly ? 'STATIONARY_ONLY' : form.modality
 
   const add = useMutation({
     mutationFn: () => {
@@ -340,10 +343,11 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
           service_id: form.kind === 'visit' && form.service_id ? form.service_id : null,
           service_name: form.kind === 'exam' ? form.service.trim() : null,
           datetimes,
-          appointment_type: form.modality === 'ONLINE' ? 'ONLINE' : 'STATIONARY',
-          allow_online: form.modality !== 'STATIONARY_ONLY',
-          // przy usłudze cena pochodzi z usługi — nie wysyłamy ręcznej
-          price: form.kind === 'visit' && form.service_id ? null : (form.price ? Number(form.price) : null),
+          appointment_type: effModality === 'ONLINE' ? 'ONLINE' : 'STATIONARY',
+          allow_online: effModality !== 'STATIONARY_ONLY',
+          // cena ręczna TYLKO dla badań pracownianych; wizyty są NFZ (zwykła) albo
+          // mają cenę z usługi katalogowej
+          price: form.kind === 'exam' && form.price ? Number(form.price) : null,
         },
       })
     },
@@ -393,16 +397,20 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
         <Field label="Do" hint={`wygeneruje ${dayTimes.length} ${dayTimes.length === 1 ? 'termin' : 'terminów'}/dzień`}>
           <TimePicker value={form.to} stepMin={effInterval} onChange={v => setForm(f => ({ ...f, to: v }))} />
         </Field>
-        <Field label="Forma">
-          <Select value={form.modality} onChange={v => setForm(f => ({ ...f, modality: v }))}
-            options={[
-              { value: 'STATIONARY', label: 'stacjonarna (z opcją teleporady)' },
-              { value: 'STATIONARY_ONLY', label: 'stacjonarna (tylko)' },
-              { value: 'ONLINE', label: 'teleporada' },
-            ]} />
+        <Field label="Forma" hint={stationaryOnly ? (form.kind === 'exam' ? 'badanie — tylko w placówce' : 'ta usługa nie ma teleporady') : undefined}>
+          {stationaryOnly ? (
+            <input className={cx(inputCls, 'text-gray-500')} value="stacjonarna" disabled readOnly />
+          ) : (
+            <Select value={form.modality} onChange={v => setForm(f => ({ ...f, modality: v }))}
+              options={[
+                { value: 'STATIONARY', label: 'stacjonarna (z opcją teleporady)' },
+                { value: 'STATIONARY_ONLY', label: 'stacjonarna (tylko)' },
+                { value: 'ONLINE', label: 'teleporada' },
+              ]} />
+          )}
         </Field>
-        {!(form.kind === 'visit' && form.service_id) && (
-          <Field label="Cena [zł]" hint="puste = NFZ">
+        {form.kind === 'exam' && (
+          <Field label="Cena [zł]" hint="puste = NFZ (wymaga skierowania)">
             <input type="number" min="0" step="10" className={inputCls} value={form.price} placeholder="—" onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
           </Field>
         )}

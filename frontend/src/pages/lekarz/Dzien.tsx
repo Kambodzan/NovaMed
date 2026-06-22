@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, CheckCircle2, Clock, DoorOpen, MapPin, Pause, Users, Video, XCircle } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Clock, DoorOpen, MapPin, Pause, UserCheck, Users, Video, XCircle } from 'lucide-react'
 import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -179,6 +179,11 @@ export function LekarzDzien() {
                     v.patient_confirmed
                       ? <Badge tone="success">obecność potwierdzona</Badge>
                       : <Badge tone="warn">bez potwierdzenia</Badge>
+                  )}
+                  {v.checked_in_at && v.appointment_status === 'CONFIRMED' && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-extrabold text-white">
+                      <UserCheck size={12} /> pacjent czeka{v.room ? ` · gab. ${v.room}` : ''}
+                    </span>
                   )}
                   <StatusBadge status={v.appointment_status} />
                   <div className="flex gap-2">

@@ -208,6 +208,31 @@ def test_whitelista_odrzucona_platnosc_tylko_in_app(client, setup, db_session, i
     assert any(n["notification_title"] == "Płatność odrzucona" for n in notifs), "ale in-app powiadomienie zostaje"
 
 
+def test_meldowanie_pacjenta_przez_recepcje(client, factory):
+    """Recepcja melduje przybyłego pacjenta + przydziela gabinet; lekarz to widzi.
+    Cofnięcie czyści; pielęgniarka nie ma uprawnień (front-desk only)."""
+    reg_user, reg = factory.user("rejestracja")
+    doc_user, _ = factory.doctor()
+    pat_user, pat = factory.patient()
+    clinic = factory.clinic()
+    factory.employ(clinic, reg_user.user_id)
+    factory.employ(clinic, doc_user.user_id)
+    dt = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{clinic.clinic_id}/slots", headers=auth_header(reg),
+                       json={"doctor_id": str(doc_user.user_id), "datetimes": [dt.isoformat()]}).json()[0]
+    aid = slot["appointment_id"]
+    client.post(f"/appointments/{aid}/book", headers=auth_header(pat))
+    # melduje + gabinet 5
+    r = client.post(f"/appointments/{aid}/arrival", headers=auth_header(reg), json={"room": "5"})
+    assert r.status_code == 200 and r.json()["room"] == "5" and r.json()["checked_in_at"]
+    # cofnięcie meldunku
+    r2 = client.post(f"/appointments/{aid}/arrival", headers=auth_header(reg), json={"checked_in": False})
+    assert r2.json()["checked_in_at"] is None and r2.json()["room"] is None
+    # pielęgniarka nie zamelduje (front-desk only)
+    _, nurse = factory.user("pielegniarka")
+    assert client.post(f"/appointments/{aid}/arrival", headers=auth_header(nurse), json={}).status_code == 403
+
+
 def test_lekarz_z_wieloma_specjalizacjami(client, factory):
     """Lekarz z kilkoma specjalizacjami jest znajdowany pod KAŻDĄ z nich,
     a slot wystawia pełną listę specjalizacji (UC-P3)."""

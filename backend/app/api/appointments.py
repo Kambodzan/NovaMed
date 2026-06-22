@@ -157,6 +157,9 @@ class AppointmentOut(BaseModel):
     # płatność: do kiedy slot jest zablokowany (TEMP_LOCK) + status rozliczenia
     locked_until: datetime | None = None
     payment_status: str | None = None  # PENDING/PAID/FAILED/REFUNDED (wizyty płatne)
+    # meldowanie przez recepcję: pacjent czeka (od kiedy) + przydzielony gabinet
+    checked_in_at: datetime | None = None
+    room: str | None = None
 
 
 class PaymentInfoOut(BaseModel):
@@ -239,6 +242,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         patient_confirmed=a.patient_confirmed,
         locked_until=locked_until,
         payment_status=payment_status,
+        checked_in_at=a.checked_in_at,
+        room=a.room,
     )
 
 
@@ -247,6 +252,35 @@ def get_appointment_or_404(appointment_id: UUID, db: Session) -> Appointment:
     if a is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wizyta nie istnieje.")
     return a
+
+
+class ArrivalIn(BaseModel):
+    checked_in: bool = True
+    room: str | None = Field(default=None, max_length=20)
+
+
+@router.post("/appointments/{appointment_id}/arrival", response_model=AppointmentOut)
+def mark_arrival(
+    appointment_id: UUID,
+    body: ArrivalIn,
+    user: AppUser = Depends(require_roles("rejestracja", "kierownik", "administrator")),
+    db: Session = Depends(get_db),
+):
+    """Recepcja melduje przybycie pacjenta i przydziela gabinet (albo cofa meldunek) —
+    lekarz widzi „pacjent czeka" w planie dnia. Most recepcja↔gabinet."""
+    a = get_appointment_or_404(appointment_id, db)
+    assert_staff_in_clinic(db, user, a.clinic_id)
+    if a.patient_id is None or a.appointment_status != AppointmentStatus.CONFIRMED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Zameldować można tylko potwierdzoną wizytę z pacjentem.")
+    if body.checked_in:
+        a.checked_in_at = datetime.now()
+        a.room = (body.room or "").strip() or None
+    else:
+        a.checked_in_at = None
+        a.room = None
+    db.commit()
+    return appointment_out(db, a)
 
 
 @router.post("/clinics/{clinic_id}/slots", status_code=status.HTTP_201_CREATED, response_model=list[AppointmentOut])

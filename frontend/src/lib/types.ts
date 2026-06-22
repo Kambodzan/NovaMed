@@ -36,6 +36,8 @@ export interface AppointmentOut {
   patient_confirmed: boolean
   locked_until?: string | null
   payment_status?: string | null
+  checked_in_at?: string | null  // recepcja zameldowała pacjenta (czeka)
+  room?: string | null           // przydzielony gabinet
 }
 
 export interface NotificationOut {

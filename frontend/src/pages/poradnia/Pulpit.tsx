@@ -1,9 +1,10 @@
 // Pulpit rejestracji — przegląd dnia placówki + szybkie akcje. Liczy się z
 // grafiku dnia (/clinics/{id}/day), żeby od wejścia widać było obłożenie.
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CheckCircle2, ChevronRight, Clock, FlaskConical, Users, Video } from 'lucide-react'
-import { Button, Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
+import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CheckCircle2, ChevronRight, Clock, DoorOpen, FlaskConical, UserCheck, Users, Video, X } from 'lucide-react'
+import { Button, Loading, Modal, Overline, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { pushToast } from '../../lib/toast'
 import { formatTime } from '../../lib/format'
@@ -36,6 +37,16 @@ export function Pulpit() {
   const { clinics, clinic, setClinicId } = useClinicSelection()
   const navigate = useNavigate()
   const today = todayIso()
+  const [arriveFor, setArriveFor] = useState<AppointmentOut | null>(null)
+  const [room, setRoom] = useState('')
+
+  // meldowanie pacjenta (recepcja → lekarz): „przyszedł" + gabinet, oraz cofnięcie
+  const arrive = useMutation({
+    mutationFn: ({ id, room, checked_in }: { id: string; room?: string; checked_in?: boolean }) =>
+      api(`/appointments/${id}/arrival`, { method: 'POST', body: { room: room || null, checked_in: checked_in ?? true } }),
+    onSuccess: () => { setArriveFor(null); setRoom(''); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) },
+    onError: (e) => pushToast(e instanceof ApiError ? e.message : 'Nie udało się zameldować pacjenta.', 'error'),
+  })
 
   const remind = useMutation({
     mutationFn: () => api<{ sent: number }>(`/clinics/${clinic!.clinic_id}/remind-unconfirmed?day=${today}`, { method: 'POST' }),
@@ -58,11 +69,11 @@ export function Pulpit() {
   const free = all.filter(a => a.appointment_status === 'FREE')
   const completed = booked.filter(a => a.appointment_status === 'COMPLETED')
   const unconfirmed = booked.filter(a => a.appointment_status === 'CONFIRMED' && a.confirmation_requested && !a.patient_confirmed)
-  const now = new Date()
   const upcoming = booked
-    .filter(a => !FINISHED.includes(a.appointment_status) && new Date(a.appointment_datetime) >= now)
+    .filter(a => !FINISHED.includes(a.appointment_status))  // dziś, niezakończone (też spóźnieni)
     .sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))
-    .slice(0, 6)
+    .slice(0, 8)
+  const waiting = booked.filter(a => a.checked_in_at && a.appointment_status === 'CONFIRMED').length
   const dayLabel = new Date(today + 'T00:00:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })
 
   const openPatient = (a: AppointmentOut) => a.patient_id && navigate(`/pacjent/${a.patient_id}`)
@@ -82,7 +93,7 @@ export function Pulpit() {
         <>
           {/* statystyki dnia */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Wizyty dziś" value={booked.length} hint={`${completed.length} zakończonych`} tone="primary" />
+            <Stat label="Wizyty dziś" value={booked.length} hint={`${completed.length} zakończonych${waiting ? ` · ${waiting} czeka` : ''}`} tone="primary" />
             <Stat label="Wolne terminy" value={free.length} hint="do umówienia" />
             <Stat label="Bez potwierdzenia" value={unconfirmed.length} hint={unconfirmed.length ? 'zadzwoń / przypomnij' : 'wszystko potwierdzone'} tone={unconfirmed.length ? 'amber' : undefined} />
             <Stat label="Teleporady dziś" value={booked.filter(a => a.appointment_type === 'ONLINE').length} hint="wideo" />
@@ -116,9 +127,9 @@ export function Pulpit() {
               ) : (
                 <ul className="space-y-1.5">
                   {upcoming.map(a => (
-                    <li key={a.appointment_id}>
+                    <li key={a.appointment_id} className="flex items-center gap-2 rounded-2xl bg-gray-50 px-4 py-2.5">
                       <button onClick={() => openPatient(a)}
-                        className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-gray-50 px-4 py-2.5 text-left hover:bg-gray-100">
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
                         <span className="shrink-0 text-base font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{formatTime(a.appointment_datetime)}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-bold text-gray-900">{a.patient_name}</span>
@@ -126,10 +137,24 @@ export function Pulpit() {
                             {a.appointment_type === 'ONLINE' ? <Video size={12} /> : <Clock size={12} />} {a.doctor_name}
                           </span>
                         </span>
-                        {a.confirmation_requested && !a.patient_confirmed && (
-                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">bez potw.</span>
-                        )}
                       </button>
+                      {a.confirmation_requested && !a.patient_confirmed && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">bez potw.</span>
+                      )}
+                      {a.appointment_status === 'CONFIRMED' && a.appointment_type !== 'ONLINE' && (
+                        a.checked_in_at ? (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-extrabold text-primary">
+                            <UserCheck size={12} /> czeka{a.room ? ` · gab. ${a.room}` : ''}
+                            <button type="button" aria-label="Cofnij meldunek" disabled={arrive.isPending}
+                              onClick={() => arrive.mutate({ id: a.appointment_id, checked_in: false })}
+                              className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-primary/15"><X size={11} /></button>
+                          </span>
+                        ) : (
+                          <Button size="sm" variant="secondary" onClick={() => { setArriveFor(a); setRoom('') }}>
+                            <DoorOpen size={13} /> Przyszedł
+                          </Button>
+                        )
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -167,6 +192,31 @@ export function Pulpit() {
             </Tile>
           </div>
         </>
+      )}
+
+      {arriveFor && (
+        <Modal
+          overline={`${arriveFor.patient_name} · ${formatTime(arriveFor.appointment_datetime)}`}
+          title="Pacjent przyszedł"
+          onClose={() => setArriveFor(null)}
+          footer={<>
+            <Button variant="secondary" onClick={() => setArriveFor(null)}>Anuluj</Button>
+            <Button disabled={arrive.isPending} onClick={() => arrive.mutate({ id: arriveFor.appointment_id, room })}>
+              <UserCheck size={15} /> {arrive.isPending ? 'Meldowanie…' : 'Zamelduj'}
+            </Button>
+          </>}
+        >
+          <div className="space-y-3 pb-1">
+            <p className="text-sm font-medium text-gray-600">Lekarz <b>{arriveFor.doctor_name}</b> zobaczy, że pacjent czeka. Podaj gabinet, do którego ma się skierować.</p>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-bold text-gray-700">Gabinet (opcjonalnie)</span>
+              <input className={cx(inputCls, 'font-extrabold tracking-wider')} value={room} placeholder="np. 5"
+                maxLength={20} autoFocus
+                onChange={e => setRoom(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') arrive.mutate({ id: arriveFor.appointment_id, room }) }} />
+            </label>
+          </div>
+        </Modal>
       )}
     </div>
   )

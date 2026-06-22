@@ -65,6 +65,10 @@ class Appointment(Base):
     # BLOCKED i wskazuje wizytę, która go zablokowała (po jej odwołaniu wraca do puli)
     blocked_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("appointment.appointment_id"))
 
+    # meldowanie pacjenta przez recepcję: kiedy przyszedł + przydzielony gabinet
+    checked_in_at: Mapped[datetime | None] = mapped_column(DateTime)
+    room: Mapped[str | None] = mapped_column(String(20))
+
     patient = relationship("Patient")
     doctor = relationship("Doctor")
     nurse = relationship("Nurse")
