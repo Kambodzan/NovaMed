@@ -159,6 +159,8 @@ class AppointmentOut(BaseModel):
     # płatność: do kiedy slot jest zablokowany (TEMP_LOCK) + status rozliczenia
     locked_until: datetime | None = None
     payment_status: str | None = None  # PENDING/PAID/FAILED/REFUNDED (wizyty płatne)
+    invoice_requested: bool = False    # faktura (mini-mock) zażądana
+    invoice_number: str | None = None  # numer faktury, gdy wystawiona
     # meldowanie przez recepcję: pacjent czeka (od kiedy) + przydzielony gabinet
     checked_in_at: datetime | None = None
     room: str | None = None
@@ -178,6 +180,7 @@ class BookOut(BaseModel):
 
 class PayIn(BaseModel):
     outcome: str = Field(pattern="^(success|failure)$", description="Symulacja autoryzacji u operatora (mock)")
+    invoice: bool = False  # pacjent chce fakturę (mini-mock)
 
 
 class BookIn(BaseModel):
@@ -211,6 +214,7 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
     # płatność liczymy tylko gdy może istnieć (TEMP_LOCK lub wizyta płatna) —
     # bez dodatkowego zapytania dla zwykłych terminów NFZ
     locked_until = payment_status = None
+    invoice_requested, invoice_number = False, None
     if a.appointment_status == AppointmentStatus.TEMP_LOCK.value or a.price is not None:
         # aktywna płatność to oczekująca (PENDING) — po odmowie i ponowieniu jest obok
         # starej FAILED z tym samym created_at, więc PENDING musi mieć pierwszeństwo
@@ -218,6 +222,7 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
                         .order_by((Payment.payment_status == "PENDING").desc(), Payment.created_at.desc()))
         if pay is not None:
             payment_status = pay.payment_status
+            invoice_requested, invoice_number = pay.invoice_requested, pay.invoice_number
             if pay.payment_status == "PENDING":
                 locked_until = pay.created_at + timedelta(minutes=settings.temp_lock_minutes)
     return AppointmentOut(
@@ -246,6 +251,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         patient_confirmed=a.patient_confirmed,
         locked_until=locked_until,
         payment_status=payment_status,
+        invoice_requested=invoice_requested,
+        invoice_number=invoice_number,
         checked_in_at=a.checked_in_at,
         room=a.room,
     )
@@ -824,11 +831,9 @@ def book_for_patient(
     a.appointment_status = AppointmentStatus.CONFIRMED.value
     a.lock_expires_at = None
     block_overlapping(db, a)
-    if a.price is not None:
-        db.add(Payment(
-            appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
-            provider_ref="RECEPCJA", created_at=datetime.now(), paid_at=datetime.now(),
-        ))
+    # wizyta płatna umówiona przez recepcję NIE jest z góry opłacona — należność
+    # reguluje pacjent na miejscu przy meldowaniu (recepcja oznacza opłatę +
+    # ew. faktura przez /settle-payment). Wizyta jest CONFIRMED, płatność „do zapłaty".
     join, manage = audience_links(db, a, online=a.appointment_type == AppointmentType.ONLINE.value)
     notify(db, body.patient_id, *messages.visit_confirmed(
         visit_label(db, a), join_link=join, manage_link=manage), email=True)
@@ -897,6 +902,13 @@ def pay_appointment(
     if final_status == "PAID":
         payment.payment_status = "PAID"
         payment.paid_at = datetime.now()
+        if body.invoice:  # faktura best-effort — nie blokuje potwierdzenia płatności
+            payment.invoice_requested = True
+            try:
+                payment.invoice_number = payments.issue_invoice(
+                    amount=float(payment.amount), reference=f"appointment-{a.appointment_id}")
+            except IntegrationError:
+                pass
         assert_transition(a.appointment_status, AppointmentStatus.CONFIRMED)
         a.appointment_status = AppointmentStatus.CONFIRMED.value
         join, manage = audience_links(db, a, online=a.appointment_type == AppointmentType.ONLINE.value)
@@ -930,6 +942,43 @@ def pay_appointment(
             amount=float(payment.amount), payment_status=payment.payment_status,
         ),
     )
+
+
+class SettlePaymentIn(BaseModel):
+    invoice: bool = False               # pacjent chce fakturę
+    buyer: str | None = Field(default=None, max_length=200)  # nazwa na fakturę (mini-mock)
+
+
+@router.post("/appointments/{appointment_id}/settle-payment", response_model=AppointmentOut)
+def settle_payment(
+    appointment_id: UUID,
+    body: SettlePaymentIn,
+    _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    db: Session = Depends(get_db),
+    payments: PaymentsClient = Depends(get_payments_client),
+):
+    """Recepcja oznacza, że pacjent zapłacił NA MIEJSCU (płatna wizyta umówiona przez
+    rejestrację nie jest z góry opłacona). Opcjonalnie wystawia fakturę (mini-mock)."""
+    a = get_appointment_or_404(appointment_id, db)
+    if a.price is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wizyta bezpłatna (NFZ) — nie ma czego rozliczać.")
+    if db.scalar(select(Payment).where(
+            Payment.appointment_id == a.appointment_id, Payment.payment_status == "PAID")):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta jest już opłacona.")
+    invoice_number = None
+    if body.invoice:
+        try:
+            invoice_number = payments.issue_invoice(
+                amount=float(a.price), reference=f"appointment-{a.appointment_id}", buyer=body.buyer)
+        except IntegrationError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc
+    db.add(Payment(
+        appointment_id=a.appointment_id, amount=a.price, payment_status="PAID",
+        provider_ref="RECEPCJA-DESK", created_at=datetime.now(), paid_at=datetime.now(),
+        invoice_requested=body.invoice, invoice_number=invoice_number,
+    ))
+    db.commit()
+    return appointment_out(db, a)
 
 
 @router.post("/appointments/{appointment_id}/cancel-payment", response_model=AppointmentOut)

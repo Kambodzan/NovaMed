@@ -289,6 +289,7 @@ export function Umow() {
   const [showSlotReviews, setShowSlotReviews] = useState(false)
   const [booked, setBooked] = useState<BookOut | null>(null)
   const [payPhase, setPayPhase] = useState<PayPhase>('idle')
+  const [wantInvoice, setWantInvoice] = useState(false)  // faktura przy płatności online (mini-mock)
   const lockLeft = useSecondsLeft(booked?.appointment.locked_until)
   const [waitlistOpen, setWaitlistOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -536,7 +537,7 @@ export function Umow() {
 
   const pay = useMutation({
     mutationFn: ({ id, outcome }: { id: string; outcome: 'success' | 'failure' }) =>
-      api<BookOut>(`/appointments/${id}/pay`, { method: 'POST', body: { outcome } }),
+      api<BookOut>(`/appointments/${id}/pay`, { method: 'POST', body: { outcome, invoice: wantInvoice } }),
     onSuccess: (data) => {
       setPayPhase(data.payment?.payment_status === 'PAID' ? 'success' : 'declined')
       setError(null)
@@ -1028,6 +1029,10 @@ export function Umow() {
                   ? <p className="flex items-center gap-1.5 text-sm font-bold text-amber-700"><Clock size={14} /> {t('Termin zarezerwowany jeszcze przez')} {mmss(lockLeft)}</p>
                   : <p className="text-sm font-bold text-red-700">{t('Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.')}</p>
                 )}
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl bg-gray-50 px-4 py-2.5">
+                  <input type="checkbox" className="h-4 w-4 accent-(--color-primary)" checked={wantInvoice} onChange={e => setWantInvoice(e.target.checked)} />
+                  <span className="text-sm font-semibold text-gray-700">{t('Chcę fakturę')}</span>
+                </label>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Button size="lg" disabled={pay.isPending}
                     onClick={() => pay.mutate({ id: slot.appointment_id, outcome: 'success' })}>

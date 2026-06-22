@@ -433,11 +433,12 @@ function PayModal({ visit, onClose, onDone }: {
   const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const [declined, setDeclined] = useState(false)
+  const [wantInvoice, setWantInvoice] = useState(false)
   const lockLeft = useSecondsLeft(visit.locked_until)
 
   const pay = useMutation({
     mutationFn: (outcome: 'success' | 'failure') =>
-      api<BookOut>(`/appointments/${visit.appointment_id}/pay`, { method: 'POST', body: { outcome } }),
+      api<BookOut>(`/appointments/${visit.appointment_id}/pay`, { method: 'POST', body: { outcome, invoice: wantInvoice } }),
     onSuccess: (data) => {
       if (data.payment?.payment_status === 'PAID') onDone()
       else { setDeclined(true); setError(null) }
@@ -471,6 +472,10 @@ function PayModal({ visit, onClose, onDone }: {
               : <p className="text-sm font-bold text-red-700">{t('Czas na płatność minął — termin mógł wrócić do puli. Zarezerwuj ponownie.')}</p>
             )}
             {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-2xl bg-gray-50 px-4 py-2.5">
+              <input type="checkbox" className="h-4 w-4 accent-(--color-primary)" checked={wantInvoice} onChange={e => setWantInvoice(e.target.checked)} />
+              <span className="text-sm font-semibold text-gray-700">{t('Chcę fakturę')}</span>
+            </label>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button disabled={pay.isPending} onClick={() => pay.mutate('success')}>
                 {t('Zapłać kartą (symulacja)')}

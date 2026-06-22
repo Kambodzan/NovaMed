@@ -1,5 +1,6 @@
 // Pulpit rejestracji — przegląd dnia placówki + szybkie akcje. Liczy się z
 // grafiku dnia (/clinics/{id}/day), żeby od wejścia widać było obłożenie.
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CalendarRange, CheckCircle2, ChevronRight, Clock, DoorOpen, UserCheck, Users, Video, X } from 'lucide-react'
@@ -9,6 +10,7 @@ import { pushToast } from '../../lib/toast'
 import { formatTime } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
+import { PaymentCheckIn, needsDeskPayment } from '../../components/PaymentCheckIn'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 const FINISHED = ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'INTERRUPTED']
@@ -36,6 +38,7 @@ const ACTIONS = [
 export function Pulpit() {
   const queryClient = useQueryClient()
   const { clinics, clinic, setClinicId } = useClinicSelection()
+  const [payFor, setPayFor] = useState<AppointmentOut | null>(null)
   const navigate = useNavigate()
   const today = todayIso()
 
@@ -151,8 +154,8 @@ export function Pulpit() {
                           </span>
                         ) : (
                           <Button size="sm" variant="primary" disabled={arrive.isPending}
-                            onClick={() => arrive.mutate({ id: a.appointment_id })}>
-                            <DoorOpen size={13} /> Przyszedł
+                            onClick={() => needsDeskPayment(a) ? setPayFor(a) : arrive.mutate({ id: a.appointment_id })}>
+                            <DoorOpen size={13} /> {needsDeskPayment(a) ? `Przyszedł · ${a.price} zł` : 'Przyszedł'}
                           </Button>
                         )
                       )}
@@ -195,6 +198,10 @@ export function Pulpit() {
         </>
       )}
 
+      {payFor && (
+        <PaymentCheckIn appt={payFor} onClose={() => setPayFor(null)}
+          onDone={() => { setPayFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) }} />
+      )}
     </div>
   )
 }

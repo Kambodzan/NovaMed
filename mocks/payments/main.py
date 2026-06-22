@@ -6,6 +6,7 @@
 # W realnej integracji potwierdzenie przychodzi webhookiem po 3DS;
 # w mocku potwierdza je wprost backend (symulacja sukcesu/odmowy).
 import itertools
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from pydantic import BaseModel, Field
 app = FastAPI(title="Mock operatora płatności")
 
 _counter = itertools.count(50000)
+_invoice_counter = itertools.count(1)
 _payments: dict[str, dict] = {}
 
 
@@ -20,6 +22,12 @@ class PaymentIn(BaseModel):
     amount: float = Field(gt=0)
     currency: str = "PLN"
     reference: str = Field(min_length=1, max_length=100, description="np. appointment-123")
+
+
+class InvoiceIn(BaseModel):
+    amount: float = Field(gt=0)
+    reference: str = Field(min_length=1, max_length=100)
+    buyer: str | None = Field(default=None, max_length=200, description="nabywca (mini-mock; bez NIP/adresu)")
 
 
 class ConfirmIn(BaseModel):
@@ -54,6 +62,19 @@ def get_payment(payment_id: str):
     if p is None:
         raise HTTPException(status_code=404, detail="Płatność nie istnieje.")
     return p
+
+
+# Mini-mock fakturowania: w realu osobny system księgowy/e-faktura (KSeF). Tu tylko
+# nadajemy numer FV/{rok}/{kolejny} — bez PDF, NIP-u, pozycji.
+@app.post("/api/v1/invoices", status_code=201)
+def issue_invoice(body: InvoiceIn):
+    num = next(_invoice_counter)
+    return {
+        "invoice_number": f"FV/{datetime.now().year}/{num:05d}",
+        "amount": body.amount,
+        "buyer": body.buyer,
+        "reference": body.reference,
+    }
 
 
 @app.get("/health")

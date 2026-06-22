@@ -90,6 +90,9 @@ class FakePayments:
     def get_status(self, *, provider_ref: str) -> str:
         return self.payments[provider_ref]
 
+    def issue_invoice(self, *, amount: float, reference: str, buyer: str | None = None) -> str:
+        return f"FV/2026/{next(self._counter):05d}"
+
 
 class FakeP1:
     """Fake P1 w pamięci — e-recepty/e-skierowania + weryfikacja kodu skierowania."""

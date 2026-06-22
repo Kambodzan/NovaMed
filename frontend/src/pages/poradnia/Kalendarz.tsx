@@ -14,6 +14,7 @@ import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
 import { StaffReschedule } from '../../components/StaffReschedule'
+import { PaymentCheckIn, needsDeskPayment } from '../../components/PaymentCheckIn'
 
 const DAY_KEY = 'novamed-kalendarz-day'
 // data LOKALNA (toISOString daje UTC → strzałki ‹›/„Dziś" skakały o ±dzień)
@@ -56,6 +57,7 @@ export function Kalendarz() {
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<AppointmentOut | null>(null)
   const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
+  const [payFor, setPayFor] = useState<AppointmentOut | null>(null)
   const [showDone, setShowDone] = useState(false)
   const [showRooms, setShowRooms] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +100,9 @@ export function Kalendarz() {
     if (await confirm({ title: 'Oznaczyć nieobecność?', message: `${a.patient_name} — ${formatTime(a.appointment_datetime)}. Wizyta trafi do „Zakończone" jako nieodbyta (można cofnąć dziś, gdy pacjent jednak dotrze).`, confirmLabel: 'Nie stawił się' }))
       noShow.mutate(a.appointment_id)
   }
+  // meldowanie: jeśli wizyta płatna i nieopłacona → najpierw rozliczenie (modal), potem
+  // automatycznie zameldowanie; inaczej od razu „Przyszedł"
+  const checkIn = (a: AppointmentOut) => needsDeskPayment(a) ? setPayFor(a) : arrive.mutate({ id: a.appointment_id })
   const doctorRoom = (id: string | null | undefined) => (doctors ?? []).find(d => d.doctor_id === id)?.room ?? null
 
   // AGENDA = tablica przepływu pacjenta: grupy wg STANU, nie po samej godzinie.
@@ -185,8 +190,8 @@ export function Kalendarz() {
               <button type="button" disabled={noShow.isPending} onClick={() => void markNoShow(a)}
                 className="cursor-pointer rounded-full px-2.5 py-1 text-xs font-extrabold text-amber-700 hover:bg-amber-100">Nie stawił się</button>
             )}
-            <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
-              <DoorOpen size={13} /> Przyszedł
+            <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => checkIn(a)}>
+              <DoorOpen size={13} /> {needsDeskPayment(a) ? `Przyszedł · ${a.price} zł` : 'Przyszedł'}
             </Button>
           </span>
         ) : online && a.appointment_status === 'CONFIRMED' ? (
@@ -298,6 +303,13 @@ export function Kalendarz() {
               </p>
             )}
             {detail.notes && <p><span className="font-semibold text-gray-500">Powód:</span> {detail.notes}</p>}
+            {detail.price ? (
+              <p><span className="font-semibold text-gray-500">Płatność:</span>{' '}
+                {detail.payment_status === 'PAID'
+                  ? <span className="font-bold text-emerald-600">opłacona{detail.invoice_number ? ` · faktura ${detail.invoice_number}` : ''}</span>
+                  : <span className="font-bold text-amber-600">do zapłaty {detail.price} zł (na miejscu)</span>}
+              </p>
+            ) : null}
             {detail.appointment_status === 'CONFIRMED' && detail.appointment_type !== 'ONLINE' && day === todayIso() && (
               <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5">
                 <span><span className="font-semibold text-gray-500">Meldunek: </span>
@@ -308,7 +320,7 @@ export function Kalendarz() {
                 {detail.checked_in_at ? (
                   <Button size="sm" variant="ghost" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id, checked_in: false })}>Cofnij</Button>
                 ) : (
-                  <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id })}><DoorOpen size={13} /> Przyszedł</Button>
+                  <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => checkIn(detail)}><DoorOpen size={13} /> {needsDeskPayment(detail) ? `Przyszedł · ${detail.price} zł` : 'Przyszedł'}</Button>
                 )}
               </div>
             )}
@@ -325,6 +337,11 @@ export function Kalendarz() {
       {rescheduleFor && (
         <StaffReschedule visit={rescheduleFor} onClose={() => setRescheduleFor(null)}
           onDone={() => { setRescheduleFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) }} />
+      )}
+
+      {payFor && (
+        <PaymentCheckIn appt={payFor} onClose={() => setPayFor(null)}
+          onDone={() => { setPayFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) }} />
       )}
 
       {showRooms && clinic && <GabinetyModal clinicId={clinic.clinic_id} clinicName={clinic.clinic_name} onClose={() => setShowRooms(false)} />}

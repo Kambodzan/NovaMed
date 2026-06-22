@@ -34,6 +34,30 @@ def make_slot(client, setup, days_ahead=3, hour=10, dt=None) -> int:
     return resp.json()[0]["appointment_id"]
 
 
+def test_recepcja_oznacza_oplate_i_fakture(client, setup):
+    """Płatna wizyta umówiona przez recepcję NIE jest z góry opłacona — recepcja
+    oznacza opłatę na miejscu, opcjonalnie z fakturą (mini-mock)."""
+    reg = auth_header(setup["reg_token"])
+    cid = setup["clinic"].clinic_id
+    pid = client.post("/patients/register", headers=reg, json={
+        "first_name": "Jan", "last_name": "Testowy", "pesel": "44051401359",
+        "birth_date": "1944-05-14", "phone_number": "601234567"}).json()["patient_id"]
+    dt = (datetime.now() + timedelta(days=4)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot = client.post(f"/clinics/{cid}/slots", headers=reg,
+                       json={"service_name": "USG prywatne", "datetimes": [dt.isoformat()], "price": 150}
+                       ).json()[0]["appointment_id"]
+    # book-for płatnej wizyty → CONFIRMED, ale NIEopłacona (do zapłaty na miejscu)
+    b = client.post(f"/appointments/{slot}/book-for", headers=reg, json={"patient_id": pid}).json()
+    assert b["appointment_status"] == "CONFIRMED" and b["payment_status"] != "PAID"
+    # recepcja oznacza opłatę + faktura
+    s = client.post(f"/appointments/{slot}/settle-payment", headers=reg, json={"invoice": True})
+    assert s.status_code == 200, s.text
+    assert s.json()["payment_status"] == "PAID"
+    assert s.json()["invoice_requested"] is True and s.json()["invoice_number"]
+    # ponowne rozliczenie → 409
+    assert client.post(f"/appointments/{slot}/settle-payment", headers=reg, json={}).status_code == 409
+
+
 def test_pacjent_nie_tworzy_slotow(client, setup):
     dt = (datetime.now() + timedelta(days=1)).isoformat()
     resp = client.post(

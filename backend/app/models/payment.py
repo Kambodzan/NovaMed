@@ -4,7 +4,7 @@ import uuid
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -20,5 +20,8 @@ class Payment(Base):
     provider_ref: Mapped[str] = mapped_column(String(50))    # id płatności u operatora
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     paid_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # faktura (mini-mock): czy pacjent poprosił + nadany numer (FV/rok/nr)
+    invoice_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    invoice_number: Mapped[str | None] = mapped_column(String(40))
 
     appointment = relationship("Appointment")

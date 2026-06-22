@@ -20,6 +20,10 @@ class PaymentsClient(Protocol):
 
     def get_status(self, *, provider_ref: str) -> str: ...
 
+    def issue_invoice(self, *, amount: float, reference: str, buyer: str | None = None) -> str:
+        """Mini-mock fakturowania — zwraca numer faktury (FV/rok/nr)."""
+        ...
+
 
 class HttpPaymentsClient:
     def __init__(self, base_url: str | None = None, timeout: float = 5.0):
@@ -47,6 +51,10 @@ class HttpPaymentsClient:
 
     def get_status(self, *, provider_ref: str) -> str:
         return self._req("GET", f"/api/v1/payments/{provider_ref}")["status"]
+
+    def issue_invoice(self, *, amount: float, reference: str, buyer: str | None = None) -> str:
+        return self._req("POST", "/api/v1/invoices",
+                         {"amount": amount, "reference": reference, "buyer": buyer})["invoice_number"]
 
 
 def get_payments_client() -> PaymentsClient:
