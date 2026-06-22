@@ -2,7 +2,7 @@
 // grafiku dnia (/clinics/{id}/day), żeby od wejścia widać było obłożenie.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CheckCircle2, ChevronRight, Clock, DoorOpen, FlaskConical, UserCheck, Users, Video, X } from 'lucide-react'
+import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CalendarRange, CheckCircle2, ChevronRight, Clock, DoorOpen, UserCheck, Users, Video, X } from 'lucide-react'
 import { Button, Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { pushToast } from '../../lib/toast'
@@ -24,11 +24,13 @@ function Stat({ label, value, hint, tone }: { label: string; value: string | num
   )
 }
 
+// szybkie akcje = rozdzielnia: każda odpowiada na typowe pytanie do recepcji,
+// prowadząc do właściwego narzędzia (a nie wszystko w jednym ekranie)
 const ACTIONS = [
-  { to: '/umow', label: 'Umów wizytę', icon: CalendarCheck, desc: 'rezerwacja dla pacjenta' },
-  { to: '/wyniki', label: 'Dodaj wynik', icon: FlaskConical, desc: 'odbiór wyniku z papieru' },
-  { to: '/pacjenci', label: 'Pacjenci', icon: Users, desc: 'szukaj / kartoteka / eWUŚ' },
-  { to: '/kalendarz', label: 'Kalendarz', icon: CalendarDays, desc: 'terminy lekarzy' },
+  { to: '/umow', label: 'Umów wizytę', icon: CalendarCheck, desc: 'pacjent chce termin' },
+  { to: '/grafik', label: 'Grafik', icon: CalendarRange, desc: 'kiedy lekarz ma wolne' },
+  { to: '/kalendarz', label: 'Kalendarz', icon: CalendarDays, desc: 'kto dziś przychodzi' },
+  { to: '/pacjenci', label: 'Pacjenci', icon: Users, desc: 'szukaj, wyniki, eWUŚ' },
 ]
 
 export function Pulpit() {
@@ -118,7 +120,7 @@ export function Pulpit() {
             {/* najbliższe wizyty dziś */}
             <Tile className="p-5" delay={60}>
               <TileHeader title="Najbliższe wizyty dziś" action={
-                <Link to="/kalendarz" className="text-xs font-extrabold text-primary hover:underline">cały grafik</Link>
+                <Link to="/kalendarz" className="text-xs font-extrabold text-primary hover:underline">cały dzień</Link>
               } />
               {upcoming.length === 0 ? (
                 <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Brak kolejnych wizyt dziś.</p>
