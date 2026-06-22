@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ClipboardList } from 'lucide-react'
+import { AlertTriangle, Check, ClipboardList, Search, X } from 'lucide-react'
 import { Button, EmptyState, Field, Loading, Modal, Overline, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL, formatTime } from '../../lib/format'
@@ -11,6 +11,7 @@ import { TimePicker } from '../../components/TimePicker'
 import { confirm } from '../../lib/confirm'
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 // wybrana data trzyma się przez sesję — powrót z innej zakładki nie resetuje
 // jej na dziś (osobny klucz niż „Mój dzień" lekarza)
@@ -26,6 +27,7 @@ export function Zabiegi() {
   const [rescheduleFor, setRescheduleFor] = useState<ProcedureOut | null>(null)
   const [rsDate, setRsDate] = useState('')
   const [rsTime, setRsTime] = useState('09:00')
+  const [q, setQ] = useState('')  // omni-search w planie dnia
 
   const { data: procedures } = useQuery({
     queryKey: ['procedures-day', day],
@@ -83,6 +85,9 @@ export function Zabiegi() {
 
   const planned = (procedures ?? []).filter(p => p.procedure_status === 'PLANNED').length
   const done = (procedures ?? []).filter(p => p.procedure_status === 'DONE').length
+  const shown = q.trim()
+    ? (procedures ?? []).filter(p => norm(`${p.procedure_type} ${p.patient_name} ${p.referral_code} ${p.ordered_by}`).includes(norm(q.trim())))
+    : (procedures ?? [])
 
   return (
     <div className="space-y-6">
@@ -126,8 +131,28 @@ export function Zabiegi() {
             hint="Zaplanuj zabiegi z zakładki „Skierowania”."
           />
         ) : (
+          <>
+          {procedures.length > 3 && (
+            <div className="relative mb-2.5">
+              <Search size={15} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                value={q} onChange={e => setQ(e.target.value)}
+                placeholder="Szukaj — pacjent, zabieg, kod skierowania…"
+                className={cx(inputCls, 'pl-10', q && 'pr-10')}
+              />
+              {q && (
+                <button type="button" aria-label="Wyczyść" onClick={() => setQ('')}
+                  className="absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-700">
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+          )}
+          {shown.length === 0 ? (
+            <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Nic nie pasuje do „{q}".</p>
+          ) : (
           <ul className="space-y-1.5">
-            {(procedures ?? []).map(p => (
+            {shown.map(p => (
               <li
                 key={p.procedure_id}
                 className={cx(
@@ -170,6 +195,8 @@ export function Zabiegi() {
               </li>
             ))}
           </ul>
+          )}
+          </>
         )}
       </Tile>
 

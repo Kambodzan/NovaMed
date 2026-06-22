@@ -24,6 +24,7 @@ export function TimePicker({ value, onChange, startHour = 6, endHour = 20, stepM
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
 
+  const [draft, setDraft] = useState(value)  // ręczne wpisywanie w popoverze
   const times: string[] = []
   for (let h = startHour; h <= endHour; h++) {
     for (let m = 0; m < 60; m += stepMin) {
@@ -32,12 +33,19 @@ export function TimePicker({ value, onChange, startHour = 6, endHour = 20, stepM
     }
   }
   const valid = /^\d{2}:\d{2}$/.test(value)
+  const isTime = (s: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s)
+  const normalize = (s: string) => {  // "9:5" → "09:05"
+    const m = s.match(/^(\d{1,2}):(\d{1,2})$/)
+    return m ? `${pad(Math.min(23, +m[1]))}:${pad(Math.min(59, +m[2]))}` : s
+  }
+  const commitDraft = () => { if (isTime(draft)) { onChange(normalize(draft)); setOpen(false) } }
 
   const show = () => {
     const r = btnRef.current!.getBoundingClientRect()
     const left = Math.max(8, Math.min(r.left, window.innerWidth - POP_W - 8))
     const top = r.bottom + POP_H + 8 > window.innerHeight && r.top - POP_H - 6 > 0 ? r.top - POP_H - 6 : r.bottom + 6
     setPos({ top, left })
+    setDraft(valid ? value : '')
     setOpen(true)
   }
 
@@ -77,10 +85,23 @@ export function TimePicker({ value, onChange, startHour = 6, endHour = 20, stepM
       {open && createPortal(
         <div
           ref={popRef} role="dialog" aria-label="Wybierz godzinę"
-          className="fixed z-[80] rounded-2xl border border-gray-100 bg-white p-2 shadow-xl shadow-gray-900/10"
-          style={{ top: pos.top, left: pos.left, width: POP_W, maxHeight: POP_H, overflowY: 'auto' }}
+          className="fixed z-[80] flex flex-col rounded-2xl border border-gray-100 bg-white p-2 shadow-xl shadow-gray-900/10"
+          style={{ top: pos.top, left: pos.left, width: POP_W, maxHeight: POP_H }}
         >
-          <div className="grid grid-cols-3 gap-1">
+          {/* ręczne wpisanie — pełna swoboda; pigułki niżej to tylko podręczne skróty */}
+          <div className="mb-2 flex items-center gap-1.5">
+            <input
+              type="text" inputMode="numeric" placeholder="np. 10:25" aria-label="Wpisz godzinę"
+              value={draft}
+              onChange={e => { const v = e.target.value; setDraft(v); if (/^\d{2}:\d{2}$/.test(v) && isTime(v)) onChange(v) }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitDraft() } }}
+              className={cx(inputCls, '!py-1.5 text-center font-bold tracking-wider')}
+            />
+            <button type="button" aria-label="Zatwierdź godzinę" disabled={!isTime(draft)} onClick={commitDraft}
+              className="shrink-0 cursor-pointer rounded-xl bg-primary px-3 py-1.5 text-sm font-extrabold text-white disabled:cursor-default disabled:bg-gray-200 disabled:text-gray-400">OK</button>
+          </div>
+          <p className="mb-1 px-1 text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Szybki wybór</p>
+          <div className="grid grid-cols-3 gap-1 overflow-y-auto">
             {times.map(t => (
               <button
                 key={t} type="button"
