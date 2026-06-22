@@ -13,6 +13,7 @@ import { confirm } from '../../lib/confirm'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
+import { StaffReschedule } from '../../components/StaffReschedule'
 
 const DAY_KEY = 'novamed-kalendarz-day'
 // data LOKALNA (toISOString daje UTC → strzałki ‹›/„Dziś" skakały o ±dzień)
@@ -51,6 +52,7 @@ export function Kalendarz() {
   const shiftDay = (n: number) => { const d = new Date(day + 'T00:00:00'); d.setDate(d.getDate() + n); setDay(isoLocal(d)) }
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<AppointmentOut | null>(null)
+  const [rescheduleFor, setRescheduleFor] = useState<AppointmentOut | null>(null)
   const [showDone, setShowDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -122,7 +124,8 @@ export function Kalendarz() {
     const online = a.appointment_type === 'ONLINE'
     const room = a.room ?? doctorRoom(a.doctor_id)
     const waiting = !!a.checked_in_at && a.appointment_status === 'CONFIRMED'
-    const canCheckIn = a.appointment_status === 'CONFIRMED' && !online && !waiting
+    // meldowanie TYLKO dla dnia dzisiejszego — w przyszłym dniu „Przyszedł" to missclick i afera
+    const canCheckIn = a.appointment_status === 'CONFIRMED' && !online && !waiting && day === todayIso()
     const late = canCheckIn && nowMin != null && minOf(a) < nowMin
     return (
       <li key={a.appointment_id} className={cx('flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-4 py-2.5',
@@ -152,7 +155,7 @@ export function Kalendarz() {
               className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-white/20"><X size={11} /></button>
           </span>
         ) : canCheckIn ? (
-          <Button size="sm" variant={late ? 'primary' : 'secondary'} disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
+          <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
             <DoorOpen size={13} /> Przyszedł
           </Button>
         ) : null}
@@ -233,7 +236,10 @@ export function Kalendarz() {
           footer={
             <>
               {!FINISHED.includes(detail.appointment_status) && detail.appointment_status !== 'CANCELLED' && (
-                <Button variant="ghost" disabled={cancel.isPending} onClick={() => void doCancel(detail)}>Odwołaj wizytę</Button>
+                <>
+                  <Button variant="ghost" disabled={cancel.isPending} onClick={() => void doCancel(detail)}>Odwołaj</Button>
+                  <Button variant="secondary" onClick={() => { setRescheduleFor(detail); setDetail(null) }}>Przełóż</Button>
+                </>
               )}
               {detail.patient_id && <Link to={`/pacjent/${detail.patient_id}`}><Button>Kartoteka pacjenta</Button></Link>}
             </>
@@ -254,7 +260,7 @@ export function Kalendarz() {
               </p>
             )}
             {detail.notes && <p><span className="font-semibold text-gray-500">Powód:</span> {detail.notes}</p>}
-            {detail.appointment_status === 'CONFIRMED' && detail.appointment_type !== 'ONLINE' && (
+            {detail.appointment_status === 'CONFIRMED' && detail.appointment_type !== 'ONLINE' && day === todayIso() && (
               <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gray-50 px-3.5 py-2.5">
                 <span><span className="font-semibold text-gray-500">Meldunek: </span>
                   {detail.checked_in_at
@@ -264,12 +270,17 @@ export function Kalendarz() {
                 {detail.checked_in_at ? (
                   <Button size="sm" variant="ghost" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id, checked_in: false })}>Cofnij</Button>
                 ) : (
-                  <Button size="sm" variant="secondary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id })}><DoorOpen size={13} /> Przyszedł</Button>
+                  <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id })}><DoorOpen size={13} /> Przyszedł</Button>
                 )}
               </div>
             )}
           </div>
         </Modal>
+      )}
+
+      {rescheduleFor && (
+        <StaffReschedule visit={rescheduleFor} onClose={() => setRescheduleFor(null)}
+          onDone={() => { setRescheduleFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) }} />
       )}
     </div>
   )

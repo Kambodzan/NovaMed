@@ -150,7 +150,7 @@ export function Pulpit() {
                               className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-primary/15"><X size={11} /></button>
                           </span>
                         ) : (
-                          <Button size="sm" variant="secondary" disabled={arrive.isPending}
+                          <Button size="sm" variant="primary" disabled={arrive.isPending}
                             onClick={() => arrive.mutate({ id: a.appointment_id })}>
                             <DoorOpen size={13} /> Przyszedł
                           </Button>
