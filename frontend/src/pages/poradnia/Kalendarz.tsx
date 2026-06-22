@@ -2,7 +2,7 @@
 // której" (godziny × lekarze) na wybrany dzień. Klik komórki: wolny → umów/usuń,
 // zajęty → kartoteka/odwołaj. Zarządzanie terminami i ustawienia placówki scalone
 // w modalach (dawne „Terminy").
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, Check, ChevronLeft, ChevronRight, DoorOpen, MapPin, Plus, Search, Settings2, UserCheck, Video, X } from 'lucide-react'
@@ -28,6 +28,25 @@ import { ServicesManager, type ServiceOut } from '../../components/ServicesManag
 
 interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
 
+// tor tablicy dnia (czeka / następni / zakończone) — wspólna ramka z nagłówkiem i licznikiem
+function Lane({ title, count, tone, collapsible, open, onToggle, children }: {
+  title: string; count: number; tone?: 'primary'; collapsible?: boolean; open?: boolean; onToggle?: () => void; children: ReactNode
+}) {
+  const head = (
+    <div className="mb-2 flex items-center gap-2 px-1">
+      <span className={cx('text-xs font-extrabold uppercase tracking-wide', tone === 'primary' ? 'text-primary' : 'text-gray-500')}>{title}</span>
+      <span className={cx('rounded-full px-2 py-0.5 text-[11px] font-extrabold [font-variant-numeric:tabular-nums]', tone === 'primary' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600')}>{count}</span>
+      {collapsible && <ChevronRight size={15} className={cx('ml-auto text-gray-400 transition-transform', open && 'rotate-90')} />}
+    </div>
+  )
+  return (
+    <Tile className={cx('p-3 sm:p-4', tone === 'primary' && 'ring-1 ring-primary/15')}>
+      {collapsible ? <button type="button" onClick={onToggle} className="w-full cursor-pointer">{head}</button> : head}
+      {(!collapsible || open) && <ul className="space-y-1.5">{children}</ul>}
+    </Tile>
+  )
+}
+
 export function Kalendarz() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -42,6 +61,7 @@ export function Kalendarz() {
   const [detail, setDetail] = useState<AppointmentOut | null>(null)
   const [modal, setModal] = useState<'add' | 'settings' | null>(null)
   const [view, setView] = useState<'agenda' | 'grid'>('agenda')
+  const [showDone, setShowDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const { data: items } = useQuery({
@@ -115,15 +135,83 @@ export function Kalendarz() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zameldować pacjenta.'),
   })
   const doctorRoom = (id: string | null | undefined) => (doctors ?? []).find(d => d.doctor_id === id)?.room ?? null
-  // agenda dnia: umówieni pacjenci chronologicznie (po filtrze lekarza/specjalizacji)
-  const agenda = useMemo(() => visible
+  // AGENDA = tablica przepływu pacjenta (nie płaska lista): recepcja myśli „kto jest
+  // na korytarzu i do którego gabinetu", więc grupujemy wg STANU, a nie po samej
+  // godzinie. Wyszukiwanie po NAZWISKU PACJENTA (gość podchodzi → wpisz → zamelduj).
+  const agendaAll = useMemo(() => (items ?? [])
     .filter(a => a.patient_id && a.appointment_status !== 'CANCELLED')
-    .sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime)), [visible])
-  const waitingCount = agenda.filter(a => a.checked_in_at && a.appointment_status === 'CONFIRMED').length
+    .sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime)), [items])
+  const waitingCount = agendaAll.filter(a => a.checked_in_at && a.appointment_status === 'CONFIRMED').length
+  const agenda = useMemo(() => {
+    const needle = fold(q.trim())
+    return needle
+      ? agendaAll.filter(a => fold(`${a.patient_name ?? ''} ${a.doctor_name ?? ''} ${a.service_name ?? ''} ${a.specializations.join(' ')}`).includes(needle))
+      : agendaAll
+  }, [agendaAll, q])
+  // „teraz" tylko dla dnia dzisiejszego — do flagowania spóźnionych (minęła godzina, brak meldunku)
+  const nowMin = day === todayIso() ? (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() })() : null
+  const minOf = (a: AppointmentOut) => { const [h, m] = hm(a.appointment_datetime).split(':').map(Number); return h * 60 + m }
+  // trzy tory: czeka (przyszedł / u lekarza) · następni (umówieni, niezameldowani) · zakończone
+  const board = useMemo(() => {
+    const here: AppointmentOut[] = [], next: AppointmentOut[] = [], done: AppointmentOut[] = []
+    for (const a of agenda) {
+      if (FINISHED.includes(a.appointment_status)) done.push(a)
+      else if ((a.checked_in_at && a.appointment_status === 'CONFIRMED') || a.appointment_status === 'IN_PROGRESS' || a.appointment_status === 'PAUSED') here.push(a)
+      else next.push(a)
+    }
+    return { here, next, done }
+  }, [agenda])
 
   const doCancel = async (a: AppointmentOut) => {
     if (await confirm({ title: 'Odwołać wizytę?', message: `${a.patient_name} — ${formatTime(a.appointment_datetime)}. Pacjent dostanie powiadomienie.`, tone: 'danger', confirmLabel: 'Odwołaj' }))
       cancel.mutate(a.appointment_id)
+  }
+
+  // wiersz tablicy — wspólny dla wszystkich torów; gabinet i meldunek wyróżnione,
+  // spóźnienie flagowane na czerwono (minęła godzina, pacjent się nie zameldował)
+  const agendaRow = (a: AppointmentOut) => {
+    const live = a.appointment_status === 'IN_PROGRESS'
+    const paused = a.appointment_status === 'PAUSED'
+    const done = FINISHED.includes(a.appointment_status)
+    const online = a.appointment_type === 'ONLINE'
+    const room = a.room ?? doctorRoom(a.doctor_id)
+    const waiting = !!a.checked_in_at && a.appointment_status === 'CONFIRMED'
+    const canCheckIn = a.appointment_status === 'CONFIRMED' && !online && !waiting
+    const late = canCheckIn && nowMin != null && minOf(a) < nowMin
+    return (
+      <li key={a.appointment_id} className={cx('flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-4 py-2.5',
+        live ? 'bg-primary-soft ring-1 ring-primary' : paused ? 'bg-amber-50 ring-1 ring-amber-200'
+          : done ? 'bg-gray-50 opacity-60' : waiting ? 'bg-primary-soft' : late ? 'bg-red-50/70' : 'bg-gray-50')}>
+        <span className={cx('w-12 shrink-0 text-base font-extrabold [font-variant-numeric:tabular-nums]', late ? 'text-red-600' : 'text-gray-900')}>{formatTime(a.appointment_datetime)}</span>
+        <button onClick={() => { setError(null); setDetail(a) }} className="flex min-w-0 flex-1 cursor-pointer flex-col text-left">
+          <span className="truncate text-sm font-extrabold text-gray-900">{a.patient_name}</span>
+          <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-500">
+            {online ? <Video size={12} /> : <MapPin size={12} />} {a.doctor_id ? a.doctor_name : a.service_name}
+            {a.doctor_id && a.service_name ? ` · ${a.service_name}` : ''}{room ? ` · gab. ${room}` : ''}
+          </span>
+        </button>
+        {late && <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-700">spóźniony</span>}
+        {a.appointment_status === 'CONFIRMED' && a.confirmation_requested && !waiting && !late && (
+          <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold',
+            a.patient_confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+            {a.patient_confirmed ? 'potw.' : 'bez potw.'}
+          </span>
+        )}
+        {(live || paused || done) && <StatusBadge status={a.appointment_status} />}
+        {waiting ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold text-white">
+            <UserCheck size={12} /> czeka{room ? ` · gab. ${room}` : ''}
+            <button type="button" aria-label="Cofnij meldunek" disabled={arrive.isPending}
+              onClick={() => arrive.mutate({ id: a.appointment_id, checked_in: false })}
+              className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-white/20"><X size={11} /></button>
+          </span>
+        ) : canCheckIn ? (
+          <Button size="sm" variant={late ? 'primary' : 'secondary'} disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
+            <DoorOpen size={13} /> Przyszedł
+          </Button>
+        ) : null}
+      </li>
+    )
   }
 
   return (
@@ -166,73 +254,50 @@ export function Kalendarz() {
       {(items?.length ?? 0) > 0 && (
         <div className="relative max-w-md fade-up">
           <Search size={15} className="absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-500" />
-          <input className={cx(inputCls, 'w-full pl-10 pr-8')} placeholder="Filtruj: lekarz lub specjalizacja…"
+          <input className={cx(inputCls, 'w-full pl-10 pr-8')}
+            placeholder={view === 'agenda' ? 'Szukaj pacjenta lub lekarza…' : 'Filtruj: lekarz lub specjalizacja…'}
             value={q} onChange={e => setQ(e.target.value)} />
           {q && <button onClick={() => setQ('')} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-gray-500 hover:text-gray-700"><X size={14} /></button>}
         </div>
       )}
 
-      {items === undefined ? <Loading /> : columns.length === 0 ? (
+      {items === undefined ? <Loading /> : view === 'agenda' ? (
+        agendaAll.length === 0 ? (
+          <Tile className="p-5">
+            <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />}
+              title="Brak umówionych wizyt tego dnia"
+              hint={free > 0 ? `${free} wolnych terminów — przełącz na „Siatkę", żeby nimi zarządzać.` : 'Dodaj terminy, aby umawiać pacjentów.'} />
+          </Tile>
+        ) : agenda.length === 0 ? (
+          <Tile className="p-5">
+            <EmptyState icon={<Search size={26} strokeWidth={1.5} />} title="Brak pacjenta dla frazy"
+              hint="Wyczyść wyszukiwanie albo wpisz inne nazwisko." />
+          </Tile>
+        ) : (
+          <div className="space-y-3 fade-up">
+            {board.here.length > 0 && (
+              <Lane title="Czeka" count={board.here.length} tone="primary">
+                {board.here.map(a => agendaRow(a))}
+              </Lane>
+            )}
+            {board.next.length > 0 && (
+              <Lane title="Następni" count={board.next.length}>
+                {board.next.map(a => agendaRow(a))}
+              </Lane>
+            )}
+            {board.done.length > 0 && (
+              <Lane title="Zakończone" count={board.done.length} collapsible open={showDone} onToggle={() => setShowDone(s => !s)}>
+                {showDone ? board.done.map(a => agendaRow(a)) : null}
+              </Lane>
+            )}
+          </div>
+        )
+      ) : columns.length === 0 ? (
         <Tile className="p-5">
           <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />}
             title={q ? 'Brak lekarzy dla filtra' : 'Brak lekarzy w placówce'}
             hint={q ? 'Zmień frazę wyszukiwania.' : 'Przypisz lekarzy do placówki w Panelu Admina.'} />
         </Tile>
-      ) : view === 'agenda' ? (
-        agenda.length === 0 ? (
-          <Tile className="p-5">
-            <EmptyState icon={<CalendarRange size={28} strokeWidth={1.5} />}
-              title={q ? 'Brak umówionych dla filtra' : 'Brak umówionych wizyt tego dnia'}
-              hint={free > 0 ? `${free} wolnych terminów — przełącz na „Siatkę", żeby nimi zarządzać.` : 'Dodaj terminy, aby umawiać pacjentów.'} />
-          </Tile>
-        ) : (
-          <Tile className="p-3 sm:p-4">
-            <ul className="space-y-1.5">
-              {agenda.map(a => {
-                const live = a.appointment_status === 'IN_PROGRESS'
-                const paused = a.appointment_status === 'PAUSED'
-                const done = FINISHED.includes(a.appointment_status)
-                const online = a.appointment_type === 'ONLINE'
-                const room = a.room ?? doctorRoom(a.doctor_id)
-                const waiting = !!a.checked_in_at && a.appointment_status === 'CONFIRMED'
-                const canCheckIn = a.appointment_status === 'CONFIRMED' && !online && !waiting
-                return (
-                  <li key={a.appointment_id} className={cx('flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl px-4 py-2.5',
-                    live ? 'bg-primary-soft ring-1 ring-primary' : paused ? 'bg-amber-50 ring-1 ring-amber-200'
-                      : done ? 'bg-gray-50 opacity-60' : waiting ? 'bg-primary-soft/50' : 'bg-gray-50')}>
-                    <span className="w-12 shrink-0 text-base font-extrabold text-gray-900 [font-variant-numeric:tabular-nums]">{formatTime(a.appointment_datetime)}</span>
-                    <button onClick={() => { setError(null); setDetail(a) }} className="flex min-w-0 flex-1 cursor-pointer flex-col text-left">
-                      <span className="truncate text-sm font-extrabold text-gray-900">{a.patient_name}</span>
-                      <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-500">
-                        {online ? <Video size={12} /> : <MapPin size={12} />} {a.doctor_id ? a.doctor_name : a.service_name}
-                        {a.doctor_id && a.service_name ? ` · ${a.service_name}` : ''}{room ? ` · gab. ${room}` : ''}
-                      </span>
-                    </button>
-                    {a.appointment_status === 'CONFIRMED' && a.confirmation_requested && !waiting && (
-                      <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold',
-                        a.patient_confirmed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-                        {a.patient_confirmed ? 'potw.' : 'bez potw.'}
-                      </span>
-                    )}
-                    {(live || paused || done) && <StatusBadge status={a.appointment_status} />}
-                    {waiting ? (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold text-white">
-                        <UserCheck size={12} /> czeka{room ? ` · gab. ${room}` : ''}
-                        <button type="button" aria-label="Cofnij meldunek" disabled={arrive.isPending}
-                          onClick={() => arrive.mutate({ id: a.appointment_id, checked_in: false })}
-                          className="ml-0.5 cursor-pointer rounded-full p-0.5 hover:bg-white/20"><X size={11} /></button>
-                      </span>
-                    ) : canCheckIn ? (
-                      <Button size="sm" variant="secondary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
-                        <DoorOpen size={13} /> Przyszedł
-                      </Button>
-                    ) : null}
-                  </li>
-                )
-              })}
-            </ul>
-          </Tile>
-        )
       ) : (
         <Tile className="overflow-x-auto p-0">
           {times.length === 0 && (
