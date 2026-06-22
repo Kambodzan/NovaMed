@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { Button, Field, Modal, cx, inputCls } from '../ui'
+import { Select } from './Select'
 import { api, ApiError } from '../lib/api'
 
 export interface ServiceOut {
@@ -21,7 +22,7 @@ export interface ServiceOut {
 }
 interface DoctorRow { doctor_id: string; name: string; specializations: string[] }
 
-export function ServicesManager({ clinicId }: { clinicId: string }) {
+export function ServicesManager({ clinicId, grid }: { clinicId: string; grid: number }) {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<ServiceOut | 'new' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +56,7 @@ export function ServicesManager({ clinicId }: { clinicId: string }) {
         <Button size="sm" variant="secondary" onClick={() => setEditing('new')}><Plus size={14} /> Dodaj usługę</Button>
       </div>
       <p className="mb-3 text-xs font-medium text-gray-500">
-        Każda usługa ma własny czas i cenę; przypisz ją lekarzom, którzy ją wykonują. Pakiet = usługa z łączną ceną.
+        Czas usługi = wielokrotność siatki placówki ({grid} min) — np. rezonans = N kratek. Przypisz usługę lekarzom, którzy ją wykonują. Pakiet = usługa z łączną ceną.
       </p>
 
       {error && <p className="mb-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
@@ -100,20 +101,22 @@ export function ServicesManager({ clinicId }: { clinicId: string }) {
       )}
 
       {editing && (
-        <ServiceForm clinicId={clinicId} service={editing === 'new' ? null : editing}
+        <ServiceForm clinicId={clinicId} grid={grid} service={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh() }} />
       )}
     </div>
   )
 }
 
-function ServiceForm({ clinicId, service, onClose, onSaved }: {
-  clinicId: string; service: ServiceOut | null; onClose: () => void; onSaved: () => void
+function ServiceForm({ clinicId, grid, service, onClose, onSaved }: {
+  clinicId: string; grid: number; service: ServiceOut | null; onClose: () => void; onSaved: () => void
 }) {
+  // czas usługi = wielokrotność siatki (atom placówki); rezonans = kilka kratek
+  const durationOptions = [1, 2, 3, 4, 5, 6, 8, 12].map(n => n * grid).filter(m => m <= 240)
   const [form, setForm] = useState({
     name: service?.name ?? '',
     specialization: service?.specialization ?? '',
-    duration_min: String(service?.duration_min ?? 20),
+    duration_min: String(service?.duration_min ?? grid),
     price: service?.price != null ? String(service.price) : '',
     referral_required: service?.referral_required ?? false,
     allow_online: service?.allow_online ?? false,
@@ -147,8 +150,9 @@ function ServiceForm({ clinicId, service, onClose, onSaved }: {
         <Field label="Specjalizacja (opcjonalnie)" hint="do filtrowania w wyszukiwarce">
           <input className={inputCls} value={form.specialization} onChange={e => setForm(f => ({ ...f, specialization: e.target.value }))} />
         </Field>
-        <Field label="Czas [min]" hint="krok siatki terminów">
-          <input type="number" min="5" max="240" step="5" className={inputCls} value={form.duration_min} onChange={e => setForm(f => ({ ...f, duration_min: e.target.value }))} />
+        <Field label="Czas [min]" hint={`wielokrotność siatki placówki (${grid} min)`}>
+          <Select value={form.duration_min} onChange={v => setForm(f => ({ ...f, duration_min: v }))}
+            options={durationOptions.map(m => ({ value: String(m), label: `${m} min${m >= grid * 2 ? ` · ${m / grid} kratki` : ''}` }))} />
         </Field>
         <Field label="Cena [zł]" hint="puste = NFZ/bezpłatna">
           <input type="number" min="0" step="10" className={inputCls} value={form.price} placeholder="—" onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />

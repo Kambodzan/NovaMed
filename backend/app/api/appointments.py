@@ -338,7 +338,9 @@ def create_slots(
         eff_referral = service.referral_required
         eff_allow_online = service.allow_online  # slot dziedziczy „czy teleporada" z usługi
         eff_duration: int | None = service.duration_min
-        interval = service.duration_min or 15
+        # siatka (start co ile) = ATOM placówki; czas usługi to TYLKO długość (wielokrotność
+        # atomu, pilnowana przy zakładaniu usługi). Usługa nie ma już własnej siatki.
+        interval = clinic.slot_interval_min or 15
     else:
         # legacy: wizyta lekarska XOR badanie pracowniane
         if (body.doctor_id is None) == (body.service_name is None):
@@ -349,7 +351,7 @@ def create_slots(
         eff_referral = (body.price is None) if body.service_name else False
         eff_allow_online = body.allow_online  # wizyta lekarska: wybór z body; badanie pracowniane i tak STATIONARY
         eff_duration = None
-        interval = (doctor.slot_duration_min if doctor and doctor.slot_duration_min else clinic.slot_interval_min) or 15
+        interval = clinic.slot_interval_min or 15
 
     for dt in body.datetimes:
         if dt.minute % interval != 0 or dt.second != 0:

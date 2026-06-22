@@ -43,16 +43,14 @@ export function DodajTerminy({ clinicId, defaultDay, interval, defaultDoctorId, 
     queryFn: () => api<ServiceOut[]>(`/clinics/${clinicId}/services`),
   })
   const doctorId = form.doctor_id || String(doctors?.[0]?.doctor_id ?? '')
-  const selectedDoctor = doctors?.find(d => String(d.doctor_id) === doctorId)
   // usługi, które wykonuje wybrany lekarz (typy wizyt z katalogu)
   const docServices = (services ?? []).filter(s => s.doctor_ids.includes(doctorId))
   const pickedService = docServices.find(s => s.service_id === form.service_id) ?? null
-  // krok siatki: czas usługi → długość wizyty lekarza → siatka placówki
-  const effInterval = form.kind === 'visit'
-    ? (pickedService?.duration_min ?? selectedDoctor?.slot_duration_min ?? interval)
-    : interval
-  // zakres Od–Do → wszystkie sloty dnia co krok siatki; × powtarzanie tygodniowe
-  const dayTimes = slotTimes(form.from, form.to, effInterval)
+  // ATOM placówki (`interval`) = siatka, na której START każdy slot. Krok GENEROWANIA
+  // = czas usługi (back-to-back, bez nakładania); usługa i tak jest wielokrotnością atomu.
+  const genStep = form.kind === 'visit' ? (pickedService?.duration_min ?? interval) : interval
+  // zakres Od–Do → sloty co krok generowania, startujące na siatce; × powtarzanie tygodniowe
+  const dayTimes = slotTimes(form.from, form.to, genStep)
   const weeks = Math.max(1, Number(form.weeks) || 1)
   const totalSlots = dayTimes.length * weeks
   // badanie pracowniane oraz usługa bez teleporady (np. echo serca) → tylko stacjonarnie
@@ -125,11 +123,11 @@ export function DodajTerminy({ clinicId, defaultDay, interval, defaultDoctorId, 
           </Field>
         )}
         <Field label="Data"><DatePicker value={form.date} min={new Date().toISOString().slice(0, 10)} onChange={v => setForm(f => ({ ...f, date: v }))} /></Field>
-        <Field label="Od" hint={form.kind === 'visit' && selectedDoctor?.slot_duration_min ? `co ${effInterval} min (lekarz)` : `co ${effInterval} min`}>
-          <TimePicker value={form.from} stepMin={effInterval} onChange={v => setForm(f => ({ ...f, from: v }))} />
+        <Field label="Od" hint={`start na siatce co ${interval} min`}>
+          <TimePicker value={form.from} stepMin={interval} onChange={v => setForm(f => ({ ...f, from: v }))} />
         </Field>
-        <Field label="Do" hint={`wygeneruje ${dayTimes.length} ${dayTimes.length === 1 ? 'termin' : 'terminów'}/dzień`}>
-          <TimePicker value={form.to} stepMin={effInterval} onChange={v => setForm(f => ({ ...f, to: v }))} />
+        <Field label="Do" hint={`${genStep} min/wizytę → ${dayTimes.length} ${dayTimes.length === 1 ? 'termin' : 'terminów'}/dzień`}>
+          <TimePicker value={form.to} stepMin={interval} onChange={v => setForm(f => ({ ...f, to: v }))} />
         </Field>
         <Field label="Forma" hint={stationaryOnly ? (form.kind === 'exam' ? 'badanie — tylko w placówce' : 'ta usługa nie ma teleporady') : undefined}>
           {stationaryOnly ? (

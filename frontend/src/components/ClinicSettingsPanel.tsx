@@ -60,7 +60,7 @@ export function ClinicSettingsPanel({ clinic }: { clinic: ClinicLite }) {
       {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
       {ok && <p className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700">{ok}</p>}
     </Tile>
-    <Tile className="mt-4 p-5"><ServicesManager clinicId={clinic.clinic_id} /></Tile>
+    <Tile className="mt-4 p-5"><ServicesManager clinicId={clinic.clinic_id} grid={clinic.slot_interval_min} /></Tile>
     </>
   )
 }

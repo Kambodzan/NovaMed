@@ -4,6 +4,22 @@ from datetime import datetime, timedelta
 from tests.conftest import auth_header
 
 
+def test_czas_uslugi_musi_byc_wielokrotnoscia_siatki(client, factory):
+    """Czas usługi = atom placówki × N (siatka 15 → 15/30/45/60…). 20 na siatce 15 odrzucone."""
+    kier_user, kier = factory.user("kierownik")
+    clinic = factory.clinic()  # siatka 15 min
+    factory.employ(clinic, kier_user.user_id)
+    cid = str(clinic.clinic_id)
+    # 20 nie jest wielokrotnością 15 → 422
+    r = client.post(f"/clinics/{cid}/services", headers=auth_header(kier),
+                    json={"name": "USG", "duration_min": 20})
+    assert r.status_code == 422 and "wielokrotnością" in r.json()["detail"]
+    # 60 (rezonans) = 4 kratki → OK
+    ok = client.post(f"/clinics/{cid}/services", headers=auth_header(kier),
+                     json={"name": "Rezonans", "duration_min": 60})
+    assert ok.status_code == 201 and ok.json()["duration_min"] == 60
+
+
 def test_uslugi_katalog_i_wspolrezerwacja(client, factory):
     kier_user, kier = factory.user("kierownik")
     _, reg = factory.user("rejestracja")
@@ -89,7 +105,7 @@ def test_slot_uslugi_tylko_dla_wykonujacego_lekarza(client, factory):
     factory.employ(clinic, doctor_user.user_id)
     cid, did = str(clinic.clinic_id), str(doctor_user.user_id)
     svc = client.post(f"/clinics/{cid}/services", headers=auth_header(kier),
-                      json={"name": "USG", "duration_min": 20}).json()
+                      json={"name": "USG", "duration_min": 30}).json()
     dt = (datetime.now() + timedelta(days=2)).replace(hour=9, minute=0, second=0, microsecond=0)
     r = client.post(f"/clinics/{cid}/slots", headers=auth_header(kier),
                     json={"doctor_id": did, "service_id": svc["service_id"], "datetimes": [dt.isoformat()]})

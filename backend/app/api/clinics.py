@@ -342,6 +342,18 @@ def get_service_in_clinic(clinic_id: UUID, service_id: UUID, db: Session) -> Ser
     return s
 
 
+def assert_duration_on_grid(clinic: Clinic, duration_min: int) -> None:
+    """Czas usługi musi być WIELOKROTNOŚCIĄ siatki placówki (atom): na siatce 15 min →
+    15/30/45/60… Dzięki temu usługa startuje na tej samej siatce co reszta i zajmuje
+    N kratek (długość ≠ własna siatka usługi). Badanie dłuższe (np. rezonans 60) = 4 kratki."""
+    grid = clinic.slot_interval_min or 15
+    if duration_min % grid != 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Czas usługi ({duration_min} min) musi być wielokrotnością siatki placówki "
+                   f"({grid} min) — np. {grid}, {grid * 2}, {grid * 3} min.")
+
+
 @router.get("/{clinic_id}/services", response_model=list[ServiceOut])
 def list_services(clinic_id: UUID, db: Session = Depends(get_db), _: AppUser = Depends(get_current_user)):
     """Katalog aktywnych usług placówki (typy wizyt) z listą wykonujących lekarzy."""
@@ -359,8 +371,9 @@ def create_service(
     db: Session = Depends(get_db),
 ):
     """Nowa usługa w katalogu placówki — kierownik SWOJEJ placówki albo administrator."""
-    get_clinic_or_404(clinic_id, db)
+    clinic = get_clinic_or_404(clinic_id, db)
     assert_staff_in_clinic(db, user, clinic_id)
+    assert_duration_on_grid(clinic, body.duration_min)
     s = Service(clinic_id=clinic_id, **body.model_dump())
     db.add(s)
     db.commit()
@@ -375,7 +388,9 @@ def update_service(
     user: AppUser = Depends(require_roles(*CLINIC_MANAGERS)),
     db: Session = Depends(get_db),
 ):
+    clinic = get_clinic_or_404(clinic_id, db)
     assert_staff_in_clinic(db, user, clinic_id)
+    assert_duration_on_grid(clinic, body.duration_min)
     s = get_service_in_clinic(clinic_id, service_id, db)
     for k, v in body.model_dump().items():
         setattr(s, k, v)
