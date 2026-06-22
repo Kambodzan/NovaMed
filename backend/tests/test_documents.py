@@ -227,6 +227,42 @@ def test_rbac_zakres_dokumentacji_per_rola(client, visit, fakes, factory):
     assert client.get(f"/documents/{sick['document_id']}/pdf", headers=auth_header(nurse_t)).status_code == 403
 
 
+def test_udostepnienie_poszerza_kartoteke_i_rezygnacja_zaweza(client, visit, fakes, factory):
+    """Kod udostępnienia (UC-P6) poszerza widoczność w ZWYKŁEJ kartotece, nie tylko
+    w widoku kodu: pielęgniarka domyślnie nie widzi skierowania do specjalisty ani
+    e-zwolnienia — po odebraniu kodu ALL widzi je w /patients/{id}/documents; po
+    rezygnacji z dostępu znów zawężone."""
+    pid = visit["patient"].user_id
+    doc = auth_header(visit["doctor_token"])
+    aid = visit["appointment_id"]
+    client.post(f"/patients/{pid}/referrals", headers=doc, json={"appointment_id": aid, "referral_type": "SPECIALIST", "specialization": "Kardiolog"})
+    client.post(f"/patients/{pid}/sick-leaves", headers=doc, json={"appointment_id": aid, "date_from": date.today().isoformat(), "date_to": (date.today() + timedelta(days=2)).isoformat()})
+
+    nurse_u, nurse_t = factory.user("pielegniarka"); factory.employ(visit["clinic"], nurse_u.user_id)
+
+    def nurse_docs():
+        return client.get(f"/patients/{pid}/documents", headers=auth_header(nurse_t)).json()
+
+    # domyślnie pielęgniarka NIE widzi e-zwolnienia ani skierowania do specjalisty
+    assert "SICK_LEAVE" not in _types(nurse_docs())
+    assert not any(d["document_type"] == "REFERRAL" and d["referral_type"] == "SPECIALIST" for d in nurse_docs())
+
+    # pacjent generuje kod ALL, pielęgniarka go odbiera
+    share = client.post("/shares", json={"scope": "ALL"}, headers=auth_header(visit["patient_token"])).json()
+    client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(nurse_t))
+
+    # teraz w KARTOTECE widzi też e-zwolnienie i specjalistę (poszerzone zgodą pacjenta)
+    after = nurse_docs()
+    assert "SICK_LEAVE" in _types(after)
+    assert any(d["document_type"] == "REFERRAL" and d["referral_type"] == "SPECIALIST" for d in after)
+    # i przebieg wizyt (noty) staje się dostępny mimo roli pielęgniarki
+    assert client.get(f"/patients/{pid}/history", headers=auth_header(nurse_t)).status_code == 200
+
+    # personel rezygnuje z dostępu → znów zawężone
+    assert client.delete(f"/shares/granted/{share['share_id']}", headers=auth_header(nurse_t)).status_code == 204
+    assert "SICK_LEAVE" not in _types(nurse_docs())
+
+
 def test_skierowanie_specjalisty_realizuje_sie_przy_rezerwacji(client, factory, fakes):
     """Skierowanie SPECIALIST realizuje się, gdy pacjent umówi z niego wizytę."""
     reg_user, reg_token = factory.user("rejestracja")

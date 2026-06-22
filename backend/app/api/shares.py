@@ -279,6 +279,23 @@ def granted_access(
     return _build_shared_docs(db, share)
 
 
+@router.delete("/granted/{share_id}", status_code=status.HTTP_204_NO_CONTENT)
+def drop_granted_access(
+    share_id: UUID,
+    user: AppUser = Depends(require_roles("lekarz", "pielegniarka")),
+    db: Session = Depends(get_db),
+):
+    """Pracownik rezygnuje z udostępnionego dostępu — usuwa go ze swojej listy
+    „Udostępnione mi" i traci wgląd (pacjent może później nadać nowy kod)."""
+    share = db.get(DocumentShare, share_id)
+    if share is None or share.recipient_id != user.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brak takiego udostępnienia.")
+    share.revoked = True
+    log_access(db, actor=user, action="DROP_SHARE", patient_id=share.patient_id,
+               detail="pracownik zrezygnowal z udostepnionego dostepu")
+    db.commit()
+
+
 @router.post("/access", response_model=SharedDocsOut)
 def access_by_code(
     body: AccessIn,

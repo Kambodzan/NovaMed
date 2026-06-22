@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import jsQR from 'jsqr'
-import { Camera, ChevronRight, FileSignature, FileText, FlaskConical, KeyRound, Pill, Stamp, Users, X } from 'lucide-react'
+import { Camera, ChevronRight, FileSignature, FileText, FlaskConical, KeyRound, Pill, Search, Stamp, Trash2, Users, X } from 'lucide-react'
 import { Button, Overline, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../ui'
 import { api, ApiError } from '../lib/api'
 import { formatDatePL } from '../lib/format'
+import { confirm } from '../lib/confirm'
 import type { DocumentOut, ShareOut, SharedDocsOut } from '../lib/types'
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 const docIcon: Record<DocumentOut['document_type'], typeof FileText> = {
   PRESCRIPTION: Pill, REFERRAL: FileSignature, LAB_RESULT: FlaskConical,
@@ -18,6 +21,7 @@ export function KodOdPacjenta() {
   const queryClient = useQueryClient()
   const [code, setCode] = useState('')
   const [shared, setShared] = useState<SharedDocsOut | null>(null)
+  const [q, setQ] = useState('')  // search w udostępnionej dokumentacji
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -31,14 +35,23 @@ export function KodOdPacjenta() {
 
   const access = useMutation({
     mutationFn: (c: string | undefined) => api<SharedDocsOut>('/shares/access', { method: 'POST', body: { code: c ?? code } }),
-    onSuccess: (data) => { setShared(data); setError(null); setCode(''); void queryClient.invalidateQueries({ queryKey: ['granted-shares'] }) },
+    onSuccess: (data) => { setShared(data); setQ(''); setError(null); setCode(''); void queryClient.invalidateQueries({ queryKey: ['granted-shares'] }) },
     onError: (e) => { setShared(null); setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć dokumentacji.') },
   })
 
   const openGrant = useMutation({
     mutationFn: (shareId: string) => api<SharedDocsOut>(`/shares/granted/${shareId}`),
-    onSuccess: (data) => { setShared(data); setError(null) },
+    onSuccess: (data) => { setShared(data); setQ(''); setError(null) },
     onError: (e) => { setShared(null); setError(e instanceof ApiError ? e.message : 'Nie udało się otworzyć dokumentacji.') },
+  })
+
+  // pracownik rezygnuje z udostępnionego dostępu (usuwa go ze swojej listy)
+  const dropGrant = useMutation({
+    mutationFn: (shareId: string) => api(`/shares/granted/${shareId}`, { method: 'DELETE' }),
+    onSuccess: (_d, shareId) => {
+      void queryClient.invalidateQueries({ queryKey: ['granted-shares'] })
+      setShared(s => (s?.share_id === shareId ? null : s))  // jeśli akurat otwarty — zamknij
+    },
   })
 
   // skan QR kamerą: klatki wideo → canvas → jsQR; trafienie = od razu otwiera
@@ -90,6 +103,13 @@ export function KodOdPacjenta() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanning])
 
+  // search po udostępnionej dokumentacji (dokumenty + noty)
+  const sDocs = shared?.documents ?? []
+  const sNotes = shared?.notes ?? []
+  const needle = norm(q.trim())
+  const fDocs = needle ? sDocs.filter(d => norm(`${d.details ?? ''} ${d.doctor_name} ${d.code ?? ''} ${formatDatePL(d.issued_at)}`).includes(needle)) : sDocs
+  const fNotes = needle ? sNotes.filter(n => norm(`${n.content} ${n.doctor_name} ${n.addenda.join(' ')} ${formatDatePL(n.date)}`).includes(needle)) : sNotes
+
   return (
     <div className="space-y-6">
       <div className="fade-up">
@@ -140,11 +160,11 @@ export function KodOdPacjenta() {
           </p>
           <ul className="space-y-1.5">
             {granted.map(g => (
-              <li key={g.share_id}>
+              <li key={g.share_id} className="flex items-center gap-2">
                 <button
                   onClick={() => openGrant.mutate(g.share_id)}
                   disabled={openGrant.isPending}
-                  className="flex w-full items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left transition hover:bg-primary-soft disabled:opacity-60"
+                  className="flex flex-1 items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left transition hover:bg-primary-soft disabled:opacity-60"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-primary tile-shadow">
                     <Users size={16} />
@@ -156,6 +176,17 @@ export function KodOdPacjenta() {
                     </span>
                   </span>
                   <ChevronRight size={16} className="shrink-0 text-gray-300" />
+                </button>
+                <button
+                  type="button" aria-label="Usuń dostęp" disabled={dropGrant.isPending}
+                  onClick={() => void confirm({
+                    title: 'Usunąć dostęp?',
+                    message: `Stracisz wgląd w dokumentację: ${g.recipient_name}. Pacjent może później nadać nowy kod.`,
+                    tone: 'danger', confirmLabel: 'Usuń',
+                  }).then(ok => ok && dropGrant.mutate(g.share_id))}
+                  className="shrink-0 cursor-pointer rounded-full p-2.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 size={16} />
                 </button>
               </li>
             ))}
@@ -175,12 +206,25 @@ export function KodOdPacjenta() {
             </Overline>
           </div>
 
+          {sDocs.length + sNotes.length > 4 && (
+            <div className="relative mb-3">
+              <Search size={15} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-gray-400" />
+              <input value={q} onChange={e => setQ(e.target.value)}
+                placeholder="Szukaj w udostępnionej dokumentacji…"
+                className={cx(inputCls, 'pl-10', q && 'pr-10')} />
+              {q && (
+                <button type="button" aria-label="Wyczyść" onClick={() => setQ('')}
+                  className="absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-700"><X size={15} /></button>
+              )}
+            </div>
+          )}
+
           {/* noty z wizyt (encounter notes) — w zakresie ogólnym / ostatnie 12 mies. */}
-          {shared.notes.length > 0 && (
+          {fNotes.length > 0 && (
             <div className="mb-4">
               <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">Noty z wizyt</p>
               <ul className="space-y-2">
-                {shared.notes.map(n => (
+                {fNotes.map(n => (
                   <li key={n.appointment_id} className="rounded-2xl bg-gray-50 px-4 py-3">
                     <p className="text-xs font-semibold text-gray-500">{formatDatePL(n.date)} · {n.doctor_name}</p>
                     <p className="mt-1 text-sm leading-relaxed font-medium whitespace-pre-wrap text-gray-800">{n.content}</p>
@@ -195,11 +239,13 @@ export function KodOdPacjenta() {
             </div>
           )}
 
-          {shared.documents.length === 0 && shared.notes.length === 0 ? (
+          {sDocs.length === 0 && sNotes.length === 0 ? (
             <p className="py-6 text-center text-sm font-medium text-gray-500">Brak dokumentów w udostępnionym zakresie.</p>
-          ) : shared.documents.length > 0 && (
+          ) : fDocs.length === 0 && fNotes.length === 0 ? (
+            <p className="py-6 text-center text-sm font-medium text-gray-500">Nic nie pasuje do „{q}".</p>
+          ) : fDocs.length > 0 && (
             <ul className="space-y-2">
-              {shared.documents.map(d => {
+              {fDocs.map(d => {
                 const Icon = docIcon[d.document_type] ?? FileText
                 return (
                   <li key={d.document_id} className="flex flex-wrap items-start gap-3 rounded-2xl bg-gray-50 px-4 py-3">

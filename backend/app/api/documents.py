@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
-from app.domain.access import can_view_clinical_data, can_view_document, filter_documents
+from app.domain.access import (
+    active_shares, assert_can_read_patient, can_view_clinical_data,
+    can_view_document, can_view_visit_notes, filter_documents,
+)
 from app.domain.tenancy import assert_staff_can_access_patient
 from app.core.db import get_db
 from app.domain.audit import log_access
@@ -606,7 +609,7 @@ def patient_info(
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
-    assert_staff_can_access_patient(db, user, patient_id)
+    assert_can_read_patient(db, user, patient_id)  # placówka lub udostępnienie
     log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id)
     return patient_info_out(db, p, user.role.role_name)
 
@@ -728,24 +731,28 @@ def patient_history(
 
     if db.get(Patient, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
-    assert_staff_can_access_patient(db, user, patient_id)
-    # przebieg wizyt (nota lekarska) to dokumentacja kliniczna — tylko lekarz; pozostały
-    # personel widzi same terminy wizyt przez /patients/{id}/appointments
-    if user.role.role_name != "lekarz":
+    assert_can_read_patient(db, user, patient_id)
+    # przebieg wizyt (nota lekarska) to dokumentacja kliniczna — widzi lekarz albo
+    # pracownik z udostępnieniem obejmującym noty; reszta personelu widzi same
+    # terminy przez /patients/{id}/appointments
+    shares = active_shares(db, user.user_id, patient_id)
+    if not can_view_visit_notes(user.role.role_name, shares):
         return []
     log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id, detail="historia wizyt")
 
-    visits = db.scalars(
-        select(Appointment).where(
-            Appointment.patient_id == patient_id,
-            Appointment.doctor_id.is_not(None),
-            Appointment.appointment_status == "COMPLETED",
-            # odsiewa artefakty danych testowych (smoke kończy wizyty 40+ dni
-            # naprzód), ale ZACHOWUJE dzisiejsze — slot bywa później niż realne
-            # zakończenie, więc filtrujemy po dacie (≤ dziś), nie po godzinie
-            Appointment.appointment_datetime < _start_of_tomorrow(),
-        ).order_by(Appointment.appointment_datetime.desc())
-    ).all()
+    conds = [
+        Appointment.patient_id == patient_id,
+        Appointment.doctor_id.is_not(None),
+        Appointment.appointment_status == "COMPLETED",
+        # odsiewa artefakty danych testowych (smoke kończy wizyty 40+ dni
+        # naprzód), ale ZACHOWUJE dzisiejsze — slot bywa później niż realne
+        # zakończenie, więc filtrujemy po dacie (≤ dziś), nie po godzinie
+        Appointment.appointment_datetime < _start_of_tomorrow(),
+    ]
+    # udostępnienie „ostatnie 12 mies." (bez ogólnego) — ogranicz noty do tego okna
+    if user.role.role_name != "lekarz" and not any(s.scope == "ALL" for s in shares):
+        conds.append(Appointment.appointment_datetime >= datetime.now() - timedelta(days=365))
+    visits = db.scalars(select(Appointment).where(*conds).order_by(Appointment.appointment_datetime.desc())).all()
 
     out: list[HistoryEntryOut] = []
     for a in visits:
@@ -755,6 +762,7 @@ def patient_history(
         docs = db.scalars(select(MedicalDocument).where(
             MedicalDocument.appointment_id == a.appointment_id)
             .order_by(MedicalDocument.issued_at)).all()
+        docs = filter_documents(db, user.role.role_name, docs, shares)
         entries = []
         for d in docs:
             o = document_out(db, d)
@@ -783,16 +791,18 @@ def patient_documents(
     if user.role.role_name != "pacjent" and user.role.role_name not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
     if user.role.role_name != "pacjent":
-        assert_staff_can_access_patient(db, user, patient_id)
+        assert_can_read_patient(db, user, patient_id)
         log_access(db, actor=user, action="VIEW_DOCUMENTS", patient_id=patient_id)
     rows = list(db.scalars(
         select(MedicalDocument)
         .where(MedicalDocument.patient_id == patient_id)
         .order_by(MedicalDocument.issued_at.desc())
     ))
-    # pacjent (własne) widzi wszystko; personel — wg zakresu roli (RODO/minimum)
+    # pacjent (własne) widzi wszystko; personel — wg zakresu roli (RODO/minimum),
+    # poszerzonego o to, co pacjent udostępnił temu pracownikowi kodem
     if user.role.role_name != "pacjent":
-        rows = filter_documents(db, user.role.role_name, rows)
+        shares = active_shares(db, user.user_id, patient_id)
+        rows = filter_documents(db, user.role.role_name, rows, shares)
     return [document_out(db, d) for d in rows]
 
 
@@ -933,9 +943,9 @@ def document_pdf(
     elif role not in STAFF_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
     if role != "pacjent":
-        assert_staff_can_access_patient(db, user, doc.patient_id)
-        # ta sama widoczność co lista: rola nie pobierze PDF dokumentu spoza swojego zakresu
-        if not can_view_document(db, role, doc):
+        assert_can_read_patient(db, user, doc.patient_id)
+        # ta sama widoczność co lista: rola (z ew. udostępnieniem) nie pobierze PDF spoza zakresu
+        if not can_view_document(db, role, doc, active_shares(db, user.user_id, doc.patient_id)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                                 detail="Ten dokument jest poza zakresem Twojej roli.")
         log_access(db, actor=user, action="DOWNLOAD_PDF", patient_id=doc.patient_id,
