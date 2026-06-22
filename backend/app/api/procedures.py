@@ -24,6 +24,11 @@ ST_CANCELLED = "CANCELLED"
 class PlanProcedureIn(BaseModel):
     referral_document_id: UUID
     procedure_datetime: datetime
+    # seria: zabieg powtarzany (np. zastrzyk codziennie przez 10 dni). occurrences=1
+    # → pojedynczy (jak dotąd). Tworzy `occurrences` wpisów co `interval_days` dni,
+    # o tej samej godzinie, automatycznie.
+    occurrences: int = Field(default=1, ge=1, le=60)
+    interval_days: int = Field(default=1, ge=1, le=30)
 
 
 class CompleteProcedureIn(BaseModel):
@@ -87,19 +92,24 @@ def plan_procedure(
     if active:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Na to skierowanie zaplanowano już zabieg.")
 
-    p = NursingProcedure(
-        nurse_id=user.user_id,
-        patient_id=doc.patient_id,
-        clinic_id=doc.appointment.clinic_id,
-        appointment_id=doc.appointment_id,
-        referral_id=referral.referral_id,
-        procedure_type=(referral.notes or "Zabieg pielęgniarski")[:100],
-        procedure_status=ST_PLANNED,
-        procedure_datetime=body.procedure_datetime,
-    )
-    db.add(p)
+    base_type = (referral.notes or "Zabieg pielęgniarski")[:90]
+    created: list[NursingProcedure] = []
+    for k in range(body.occurrences):
+        label = base_type if body.occurrences == 1 else f"{base_type} ({k + 1}/{body.occurrences})"
+        p = NursingProcedure(
+            nurse_id=user.user_id,
+            patient_id=doc.patient_id,
+            clinic_id=doc.appointment.clinic_id,
+            appointment_id=doc.appointment_id,
+            referral_id=referral.referral_id,
+            procedure_type=label,
+            procedure_status=ST_PLANNED,
+            procedure_datetime=body.procedure_datetime + timedelta(days=k * body.interval_days),
+        )
+        db.add(p)
+        created.append(p)
     db.commit()
-    return procedure_out(db, p)
+    return procedure_out(db, created[0])  # reprezentant serii (front i tak odświeża plan)
 
 
 @router.get("/day", response_model=list[ProcedureOut])
@@ -166,9 +176,17 @@ def complete_procedure(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Można odnotować tylko zaplanowany zabieg.")
     p.procedure_status = ST_DONE
     p.notes = body.notes
-    referral = db.get(Referral, p.referral_id)
-    doc = db.get(MedicalDocument, referral.document_id)
-    doc.document_status = DocumentStatus.REALIZED.value
+    # skierowanie → REALIZED dopiero, gdy NIE ma już innych zaplanowanych zabiegów z tej
+    # serii (przy serii np. 10 zastrzyków realizujemy dopiero po ostatnim)
+    remaining = db.scalar(select(NursingProcedure).where(
+        NursingProcedure.referral_id == p.referral_id,
+        NursingProcedure.procedure_id != p.procedure_id,
+        NursingProcedure.procedure_status == ST_PLANNED,
+    ))
+    if remaining is None:
+        referral = db.get(Referral, p.referral_id)
+        doc = db.get(MedicalDocument, referral.document_id)
+        doc.document_status = DocumentStatus.REALIZED.value
     db.commit()
     return procedure_out(db, p)
 

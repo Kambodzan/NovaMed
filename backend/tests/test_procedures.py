@@ -105,6 +105,35 @@ def test_dzien_pielegniarki_i_wykonanie(client, nursing_setup):
     assert resp.status_code == 409
 
 
+def test_seria_zabiegow_realizuje_skierowanie_po_ostatnim(client, nursing_setup):
+    """Zabieg wieloseryjny (np. zastrzyk codziennie przez 3 dni): jedno planowanie
+    tworzy 3 wpisy, a skierowanie jest REALIZED dopiero po wykonaniu ostatniego."""
+    s = nursing_setup
+    dt = (datetime.now() + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    resp = client.post("/procedures", headers=auth_header(s["nurse_token"]),
+                       json={"referral_document_id": s["referral"]["document_id"],
+                             "procedure_datetime": dt.isoformat(), "occurrences": 3, "interval_days": 1})
+    assert resp.status_code == 201, resp.text
+    # 3 wpisy w kolejne dni, kolejka pusta
+    ids = []
+    for k in range(3):
+        day = (dt + timedelta(days=k)).strftime("%Y-%m-%d")
+        rows = client.get(f"/procedures/day?day={day}", headers=auth_header(s["nurse_token"])).json()
+        assert len(rows) == 1 and f"({k + 1}/3)" in rows[0]["procedure_type"]
+        ids.append(rows[0]["procedure_id"])
+    assert client.get("/referrals/nursing", headers=auth_header(s["nurse_token"])).json() == []
+
+    # wykonanie 2 z 3 → skierowanie NADAL nie zrealizowane
+    for pid in ids[:2]:
+        client.post(f"/procedures/{pid}/complete", json={"notes": "podano dawkę"}, headers=auth_header(s["nurse_token"]))
+    docs = client.get("/documents/my", headers=auth_header(s["patient_token"])).json()
+    assert next(d for d in docs if d["document_type"] == "REFERRAL")["document_status"] != "REALIZED"
+    # wykonanie ostatniego → REALIZED
+    client.post(f"/procedures/{ids[2]}/complete", json={"notes": "ostatnia dawka"}, headers=auth_header(s["nurse_token"]))
+    docs = client.get("/documents/my", headers=auth_header(s["patient_token"])).json()
+    assert next(d for d in docs if d["document_type"] == "REFERRAL")["document_status"] == "REALIZED"
+
+
 def test_anulowanie_zwraca_skierowanie_do_kolejki(client, nursing_setup):
     s = nursing_setup
     proc = plan(client, s).json()

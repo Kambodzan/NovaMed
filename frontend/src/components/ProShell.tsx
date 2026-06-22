@@ -8,7 +8,7 @@ import { useAuth } from '../lib/auth'
 
 export function ProShell({ brand, nav, children }: {
   brand: string
-  nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }>
+  nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean; badge?: number }>
   children: ReactNode
 }) {
   const { me, logout } = useAuth()
@@ -41,7 +41,13 @@ export function ProShell({ brand, nav, children }: {
                   : 'font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-900',
               )}
             >
-              <item.icon size={17} strokeWidth={2.2} /> {item.label}
+              <item.icon size={17} strokeWidth={2.2} />
+              <span className="flex-1">{item.label}</span>
+              {!!item.badge && item.badge > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-extrabold text-white">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

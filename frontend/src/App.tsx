@@ -1,4 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { api } from './lib/api'
+import type { DocumentOut } from './lib/types'
 import { Activity, BarChart3, Building2, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, FlaskConical, KeyRound as KeyIcon, LayoutDashboard, Plug, ShieldCheck, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
@@ -65,12 +68,20 @@ function LekarzLayout() {
 }
 
 function PielegniarkaLayout() {
+  // marker „nowe skierowania": licznik czekających w kolejce, odświeżany w tle
+  // (near-real-time) — ta sama queryKey co strona Skierowania, więc współdzielą cache
+  const { data: referrals } = useQuery({
+    queryKey: ['nursing-referrals'],
+    queryFn: () => api<DocumentOut[]>('/referrals/nursing'),
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
+  })
   return (
     <ProShell
       brand="Portal Pielęgniarki"
       nav={[
         { to: '/', label: 'Zabiegi', icon: ClipboardList, end: true },
-        { to: '/skierowania', label: 'Skierowania', icon: FileSignature },
+        { to: '/skierowania', label: 'Skierowania', icon: FileSignature, badge: referrals?.length },
         { to: '/pacjenci', label: 'Pacjenci', icon: Users },
         { to: '/kod', label: 'Kod od pacjenta', icon: KeyIcon },
       ]}
