@@ -4,7 +4,10 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.domain.reminders import send_confirmation_requests
+import uuid
+
+from app.domain.reminders import send_confirmation_requests, send_imminent_teleporada_links
+from app.models import Appointment
 from tests.conftest import auth_header
 
 
@@ -63,6 +66,35 @@ def test_prosba_o_potwierdzenie_w_oknie(client, setup, db_session):
     my = client.get("/appointments/my", headers=auth_header(s["patient_token"])).json()
     mine = next(a for a in my if a["appointment_id"] == near_id)
     assert mine["confirmation_requested"] is True and mine["patient_confirmed"] is False
+
+
+def book_online_at(client, s, dt) -> str:
+    slot = client.post(
+        f"/clinics/{s['clinic'].clinic_id}/slots",
+        json={"doctor_id": str(s["doctor"].user_id), "datetimes": [dt.isoformat()], "appointment_type": "ONLINE"},
+        headers=auth_header(s["reg_token"]),
+    ).json()[0]
+    resp = client.post(f"/appointments/{slot['appointment_id']}/book", headers=auth_header(s["patient_token"]))
+    assert resp.status_code == 200, resp.text
+    return slot["appointment_id"]
+
+
+def test_link_teleporady_tuz_przed(client, setup, db_session):
+    # teleporada „za chwilę": link wysyłany w oknie ~15 min przed startem, raz na wizytę
+    s = setup
+    far = (datetime.now() + timedelta(hours=3)).replace(minute=0, second=0, microsecond=0)
+    far2 = (datetime.now() + timedelta(hours=4)).replace(minute=0, second=0, microsecond=0)
+    soon_id = book_online_at(client, s, far)
+    book_online_at(client, s, far2)  # poza oknem — nie wyśle
+    # przesuwamy jedną na ~10 min od teraz (siatka dotyczy zakładania slotu, nie przypomnienia)
+    a = db_session.get(Appointment, uuid.UUID(soon_id))
+    a.appointment_datetime = datetime.now() + timedelta(minutes=10)
+    db_session.commit()
+
+    assert send_imminent_teleporada_links(db_session) == 1  # tylko ta w oknie 15 min
+    notifs = client.get("/notifications/my", headers=auth_header(s["patient_token"])).json()
+    assert any(n["notification_title"] == "Teleporada za chwilę" for n in notifs)
+    assert send_imminent_teleporada_links(db_session) == 0  # idempotencja (link_sent)
 
 
 def test_placowka_bez_wymogu_nie_wysyla(client, setup, db_session):

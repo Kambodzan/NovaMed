@@ -41,6 +41,31 @@ def send_due_reminders(db: Session) -> int:
     return len(rows)
 
 
+def send_imminent_teleporada_links(db: Session, *, minutes_before: int = 15) -> int:
+    """Tuż przed teleporadą (okno `minutes_before`) pacjent dostaje SMS/mail z linkiem
+    do dołączenia — gdy jest najbardziej potrzebny (osobne od 24h). Raz na wizytę."""
+    now = datetime.now()
+    rows = db.scalars(
+        select(Appointment).where(
+            Appointment.appointment_type == "ONLINE",
+            Appointment.appointment_status == AppointmentStatus.CONFIRMED.value,
+            Appointment.patient_id.is_not(None),
+            Appointment.teleporada_link_sent.is_(False),
+            Appointment.appointment_datetime > now,
+            Appointment.appointment_datetime <= now + timedelta(minutes=minutes_before),
+        )
+    ).all()
+    for a in rows:
+        doctor_user = db.get(AppUser, a.doctor_id) if a.doctor_id else None
+        who = doctor_user.username if doctor_user else (a.service_name or "teleporada")
+        join = confirm_link(ensure_confirm_token(a))
+        notify(db, a.patient_id, *messages.teleporada_soon(
+            who, a.appointment_datetime, join_link=join, minutes=minutes_before), email=True)
+        a.teleporada_link_sent = True
+    db.commit()
+    return len(rows)
+
+
 def send_confirmation_requests(db: Session) -> int:
     """Potwierdzanie obecności: gdy placówka tego wymaga, X godzin przed wizytą
     pacjent dostaje prośbę „potwierdź, że będziesz". Brak potwierdzenia jest

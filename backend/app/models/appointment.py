@@ -35,6 +35,8 @@ class Appointment(Base):
     price: Mapped[float | None] = mapped_column(Numeric(8, 2))
     # Czy wysłano przypomnienie 24h przed wizytą (UC-P7)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Czy wysłano link do teleporady TUŻ PRZED startem (UC-P7 — osobne od 24h)
+    teleporada_link_sent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Pacjent chce powiadomienie, gdy u tego lekarza zwolni się WCZEŚNIEJSZY termin
     # (rozszerzenie ERD)
     notify_earlier: Mapped[bool] = mapped_column(Boolean, default=False)

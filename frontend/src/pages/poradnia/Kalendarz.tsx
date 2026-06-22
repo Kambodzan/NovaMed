@@ -137,7 +137,7 @@ export function Kalendarz() {
     const paused = a.appointment_status === 'PAUSED'
     const done = FINISHED.includes(a.appointment_status)
     const online = a.appointment_type === 'ONLINE'
-    const room = a.room ?? doctorRoom(a.doctor_id)
+    const room = online ? null : (a.room ?? doctorRoom(a.doctor_id))  // teleporada nie ma gabinetu
     const waiting = !!a.checked_in_at && a.appointment_status === 'CONFIRMED'
     // meldowanie TYLKO dla dnia dzisiejszego — w przyszłym dniu „Przyszedł" to missclick i afera
     const canCheckIn = a.appointment_status === 'CONFIRMED' && !online && !waiting && day === todayIso()
@@ -188,6 +188,12 @@ export function Kalendarz() {
             <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: a.appointment_id })}>
               <DoorOpen size={13} /> Przyszedł
             </Button>
+          </span>
+        ) : online && a.appointment_status === 'CONFIRMED' ? (
+          // teleporada: nic do meldowania — sama informacja. Link wysyła pacjentowi
+          // automat ~15 min przed startem (osobne przypomnienie z linkiem)
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-extrabold text-sky-700">
+            <Video size={12} /> Teleporada online
           </span>
         ) : null}
       </li>
@@ -304,6 +310,12 @@ export function Kalendarz() {
                 ) : (
                   <Button size="sm" variant="primary" disabled={arrive.isPending} onClick={() => arrive.mutate({ id: detail.appointment_id })}><DoorOpen size={13} /> Przyszedł</Button>
                 )}
+              </div>
+            )}
+            {detail.appointment_status === 'CONFIRMED' && detail.appointment_type === 'ONLINE' && (
+              <div className="mt-2 flex items-start gap-2 rounded-xl bg-sky-50 px-3.5 py-2.5">
+                <Video size={15} className="mt-0.5 shrink-0 text-sky-700" />
+                <span className="text-sm font-medium text-sky-800">Teleporada — nie ma czego meldować. Pacjent dołącza z linku, który wysyłamy automatycznie ~15 min przed startem (osobno od przypomnienia 24 h).</span>
               </div>
             )}
           </div>

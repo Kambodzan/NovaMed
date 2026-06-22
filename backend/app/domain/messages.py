@@ -66,6 +66,15 @@ def visit_reminder(who: str, dt: datetime, *, join_link: str | None = None) -> t
     return "Przypomnienie o wizycie", _link(f"Jutro masz wizytę: {who}, {_dt(dt)}.", join_link)
 
 
+def teleporada_soon(who: str, dt: datetime, *, join_link: str | None, minutes: int) -> tuple[str, str]:
+    """Przypomnienie TUŻ PRZED teleporadą — z linkiem do dołączenia od razu (UC-P7).
+    Osobne od 24h: link trafia, gdy jest najbardziej potrzebny, a nie dobę wcześniej."""
+    body = f"Twoja teleporada ({who}) zaczyna się o {dt.strftime('%H:%M')} — za ok. {minutes} min."
+    if join_link:
+        body += f" Dołącz (wideo): {join_link}"
+    return "Teleporada za chwilę", body
+
+
 def payment_declined() -> tuple[str, str]:
     """Bramka odrzuciła płatność — termin nadal trzymany, można ponowić. (Nie mailem.)"""
     return ("Płatność odrzucona",

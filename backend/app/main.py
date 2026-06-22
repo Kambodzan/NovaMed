@@ -26,7 +26,7 @@ from app.api.telemed import router as telemed_router
 from app.api.waitlist import router as waitlist_router
 from app.core.config import settings
 from app.core.db import SessionLocal, get_db
-from app.domain.reminders import release_expired_temp_locks, send_confirmation_requests, send_due_reminders
+from app.domain.reminders import release_expired_temp_locks, send_confirmation_requests, send_due_reminders, send_imminent_teleporada_links
 
 logger = logging.getLogger("novamed")
 
@@ -41,6 +41,9 @@ async def reminders_loop() -> None:
                 sent = send_due_reminders(db)
                 if sent:
                     logger.info("Wysłano %s przypomnień o wizytach", sent)
+                soon = send_imminent_teleporada_links(db)
+                if soon:
+                    logger.info("Wysłano %s linków do teleporad (tuż przed)", soon)
                 released = release_expired_temp_locks(db)
                 if released:
                     logger.info("Zwolniono %s terminów z porzuconą płatnością", released)
