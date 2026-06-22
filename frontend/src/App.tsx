@@ -38,6 +38,7 @@ import { Toaster } from './components/Toaster'
 import { ConfirmHost } from './components/ConfirmHost'
 import { UmowWizyte } from './pages/poradnia/UmowWizyte'
 import { Kalendarz } from './pages/poradnia/Kalendarz'
+import { Grafik } from './pages/poradnia/Grafik'
 import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
 import { Pulpit } from './pages/poradnia/Pulpit'
@@ -118,7 +119,8 @@ function PoradniaLayout() {
       brand="Panel Poradni"
       nav={[
         { to: '/', label: 'Pulpit', icon: LayoutDashboard, end: true },
-        { to: '/kalendarz', label: 'Kalendarz lekarzy', icon: CalendarDays },
+        { to: '/kalendarz', label: 'Kalendarz', icon: CalendarDays },
+        { to: '/grafik', label: 'Grafik', icon: CalendarRange },
         { to: '/umow', label: 'Umów wizytę', icon: CalendarCheck },
         { to: '/pacjenci', label: 'Pacjenci', icon: Users },
         { to: '/wyniki', label: 'Wyniki badań', icon: FlaskConical },
@@ -207,6 +209,7 @@ export default function App() {
         <Route path="/" element={<PoradniaLayout />}>
           <Route index element={<Pulpit />} />
           <Route path="kalendarz" element={<Kalendarz />} />
+          <Route path="grafik" element={<Grafik />} />
           <Route path="umow" element={<UmowWizyte />} />
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
