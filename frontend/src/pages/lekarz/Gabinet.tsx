@@ -765,7 +765,7 @@ export function Gabinet() {
                   </button>
                 ))}
               </div>
-              <div className="max-h-[60vh] overflow-y-auto p-1">
+              <div className="max-h-[60vh] overflow-y-auto p-1 [scrollbar-gutter:stable]">
                 <DokumentyLista documents={histShown.slice(0, histLimit)} emptyHint="Brak dokumentów tego rodzaju." />
               </div>
               {histShown.length > histLimit && (
