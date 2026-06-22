@@ -36,15 +36,20 @@ PRESCRIPTION_VALID_DAYS = 30  # ważność e-recepty (standardowo 30 dni)
 
 class PrescriptionIn(BaseModel):
     appointment_id: UUID
-    icd10: str = Field(min_length=3, max_length=10)
+    # rozpoznanie opcjonalne — przy leczeniu objawowym / w trakcie diagnostyki lekarz
+    # może go jeszcze nie mieć (dopiero szuka)
+    icd10: str | None = Field(default=None, max_length=10)
     drugs: str = Field(min_length=3)
 
 
 class ReferralIn(BaseModel):
     appointment_id: UUID
     referral_type: ReferralType
-    icd10: str = Field(min_length=3, max_length=10)
-    notes: str | None = None
+    # rozpoznanie opcjonalne — skierowanie (zwł. na badania) bywa elementem diagnostyki,
+    # gdy rozpoznania jeszcze NIE ma
+    icd10: str | None = Field(default=None, max_length=10)
+    specialization: str | None = None  # do jakiego specjalisty (wymagane dla SPECIALIST)
+    notes: str | None = None           # LAB: jakie badania; SPECIALIST/NURSING: powód/zalecenia
 
 
 class SickLeaveIn(BaseModel):
@@ -129,6 +134,8 @@ def document_out(db: Session, doc: MedicalDocument, error_message: str | None = 
         if child:
             referral_type = child.referral_type
             label = REFERRAL_TYPE_LABEL.get(child.referral_type, child.referral_type)
+            if child.specialization:
+                label = f"{label} — {child.specialization}"
             code, details = child.referral_code, f"{label}: {child.notes or ''}".strip(": ")
     elif doc.document_type == DocumentType.SICK_LEAVE.value:
         child = db.scalar(select(SickLeave).where(SickLeave.document_id == doc.document_id))
@@ -269,6 +276,15 @@ def issue_referral(
     bez P1); LAB/SPECIALIST idą przez P1 jak e-skierowanie. Skierowanie LAB
     rejestruje też zlecenie w systemie laboratorium (UC-I2)."""
     validate_visit(db, user, patient_id, body.appointment_id)
+    # treść zlecenia jest obowiązkowa zależnie od typu: do specjalisty trzeba podać
+    # specjalizację, na badania — co właściwie zlecamy (inaczej skierowanie jest puste)
+    if body.referral_type == ReferralType.SPECIALIST and not (body.specialization or "").strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Wskaż specjalizację, do której kierujesz pacjenta.")
+    if body.referral_type == ReferralType.LAB and not (body.notes or "").strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Wpisz, jakie badania zlecasz.")
+    specialization = (body.specialization or "").strip() or None if body.referral_type == ReferralType.SPECIALIST else None
     patient = db.get(Patient, patient_id)
     payload = json.dumps(body.model_dump(exclude={"appointment_id"}), ensure_ascii=False)
 
@@ -291,10 +307,12 @@ def issue_referral(
                        DocumentType.REFERRAL, DocumentStatus.SENT_TO_P1, payload)
     db.add(doc)
     db.flush()
+    # dla skierowania do specjalisty cel (specjalizacja) wędruje też w treści do P1
+    p1_notes = f"Konsultacja: {specialization}." + (f" {body.notes}" if body.notes else "") if specialization else body.notes
     try:
         code = p1.issue_referral(
             pesel=patient.pesel, doctor_pwz=doctor_pwz(db, user.user_id),
-            icd10=body.icd10, referral_type=body.referral_type.value, notes=body.notes,
+            icd10=body.icd10 or "", referral_type=body.referral_type.value, notes=p1_notes,
         )
     except IntegrationError as exc:
         doc.document_status = DocumentStatus.ERROR.value
@@ -302,7 +320,7 @@ def issue_referral(
         return document_out(db, doc, error_message=exc.message)
     doc.document_status = DocumentStatus.CONFIRMED.value
     db.add(Referral(document_id=doc.document_id, referral_code=code,
-                    referral_type=body.referral_type.value, notes=body.notes))
+                    referral_type=body.referral_type.value, specialization=specialization, notes=body.notes))
     notify_new_document(db, doc, code)
     db.commit()
 

@@ -43,6 +43,11 @@ export const KIND_LABEL: Record<DocKind, string> = {
 const CERT_PURPOSES = ['do pracodawcy', 'do szkoły / przedszkola', 'do klubu sportowego',
   'do sanatorium', 'na uczelnię', 'inne (wpisz)']
 
+// specjalizacje do skierowania (SPECIALIST) — z opcją wpisania własnej
+const SPECIALIZATIONS = ['Kardiolog', 'Neurolog', 'Dermatolog', 'Endokrynolog', 'Diabetolog',
+  'Ortopeda', 'Okulista', 'Laryngolog', 'Ginekolog', 'Urolog', 'Gastrolog', 'Pulmonolog',
+  'Reumatolog', 'Psychiatra', 'Alergolog', 'Chirurg', 'inne (wpisz)']
+
 export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10, allergies }: {
   patientId: string
   appointmentId: string
@@ -79,9 +84,10 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
   }
 
   const [form, setForm] = useState({
-    icd10: 'I10',
+    icd10: '',
     drugs: '',
     referral_type: 'NURSING',
+    specialization: SPECIALIZATIONS[0],
     notes: '',
     date_from: new Date().toISOString().slice(0, 10),
     date_to: new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10),
@@ -106,11 +112,15 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       switch (kind) {
         case 'PRESCRIPTION':
           return api<DocumentOut>(`/patients/${patientId}/prescriptions`, {
-            method: 'POST', body: { ...base, icd10: icdCode(icd10Value), drugs: form.drugs },
+            method: 'POST', body: { ...base, icd10: icdCode(icd10Value) || null, drugs: form.drugs },
           })
         case 'REFERRAL':
           return api<DocumentOut>(`/patients/${patientId}/referrals`, {
-            method: 'POST', body: { ...base, icd10: icdCode(icd10Value), referral_type: form.referral_type, notes: form.notes || null },
+            method: 'POST', body: {
+              ...base, icd10: icdCode(icd10Value) || null, referral_type: form.referral_type,
+              specialization: form.referral_type === 'SPECIALIST' ? form.specialization : null,
+              notes: form.notes || null,
+            },
           })
         case 'SICK_LEAVE':
           return api<DocumentOut>(`/patients/${patientId}/sick-leaves`, {
@@ -204,9 +214,9 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       </div>
 
       {needsIcd && !externalIcd && (
-        <Field label="Rozpoznanie (ICD-10)" hint="zacznij pisać kod lub nazwę rozpoznania">
+        <Field label="Rozpoznanie (ICD-10) — jeśli znane" hint="opcjonalne; przy diagnostyce możesz nie mieć jeszcze rozpoznania">
           <Typeahead
-            id="icd10" minLength={1} required
+            id="icd10" minLength={1}
             value={form.icd10}
             onChange={v => setForm(f => ({ ...f, icd10: v }))}
             search={searchIcd10}
@@ -216,10 +226,10 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       )}
       {needsIcd && externalIcd && (
         <div className="rounded-xl bg-gray-50 px-3.5 py-2.5">
-          <p className="text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">Rozpoznanie (ICD-10)</p>
+          <p className="text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">Rozpoznanie (ICD-10) — jeśli znane</p>
           {icd10Value.trim()
             ? <p className="text-sm font-bold text-gray-900">{icd10Value}</p>
-            : <p className="text-sm font-medium text-amber-700">Uzupełnij „Rozpoznanie" w notatce obok — trafi tu automatycznie.</p>}
+            : <p className="text-sm font-medium text-gray-500">Brak — uzupełnij „Rozpoznanie" w notatce obok, jeśli już je masz (opcjonalne).</p>}
         </div>
       )}
 
@@ -290,9 +300,30 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
                 { value: 'SPECIALIST', label: 'Konsultacja specjalistyczna (przez P1)' },
               ]} />
           </Field>
-          <Field label="Zalecenia (opcjonalnie)">
-            <input className={inputCls} value={form.notes} onChange={set('notes')} placeholder="np. iniekcje 1×dz. przez 10 dni" />
-          </Field>
+          {form.referral_type === 'SPECIALIST' && (
+            <Field label="Do jakiego specjalisty" hint="specjalizacja, do której kierujesz pacjenta">
+              <Select
+                value={SPECIALIZATIONS.includes(form.specialization) ? form.specialization : 'inne (wpisz)'}
+                onChange={v => setForm(f => ({ ...f, specialization: v === 'inne (wpisz)' ? '' : v }))}
+                options={SPECIALIZATIONS.map(s => ({ value: s, label: s }))}
+              />
+              {!SPECIALIZATIONS.includes(form.specialization) && (
+                <input className={cx(inputCls, 'mt-2')} required minLength={2} value={form.specialization}
+                  onChange={set('specialization')} placeholder="Wpisz specjalizację (np. Nefrolog)" />
+              )}
+            </Field>
+          )}
+          {form.referral_type === 'LAB' ? (
+            <Field label="Jakie badania zlecasz" hint="wpisz badania — trafią do zlecenia w laboratorium">
+              <textarea className={cx(inputCls, 'h-16 py-2')} required minLength={2} value={form.notes} onChange={set('notes')}
+                placeholder="np. Morfologia, lipidogram, TSH, glukoza na czczo" />
+            </Field>
+          ) : (
+            <Field label={form.referral_type === 'SPECIALIST' ? 'Powód / zalecenia (opcjonalnie)' : 'Zalecenia (opcjonalnie)'}>
+              <input className={inputCls} value={form.notes} onChange={set('notes')}
+                placeholder={form.referral_type === 'SPECIALIST' ? 'np. podejrzenie nadciśnienia opornego' : 'np. iniekcje 1×dz. przez 10 dni'} />
+            </Field>
+          )}
         </>
       )}
 
@@ -339,7 +370,7 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
       )}
 
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-      <Button disabled={issue.isPending || (needsIcd && externalIcd && !icd10Value.trim())} type="submit">
+      <Button disabled={issue.isPending} type="submit">
         <Send size={14} /> {issue.isPending ? 'Wystawianie…' : 'Wystaw'}
       </Button>
     </form>

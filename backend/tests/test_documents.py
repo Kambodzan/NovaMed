@@ -198,7 +198,7 @@ def test_skierowanie_specjalisty_realizuje_sie_przy_rezerwacji(client, factory, 
     base = make_slot(9)
     client.post(f"/appointments/{base}/book", headers=auth_header(patient_token))
     assert client.post(f"/patients/{patient_user.user_id}/referrals", headers=auth_header(doctor_token),
-                       json={"appointment_id": base, "referral_type": "SPECIALIST",
+                       json={"appointment_id": base, "referral_type": "SPECIALIST", "specialization": "Kardiolog",
                              "icd10": "I10", "notes": "do kardiologa"}).status_code == 201
     doc_id = next(d["document_id"] for d in client.get("/documents/my", headers=auth_header(patient_token)).json()
                   if d["document_type"] == "REFERRAL")
@@ -214,7 +214,8 @@ def test_skierowanie_specjalisty_realizuje_sie_przy_rezerwacji(client, factory, 
 
 
 def test_skierowanie_lab_przez_p1(client, visit, fakes):
-    body = {"appointment_id": visit["appointment_id"], "referral_type": "LAB", "icd10": "E78.0"}
+    body = {"appointment_id": visit["appointment_id"], "referral_type": "LAB",
+            "icd10": "E78.0", "notes": "Lipidogram, glukoza na czczo"}
     resp = client.post(
         f"/patients/{visit['patient'].user_id}/referrals",
         json=body, headers=auth_header(visit["doctor_token"]),
@@ -222,6 +223,25 @@ def test_skierowanie_lab_przez_p1(client, visit, fakes):
     assert resp.status_code == 201
     assert resp.json()["document_status"] == "CONFIRMED"
     assert not resp.json()["code"].startswith("NUR-")
+
+
+def test_skierowanie_wymaga_tresci_zlecenia_icd_opcjonalne(client, visit, fakes):
+    """Skierowanie do specjalisty wymaga specjalizacji, na badania — listy badań;
+    rozpoznanie (ICD-10) jest opcjonalne (diagnostyka bez rozpoznania)."""
+    pid = visit["patient"].user_id
+    hdr = auth_header(visit["doctor_token"])
+    aid = visit["appointment_id"]
+    # SPECIALIST bez specjalizacji → 422
+    assert client.post(f"/patients/{pid}/referrals", headers=hdr,
+                       json={"appointment_id": aid, "referral_type": "SPECIALIST"}).status_code == 422
+    # LAB bez listy badań → 422
+    assert client.post(f"/patients/{pid}/referrals", headers=hdr,
+                       json={"appointment_id": aid, "referral_type": "LAB"}).status_code == 422
+    # SPECIALIST z specjalizacją, BEZ icd10 → 201, specjalizacja widoczna w opisie
+    r = client.post(f"/patients/{pid}/referrals", headers=hdr,
+                    json={"appointment_id": aid, "referral_type": "SPECIALIST", "specialization": "Neurolog"})
+    assert r.status_code == 201, r.text
+    assert "Neurolog" in r.json()["details"]
 
 
 def test_ezla(client, visit, fakes):

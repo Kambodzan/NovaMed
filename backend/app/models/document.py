@@ -55,6 +55,8 @@ class Referral(Base):
     document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     referral_code: Mapped[str] = mapped_column(String(50))
     referral_type: Mapped[str] = mapped_column(String(100))  # m.in. zabieg pielęgniarski, badanie lab
+    # cel skierowania do specjalisty (tylko SPECIALIST); NURSING/LAB nie używają
+    specialization: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(Text)
 
     document = relationship("MedicalDocument")
