@@ -186,7 +186,7 @@ def main() -> None:
         check("przełożenie powrotne", r.status_code == 200)
         visit_id = back["appointment_id"]
 
-    print("== E. Płatności (TEMP_LOCK → PAID / FREE) ==")
+    print("== E. Płatności (TEMP_LOCK → PAID / ponowienie) ==")
     r = api("POST", f"/appointments/{paid1['appointment_id']}/book", jan)
     ok_lock = r.status_code == 200 and r.json()["appointment"]["appointment_status"] == "TEMP_LOCK" \
         and r.json()["payment"]["payment_status"] == "PENDING"
@@ -197,8 +197,12 @@ def main() -> None:
           and r.json()["payment"]["payment_status"] == "PAID", r.text[:120])
     r = api("POST", f"/appointments/{paid2['appointment_id']}/book", tom)
     r = api("POST", f"/appointments/{paid2['appointment_id']}/pay", tom, json={"outcome": "failure"})
-    check("odmowa płatności → slot FREE", r.status_code == 200
-          and r.json()["appointment"]["appointment_status"] == "FREE", r.text[:120])
+    # odmowa NIE kasuje rezerwacji: slot trzymany (TEMP_LOCK) + NOWA próba PENDING,
+    # żeby pacjent mógł ponowić; FREE dopiero po wygaśnięciu okna (pętla tła) — commit 53082ca
+    check("odmowa płatności → slot trzymany do ponowienia (TEMP_LOCK + PENDING)",
+          r.status_code == 200
+          and r.json()["appointment"]["appointment_status"] == "TEMP_LOCK"
+          and r.json()["payment"]["payment_status"] == "PENDING", r.text[:120])
 
     print("== F. 'Powiadom o wcześniejszym terminie' ==")
     api("POST", f"/appointments/{watch_slot['appointment_id']}/book", jan, json={"notify_earlier": True})
