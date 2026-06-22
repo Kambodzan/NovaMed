@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, MapPin, Plus, Search, Video, X } from 'lucide-react'
+import { CalendarRange, ChevronDown, ChevronLeft, ChevronRight, MapPin, Plus, Search, Video, X } from 'lucide-react'
 import { Button, EmptyState, Loading, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -25,6 +25,8 @@ const dayLabel = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString
 const shortDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const EXAM = '__exam'
+// kolory placówek do trybu „cała sieć" (z dala od primary-teal, by nie mylić z akcją)
+const CLINIC_DOTS = ['bg-indigo-500', 'bg-amber-500', 'bg-rose-500', 'bg-sky-500', 'bg-violet-500', 'bg-orange-500', 'bg-lime-500', 'bg-fuchsia-500']
 
 export function Grafik() {
   const navigate = useNavigate()
@@ -60,6 +62,16 @@ export function Grafik() {
       const cur = m.get(k)
       if (!cur || s.appointment_datetime < cur) m.set(k, s.appointment_datetime)
     }
+    return m
+  }, [free])
+
+  // placówki sieci z kolorem + adresem (do legendy i kropek na pigułkach)
+  const clinicMeta = useMemo(() => {
+    const byId = new Map<string, { name: string; address: string | null; city: string | null }>()
+    for (const s of free) if (!byId.has(s.clinic_id)) byId.set(s.clinic_id, { name: s.clinic_name, address: s.clinic_address ?? null, city: s.clinic_city ?? null })
+    const sorted = [...byId.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
+    const m = new Map<string, { name: string; address: string | null; city: string | null; dot: string }>()
+    sorted.forEach(([id, info], i) => m.set(id, { ...info, dot: CLINIC_DOTS[i % CLINIC_DOTS.length] }))
     return m
   }, [free])
 
@@ -187,6 +199,18 @@ export function Grafik() {
               <span className="text-sm font-extrabold text-gray-900">{active?.label}</span>
               <span className="text-xs font-semibold text-gray-500">— wolne okienka, klik = umów pacjenta</span>
             </div>
+            {/* legenda placówek — kolor → nazwa + adres (kropki na pigułkach niżej) */}
+            {scope === 'network' && clinicMeta.size > 0 && (
+              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5 rounded-2xl bg-gray-50 px-3.5 py-2.5">
+                {[...clinicMeta.values()].map(c => (
+                  <span key={c.name} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+                    <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full', c.dot)} />
+                    <span className="font-extrabold text-gray-900">{c.name}</span>
+                    {c.address && <span>· {c.address}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="space-y-1.5">
               {days.map(d => {
                 const list = byDay.get(d) ?? []
@@ -206,14 +230,13 @@ export function Grafik() {
                         {[...byTime.entries()].map(([t, opts]) => {
                           const s0 = opts[0]
                           const multi = opts.length > 1
-                          const tag = scope === 'network' && s0.clinic_id !== clinic?.clinic_id ? s0.clinic_name : null
                           return (
                             <button key={s0.appointment_id} onClick={() => multi ? setChooser({ time: t, options: opts }) : book(s0)}
                               className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-extrabold text-gray-900 ring-1 ring-gray-200 transition-colors hover:bg-primary hover:text-white hover:ring-primary">
+                              {scope === 'network' && <span className={cx('h-2 w-2 shrink-0 rounded-full', clinicMeta.get(s0.clinic_id)?.dot ?? 'bg-gray-300')} title={s0.clinic_name} />}
                               {!multi && (s0.appointment_type === 'ONLINE' ? <Video size={12} /> : <MapPin size={12} />)}
                               {t}
                               {multi && <ChevronDown size={12} className="opacity-60" />}
-                              {tag && <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-700"><Building2 size={9} /> {tag}</span>}
                             </button>
                           )
                         })}
@@ -228,7 +251,9 @@ export function Grafik() {
       )}
 
       {chooser && (
-        <Modal title={`Wizyta o ${chooser.time}`} overline={active?.label} onClose={() => setChooser(null)}>
+        <Modal title={`Wizyta o ${chooser.time}`}
+          overline={`${active?.label ?? ''}${scope === 'network' && chooser.options[0] ? ` · ${chooser.options[0].clinic_name}` : ''}`}
+          onClose={() => setChooser(null)}>
           <p className="mb-3 text-sm font-semibold text-gray-500">Wybierz rodzaj wizyty na tę godzinę:</p>
           <div className="space-y-1.5">
             {chooser.options.map(s => (

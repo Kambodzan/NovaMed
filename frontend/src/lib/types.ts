@@ -26,6 +26,8 @@ export interface AppointmentOut {
   specializations: string[]
   clinic_id: string
   clinic_name: string
+  clinic_address?: string | null
+  clinic_city?: string | null
   patient_id: string | null
   patient_name: string | null
   price: number | null

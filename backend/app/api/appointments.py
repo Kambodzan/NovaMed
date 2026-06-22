@@ -141,6 +141,8 @@ class AppointmentOut(BaseModel):
     specializations: list[str] = []
     clinic_id: UUID
     clinic_name: str
+    clinic_address: str | None = None  # do legendy „cała sieć" w Grafiku recepcji
+    clinic_city: str | None = None
     patient_id: UUID | None = None
     patient_name: str | None = None
     price: float | None = None
@@ -229,6 +231,8 @@ def appointment_out(db: Session, a: Appointment) -> AppointmentOut:
         specializations=list(doctor.specialization_names) if doctor else [],
         clinic_id=a.clinic_id,
         clinic_name=clinic.clinic_name,
+        clinic_address=clinic.address,
+        clinic_city=clinic.city,
         patient_id=a.patient_id,
         patient_name=f"{patient.first_name} {patient.last_name}" if patient else None,
         price=float(a.price) if a.price is not None else None,
