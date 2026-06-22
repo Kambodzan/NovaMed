@@ -75,7 +75,8 @@ export function Gabinet() {
   const [templatesOpen, setTemplatesOpen] = useState(false)  // „Gotowe szablony" — domyślnie schowane
   const [error, setError] = useState<string | null>(null)
   // potwierdzenia akcji bez powrotu: NO_SHOW i zakończenie z niezapisanym szkicem
-  const [confirm, setConfirm] = useState<'NO_SHOW' | 'COMPLETE_UNSAVED' | null>(null)
+  const [confirm, setConfirm] = useState<'NO_SHOW' | 'COMPLETE_UNSAVED' | 'SIGN' | null>(null)
+  const [printOpen, setPrintOpen] = useState(false)
   // historia dokumentów: domyślnie zwinięta, z filtrem rodzaju i limitem
   const [histOpen, setHistOpen] = useState(false)
   const [histFilter, setHistFilter] = useState<'ALL' | DocKind>('ALL')
@@ -219,41 +220,63 @@ export function Gabinet() {
   const histShown = historyDocs.filter(d => histFilter === 'ALL' || d.document_type === histFilter)
   const histCount = (k: DocKind) => historyDocs.filter(d => d.document_type === k).length
 
-  // kartka na koniec: podsumowanie wizyty do druku (okno systemowe drukarki)
-  const printSummary = () => {
+  // Wydruk gabinetowy: każda logiczna „kartka" (nota / dokument) to osobna strona
+  // (page-break). Wspólny, czysty layout — Soft Clinical, teal akcent jak w aplikacji.
+  const canPrintNote = signed && !!clinicalNote?.content
+  const PRINT_CSS = `
+    @page { size: A4; margin: 16mm; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Plus Jakarta Sans','Segoe UI',Arial,sans-serif; color:#0f172a; margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .sheet { page-break-after: always; padding-bottom:8px; }
+    .sheet:last-child { page-break-after: auto; }
+    .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #0D9488; padding-bottom:9px; }
+    .brand { font-size:21px; font-weight:800; letter-spacing:-0.02em; color:#0D9488; }
+    .meta { text-align:right; font-size:11px; color:#64748b; line-height:1.55; }
+    .title { font-size:17px; font-weight:800; margin:20px 0 12px; }
+    .patient { display:flex; gap:30px; flex-wrap:wrap; background:#f8fafc; border:1px solid #eef2f6; border-radius:10px; padding:11px 16px; }
+    .patient .k { display:block; font-size:8.5px; text-transform:uppercase; letter-spacing:.09em; color:#94a3b8; font-weight:800; }
+    .patient .v { font-size:13px; font-weight:700; }
+    .block { margin-top:18px; }
+    .block h2 { font-size:9.5px; text-transform:uppercase; letter-spacing:.09em; color:#0D9488; font-weight:800; margin:0 0 7px; border-bottom:1px solid #e2e8f0; padding-bottom:5px; }
+    pre { white-space:pre-wrap; font:inherit; font-size:12.5px; line-height:1.62; margin:0; }
+    .addendum { margin-top:11px; padding-left:12px; border-left:3px solid #5eead4; }
+    .addendum .lbl { display:block; font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; color:#0D9488; font-weight:800; margin-bottom:2px; }
+    .codebox { display:inline-flex; align-items:center; gap:14px; margin-top:14px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:9px 16px; }
+    .codebox .k { font-size:8.5px; text-transform:uppercase; letter-spacing:.09em; color:#64748b; font-weight:800; }
+    .code { font-family:'Courier New',monospace; font-size:18px; font-weight:700; letter-spacing:.2em; }
+    .sign { margin-top:32px; padding-top:9px; border-top:1px solid #e2e8f0; font-size:12px; color:#334155; font-weight:600; }
+    .foot { margin-top:6px; font-size:9.5px; color:#94a3b8; }
+  `
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  const head = () => `<header class="head"><div class="brand">NovaMed</div>`
+    + `<div class="meta">${esc(visit.clinic_name)}<br>${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)}</div></header>`
+  const patientBox = () => patient ? `<div class="patient">`
+    + `<div><span class="k">Pacjent</span><span class="v">${esc(`${patient.first_name} ${patient.last_name}`)}</span></div>`
+    + `<div><span class="k">PESEL</span><span class="v">${esc(patient.pesel)}</span></div>`
+    + `<div><span class="k">Lekarz</span><span class="v">${esc(visit.doctor_name)}</span></div></div>` : ''
+  const foot = () => `<footer class="foot">Wydruk z systemu NovaMed · ${new Date().toLocaleString('pl-PL')}</footer>`
+  const noteSheet = () => `<section class="sheet">${head()}<h1 class="title">Karta wizyty</h1>${patientBox()}`
+    + (visit.notes ? `<section class="block"><h2>Zgłoszony powód wizyty</h2><pre>${esc(visit.notes)}</pre></section>` : '')
+    + `<section class="block"><h2>Przebieg wizyty i zalecenia</h2><pre>${esc(clinicalNote!.content!)}</pre>`
+    + (clinicalNote?.addenda ?? []).map(a => `<div class="addendum"><span class="lbl">Uzupełnienie — ${esc(a.author_name)}</span><pre>${esc(a.content)}</pre></div>`).join('')
+    + `</section><div class="sign">Podpisano elektronicznie — ${esc(visit.doctor_name)}</div>${foot()}</section>`
+  const docSheet = (d: typeof visitDocs[number]) => `<section class="sheet">${head()}<h1 class="title">${KIND_LABEL[d.document_type]}</h1>${patientBox()}`
+    + (d.code ? `<div class="codebox"><span class="k">Kod</span><span class="code">${esc(d.code)}</span></div>` : '')
+    + `<section class="block"><h2>Treść</h2><pre>${esc(d.details ?? '')}</pre></section>`
+    + `<div class="sign">Wystawił: ${esc(visit.doctor_name)}</div>${foot()}</section>`
+
+  const printSheets = ({ note, docs }: { note: boolean; docs: boolean }) => {
     if (!patient) return
-    const w = window.open('', '_blank', 'width=780,height=920')
+    const sheets: string[] = []
+    if (note && canPrintNote) sheets.push(noteSheet())
+    if (docs) visitDocs.forEach(d => sheets.push(docSheet(d)))
+    if (!sheets.length) return
+    const w = window.open('', '_blank', 'width=860,height=1000')
     if (!w) return
-    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    const others = visitDocs  // noty nie są już dokumentami — są w clinicalNote
-    const noteHtml = clinicalNote && clinicalNote.status === 'SIGNED' && clinicalNote.content
-      ? `<div class="sec"><h2>Przebieg wizyty i zalecenia</h2><pre>${esc(clinicalNote.content)}</pre>`
-        + clinicalNote.addenda.map(a => `<pre style="margin-top:8px"><strong>Uzupełnienie (${esc(a.author_name)}):</strong> ${esc(a.content)}</pre>`).join('')
-        + '</div>'
-      : ''
-    w.document.write(`<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Podsumowanie wizyty — ${esc(visit.patient_name ?? '')}</title>
-<style>
-  body{font-family:'Segoe UI',Arial,sans-serif;margin:42px;color:#111;font-size:14px;line-height:1.5}
-  h1{font-size:19px;margin:0}
-  .muted{color:#666;font-size:12px}
-  .sec{margin-top:18px;border-top:1px solid #ddd;padding-top:10px}
-  .sec h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:#555;margin:0 0 6px}
-  .doc{margin:8px 0;padding:9px 12px;border:1px solid #ccc;border-radius:8px}
-  .code{font-weight:700;letter-spacing:.18em}
-  pre{white-space:pre-wrap;font:inherit;margin:0}
-</style></head><body>
-<h1>NovaMed — podsumowanie wizyty</h1>
-<p class="muted">${esc(visit.clinic_name)} · ${formatDatePL(visit.appointment_datetime)}, ${formatTime(visit.appointment_datetime)} · ${esc(visit.doctor_name)}</p>
-<div class="sec"><h2>Pacjent</h2><p>${esc(`${patient.first_name} ${patient.last_name}`)} · PESEL ${patient.pesel}</p></div>
-${visit.notes ? `<div class="sec"><h2>Zgłoszony powód wizyty</h2><pre>${esc(visit.notes)}</pre></div>` : ''}
-${noteHtml}
-${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d =>
-      `<div class="doc"><strong>${KIND_LABEL[d.document_type]}</strong>${d.code ? ` · kod: <span class="code">${esc(d.code)}</span>` : ''}<br><span class="muted">${esc(d.details ?? '')}</span></div>`).join('')}</div>` : ''}
-<p class="muted" style="margin-top:26px">Wydruk z systemu NovaMed · ${new Date().toLocaleString('pl-PL')}</p>
-</body></html>`)
+    w.document.write(`<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Wydruk — ${esc(visit.patient_name ?? '')}</title><style>${PRINT_CSS}</style></head><body>${sheets.join('')}</body></html>`)
     w.document.close()
     w.focus()
-    setTimeout(() => w.print(), 250)
+    setTimeout(() => w.print(), 300)
   }
 
   return (
@@ -302,6 +325,9 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
               </Button>
             )}
             {!confirmed && !inProgress && !paused && <StatusBadge status={visit.appointment_status} />}
+            {(canPrintNote || visitDocs.length > 0) && (
+              <Button variant="ghost" onClick={() => setPrintOpen(true)}><Printer size={14} /> Drukuj</Button>
+            )}
           </>}
         />
       </div>
@@ -481,7 +507,7 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button size="sm" disabled={signNote.isPending || (composed.length < 2 && savedContent.length < 2)}
-                  onClick={() => unsavedNote ? saveDraft.mutate(undefined, { onSuccess: () => signNote.mutate() }) : signNote.mutate()}>
+                  onClick={() => setConfirm('SIGN')}>
                   <FileCheck2 size={14} /> Podpisz notę
                 </Button>
                 <Button size="sm" variant="secondary" disabled={saveDraft.isPending || composed.length < 2} onClick={() => saveDraft.mutate()}>
@@ -545,6 +571,56 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
           </Modal>
         )}
 
+        {confirm === 'SIGN' && (
+          <Modal
+            overline="Gabinet"
+            title="Podpisać notę?"
+            onClose={() => setConfirm(null)}
+            footer={<>
+              <Button variant="secondary" onClick={() => setConfirm(null)}>Wróć</Button>
+              <Button disabled={signNote.isPending || saveDraft.isPending}
+                onClick={() => unsavedNote
+                  ? saveDraft.mutate(undefined, { onSuccess: () => signNote.mutate(undefined, { onSuccess: () => setConfirm(null) }) })
+                  : signNote.mutate(undefined, { onSuccess: () => setConfirm(null) })}>
+                <FileCheck2 size={14} /> Tak, podpisz
+              </Button>
+            </>}
+          >
+            <p className="text-sm leading-relaxed font-medium text-gray-600">
+              Po podpisaniu treść noty jest <b>niezmienialna</b> — później możesz dodać już tylko uzupełnienie (addendum). Upewnij się, że wszystko się zgadza.
+            </p>
+          </Modal>
+        )}
+
+        {printOpen && (
+          <Modal
+            overline="Gabinet"
+            title="Drukuj z wizyty"
+            onClose={() => setPrintOpen(false)}
+            footer={<Button variant="secondary" onClick={() => setPrintOpen(false)}>Zamknij</Button>}
+          >
+            <div className="space-y-2 pb-1">
+              {([
+                ['Nota wizyty', 'Przebieg i zalecenia — jedna kartka dla pacjenta.', canPrintNote, { note: true, docs: false }],
+                ['Skierowania i dokumenty', 'Każdy dokument na osobnej kartce.', visitDocs.length > 0, { note: false, docs: true }],
+                ['Wszystko', 'Nota i dokumenty — każde na osobnej kartce.', canPrintNote || visitDocs.length > 0, { note: true, docs: true }],
+              ] as const).map(([title, sub, enabled, opts], i) => (
+                <button key={i} type="button" disabled={!enabled}
+                  onClick={() => { setPrintOpen(false); printSheets(opts) }}
+                  className={cx('flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors',
+                    enabled ? 'cursor-pointer bg-gray-50 hover:bg-primary-soft/50' : 'cursor-not-allowed bg-gray-50 opacity-50')}>
+                  <Printer size={18} className="shrink-0 text-primary" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-extrabold text-gray-900">{title}</span>
+                    <span className="block text-xs font-semibold text-gray-500">{sub}</span>
+                  </span>
+                </button>
+              ))}
+              {!canPrintNote && <p className="px-1 pt-1 text-xs font-medium text-gray-400">Notę można wydrukować dopiero po jej podpisaniu.</p>}
+            </div>
+          </Modal>
+        )}
+
         {clinicalOpen && (
           <Modal
             overline={patient ? `${patient.first_name} ${patient.last_name}` : 'Pacjent'}
@@ -594,8 +670,8 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
               <TileHeader
                 title={<span className="inline-flex items-center gap-1.5 text-primary"><ClipboardPen size={13} /> Z tej wizyty</span>}
                 action={(visitDocs.length > 0 || signed) && (
-                  <Button size="sm" variant="ghost" onClick={printSummary}>
-                    <Printer size={14} /> Drukuj podsumowanie
+                  <Button size="sm" variant="ghost" onClick={() => setPrintOpen(true)}>
+                    <Printer size={14} /> Drukuj
                   </Button>
                 )}
               />
