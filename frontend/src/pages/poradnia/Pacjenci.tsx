@@ -1,9 +1,15 @@
+// Pacjenci placówki (recepcja) — lista do szybkiego odnalezienia + KLIKALNY rząd
+// otwierający modal szczegółów: kiedy pacjent do nas wpada, kiedy był ostatnio,
+// dane kontaktowe (edycja inline), eWUŚ, skróty do umówienia i pełnej kartoteki.
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderOpen, Pencil, Search, ShieldCheck, Users } from 'lucide-react'
-import { Badge, Button, EmptyState, Field, Loading, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { CalendarCheck, CalendarClock, Check, ChevronRight, Clock, FolderOpen, MapPin, Pencil, Phone, Search, ShieldCheck, Users, Video, X } from 'lucide-react'
+import { Badge, Button, EmptyState, Loading, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
+import { formatDatePL, formatTime } from '../../lib/format'
+import { birthFromPesel } from '../../lib/pesel'
+import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 
 interface PatientRow {
@@ -16,11 +22,14 @@ interface PatientRow {
 }
 
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+const UPCOMING = ['CONFIRMED', 'IN_PROGRESS', 'PAUSED']
+const ageOf = (iso: string) => { const b = new Date(iso), t = new Date(); let a = t.getFullYear() - b.getFullYear(); const m = t.getMonth() - b.getMonth(); if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--; return a }
 
 export function PacjenciPlacowki() {
   const queryClient = useQueryClient()
   const [q, setQ] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [detail, setDetail] = useState<PatientRow | null>(null)
   const { clinics, clinic, setClinicId } = useClinicSelection()
 
   const { data: patients } = useQuery({
@@ -34,15 +43,9 @@ export function PacjenciPlacowki() {
     onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Weryfikacja eWUŚ nie powiodła się.'),
   })
-
-  // UC-PP3: edycja danych kontaktowych pacjenta
-  const [editFor, setEditFor] = useState<PatientRow | null>(null)
-  const [editPhone, setEditPhone] = useState('')
   const saveContact = useMutation({
-    mutationFn: () => api(`/patients/${editFor!.patient_id}/contact`, {
-      method: 'PATCH', body: { phone_number: editPhone },
-    }),
-    onSuccess: () => { setError(null); setEditFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
+    mutationFn: ({ id, phone }: { id: string; phone: string }) => api(`/patients/${id}/contact`, { method: 'PATCH', body: { phone_number: phone } }),
+    onSuccess: (_d, v) => { setError(null); setDetail(p => (p && p.patient_id === v.id ? { ...p, phone_number: v.phone } : p)); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać danych.'),
   })
 
@@ -88,7 +91,8 @@ export function PacjenciPlacowki() {
             </thead>
             <tbody>
               {filtered.map(p => (
-                <tr key={p.patient_id} className="hover:bg-gray-50">
+                <tr key={p.patient_id} onClick={() => { setError(null); setDetail(p) }}
+                  className="cursor-pointer hover:bg-primary-soft/40">
                   <td className="border-t border-gray-100 px-4 py-3.5 font-extrabold text-gray-900">{p.first_name} {p.last_name}</td>
                   <td className="border-t border-gray-100 px-4 py-3.5 font-medium text-gray-500">{p.pesel}</td>
                   <td className="border-t border-gray-100 px-4 py-3.5 font-medium text-gray-500">{p.phone_number ?? <span className="text-gray-300">—</span>}</td>
@@ -98,18 +102,7 @@ export function PacjenciPlacowki() {
                       : <Badge tone="warn">brak potwierdzenia</Badge>}
                   </td>
                   <td className="border-t border-gray-100 px-4 py-3.5 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Link to={`/pacjent/${p.patient_id}`} className="inline-flex h-8 items-center gap-1 rounded-full px-4 text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-                        <FolderOpen size={13} /> Kartoteka
-                      </Link>
-                      <Button size="sm" variant="ghost" onClick={() => { setEditFor(p); setEditPhone(p.phone_number ?? '') }}>
-                        <Pencil size={13} /> Kontakt
-                      </Button>
-                      <Button size="sm" variant="secondary" disabled={verify.isPending}
-                        onClick={() => verify.mutate(p.patient_id)}>
-                        <ShieldCheck size={14} /> Weryfikuj eWUŚ
-                      </Button>
-                    </div>
+                    <ChevronRight size={16} className="ml-auto text-gray-300" />
                   </td>
                 </tr>
               ))}
@@ -118,27 +111,115 @@ export function PacjenciPlacowki() {
         )}
       </Tile>
 
-      {editFor && (
-        <Modal
-          overline={`${editFor.first_name} ${editFor.last_name} · PESEL ${editFor.pesel}`}
-          title="Dane kontaktowe"
-          onClose={() => setEditFor(null)}
-          footer={<>
-            <Button variant="secondary" onClick={() => setEditFor(null)}>Anuluj</Button>
-            <Button disabled={saveContact.isPending || editPhone.trim().length < 7}
-              onClick={() => saveContact.mutate()}>
-              {saveContact.isPending ? 'Zapisywanie…' : 'Zapisz'}
-            </Button>
-          </>}
-        >
-          <div className="pb-2">
-            <Field label="Telefon" hint="na ten numer pójdą SMS-y z przypomnieniami">
-              <input className={inputCls} value={editPhone} placeholder="601 234 567"
-                onChange={e => setEditPhone(e.target.value)} />
-            </Field>
-          </div>
-        </Modal>
+      {detail && (
+        <PatientDetail patient={detail} onClose={() => setDetail(null)}
+          onVerify={() => verify.mutate(detail.patient_id)} verifying={verify.isPending}
+          onSaveContact={(phone) => saveContact.mutate({ id: detail.patient_id, phone })} savingContact={saveContact.isPending} />
       )}
     </div>
+  )
+}
+
+// ---- modal szczegółów pacjenta ----
+function ApptLine({ a, tone }: { a: AppointmentOut; tone?: 'primary' }) {
+  const online = a.appointment_type === 'ONLINE'
+  return (
+    <div className={cx('flex items-center gap-3 rounded-2xl px-4 py-2.5', tone === 'primary' ? 'bg-primary-soft' : 'bg-gray-50')}>
+      <span className={cx('shrink-0 text-sm font-extrabold [font-variant-numeric:tabular-nums]', tone === 'primary' ? 'text-primary' : 'text-gray-900')}>
+        {formatDatePL(a.appointment_datetime)}<span className="ml-1 font-bold">{formatTime(a.appointment_datetime)}</span>
+      </span>
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-500">
+        {online ? <Video size={12} className="mr-1 inline" /> : <MapPin size={12} className="mr-1 inline" />}
+        {a.doctor_id ? a.doctor_name : a.service_name}{a.doctor_id && a.service_name ? ` · ${a.service_name}` : ''}
+      </span>
+    </div>
+  )
+}
+
+function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, savingContact }: {
+  patient: PatientRow
+  onClose: () => void
+  onVerify: () => void
+  verifying: boolean
+  onSaveContact: (phone: string) => void
+  savingContact: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [phone, setPhone] = useState(patient.phone_number ?? '')
+  const { data: appts } = useQuery({
+    queryKey: ['patient-appts', patient.patient_id],
+    queryFn: () => api<AppointmentOut[]>(`/patients/${patient.patient_id}/appointments`),
+  })
+  const birth = birthFromPesel(patient.pesel)
+  const list = appts ?? []
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0)
+  // najbliższa = pierwsza przyszła potwierdzona; ostatnia = ostatnia odbyta
+  const upcoming = list
+    .filter(a => UPCOMING.includes(a.appointment_status) && new Date(a.appointment_datetime) >= startToday)
+    .sort((x, y) => x.appointment_datetime.localeCompare(y.appointment_datetime))
+  const next = upcoming[0]
+  const completed = list.filter(a => a.appointment_status === 'COMPLETED')  // /appointments zwraca malejąco
+  const last = completed[0]
+  const totalVisits = completed.length
+
+  return (
+    <Modal title={`${patient.first_name} ${patient.last_name}`}
+      overline={`PESEL ${patient.pesel}${birth ? ` · ${ageOf(birth)} l.` : ''}`}
+      onClose={onClose} wide
+      footer={<>
+        <Link to={`/pacjent/${patient.patient_id}`}><Button variant="ghost"><FolderOpen size={15} /> Pełna kartoteka</Button></Link>
+        <Link to="/umow" state={{ patient: { patient_id: patient.patient_id, name: `${patient.first_name} ${patient.last_name}`, pesel: patient.pesel } }}>
+          <Button><CalendarCheck size={16} /> Umów wizytę</Button>
+        </Link>
+      </>}>
+      <div className="space-y-3">
+        {/* dane kontaktowe + eWUŚ */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-gray-50 px-4 py-3">
+          <span className="flex items-center gap-1.5 text-sm">
+            <Phone size={14} className="text-gray-400" />
+            {editing ? (
+              <span className="flex items-center gap-1.5">
+                <input className={cx(inputCls, 'h-8 w-40')} value={phone} placeholder="601 234 567" onChange={e => setPhone(e.target.value)} />
+                <Button size="sm" disabled={savingContact || phone.trim().length < 7} onClick={() => { onSaveContact(phone.trim()); setEditing(false) }}><Check size={13} /></Button>
+                <button onClick={() => { setEditing(false); setPhone(patient.phone_number ?? '') }} className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-200"><X size={14} /></button>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 font-bold text-gray-900">
+                {patient.phone_number ?? <span className="font-medium text-gray-400">brak numeru</span>}
+                <button onClick={() => setEditing(true)} className="cursor-pointer text-gray-400 hover:text-primary"><Pencil size={12} /></button>
+              </span>
+            )}
+          </span>
+          <span className="flex items-center gap-2 text-sm">
+            {patient.insurance_status ? <Badge tone="success">eWUŚ: ubezpieczony</Badge> : <Badge tone="warn">eWUŚ: brak potwierdzenia</Badge>}
+            <Button size="sm" variant="ghost" disabled={verifying} onClick={onVerify}><ShieldCheck size={14} /> {verifying ? 'Sprawdzam…' : 'Sprawdź'}</Button>
+          </span>
+        </div>
+
+        {/* kiedy do nas wpada */}
+        <div>
+          <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-extrabold tracking-wide text-gray-500 uppercase"><CalendarClock size={13} /> Najbliższa wizyta</p>
+          {appts === undefined ? <p className="px-1 text-sm text-gray-400">Wczytywanie…</p>
+            : next ? <ApptLine a={next} tone="primary" />
+              : <p className="rounded-2xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500">Brak nadchodzących wizyt.</p>}
+          {upcoming.length > 1 && (
+            <div className="mt-1.5 space-y-1.5">
+              {upcoming.slice(1, 3).map(a => <ApptLine key={a.appointment_id} a={a} />)}
+              {upcoming.length > 3 && <p className="px-1 text-xs font-semibold text-gray-400">+ {upcoming.length - 3} kolejnych</p>}
+            </div>
+          )}
+        </div>
+
+        {/* kiedy był ostatnio */}
+        <div>
+          <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-extrabold tracking-wide text-gray-500 uppercase">
+            <Clock size={13} /> Ostatnia wizyta{totalVisits > 0 ? ` · ${totalVisits} odbytych` : ''}
+          </p>
+          {appts === undefined ? <p className="px-1 text-sm text-gray-400">Wczytywanie…</p>
+            : last ? <ApptLine a={last} />
+              : <p className="rounded-2xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500">Pacjent nie był jeszcze na żadnej wizycie.</p>}
+        </div>
+      </div>
+    </Modal>
   )
 }

@@ -61,10 +61,12 @@ export function UmowWizyte() {
   const [slot, setSlot] = useState<AppointmentOut | null>(null)
   const [holdToken, setHoldToken] = useState<string | null>(null)
   const [asOnline, setAsOnline] = useState(false)  // teleporada na slocie stacjonarnym z allow_online (#4)
-  // wejście z Kalendarza: { slot } = konkretny wybrany termin; { doctorId, day } = preselekcja filtra
-  const navState = useLocation().state as { slot?: AppointmentOut; doctorId?: string | null; day?: string } | null
+  // wejście z Kalendarza/Grafiku: { slot } = wybrany termin; { doctorId, day } = preselekcja filtra;
+  // z modala pacjenta (Pacjenci): { patient } = pacjent wybrany z góry
+  const navState = useLocation().state as { slot?: AppointmentOut; doctorId?: string | null; day?: string; patient?: PickedPatient } | null
   useEffect(() => { if (navState?.slot) setSlot(navState.slot) }, [navState?.slot])
   useEffect(() => { if (navState?.day) setDayFilter(navState.day) }, [navState?.day])
+  useEffect(() => { if (navState?.patient) setPicked(navState.patient) }, [navState?.patient])
 
   // krok 3
   const [reason, setReason] = useState('')
