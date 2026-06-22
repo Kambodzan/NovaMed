@@ -5,10 +5,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarRange, Check, ChevronLeft, ChevronRight, DoorOpen, MapPin, Plus, Search, Settings2, UserCheck, Video, X } from 'lucide-react'
+import { CalendarRange, Check, ChevronLeft, ChevronRight, DoorOpen, MapPin, Plus, Search, UserCheck, Video, X } from 'lucide-react'
 import { Button, EmptyState, Field, Loading, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
-import { useAuth } from '../../lib/auth'
 import { formatDatePL, formatTime } from '../../lib/format'
 import { confirm } from '../../lib/confirm'
 import type { AppointmentOut } from '../../lib/types'
@@ -24,7 +23,7 @@ const todayIso = () => isoLocal(new Date())
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
-import { ServicesManager, type ServiceOut } from '../../components/ServicesManager'
+import { type ServiceOut } from '../../components/ServicesManager'
 
 interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
 
@@ -50,16 +49,13 @@ function Lane({ title, count, tone, collapsible, open, onToggle, children }: {
 export function Kalendarz() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { me } = useAuth()
-  // ustawienia placówki (polityka) zmienia tylko kierownik/administrator, nie rejestracja
-  const canManage = me?.role === 'kierownik' || me?.role === 'administrator'
   const { clinics, clinic, setClinicId } = useClinicSelection()
   const [day, setDayState] = useState(() => sessionStorage.getItem(DAY_KEY) ?? todayIso())
   const setDay = (d: string) => { sessionStorage.setItem(DAY_KEY, d); setDayState(d) }
   const shiftDay = (n: number) => { const d = new Date(day + 'T00:00:00'); d.setDate(d.getDate() + n); setDay(isoLocal(d)) }
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<AppointmentOut | null>(null)
-  const [modal, setModal] = useState<'add' | 'settings' | null>(null)
+  const [modal, setModal] = useState<'add' | null>(null)
   const [view, setView] = useState<'agenda' | 'grid'>('agenda')
   const [showDone, setShowDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -242,7 +238,6 @@ export function Kalendarz() {
                 {day !== todayIso() && <Button variant="ghost" size="sm" onClick={() => setDay(todayIso())}>Dziś</Button>}
               </div>
               <Button variant="secondary" size="sm" onClick={() => setModal('add')}><Plus size={14} /> Dodaj terminy</Button>
-              {canManage && <Button variant="secondary" size="sm" onClick={() => setModal('settings')}><Settings2 size={14} /> Ustawienia</Button>}
             </div>
           }
         />
@@ -436,7 +431,6 @@ export function Kalendarz() {
 
       {modal === 'add' && <DodajTerminy clinicId={clinic!.clinic_id} defaultDay={day} interval={clinic?.slot_interval_min ?? 15}
         onClose={() => setModal(null)} onAdded={() => void queryClient.invalidateQueries({ queryKey: ['clinic-day'] })} />}
-      {modal === 'settings' && clinic && <UstawieniaPlacowki clinic={clinic} onClose={() => setModal(null)} />}
     </div>
   )
 }
@@ -589,102 +583,3 @@ function DodajTerminy({ clinicId, defaultDay, interval, onClose, onAdded }: {
   )
 }
 
-// ---- modal: ustawienia placówki ----
-function UstawieniaPlacowki({ clinic, onClose }: { clinic: { clinic_id: string; slot_interval_min: number; earlier_notice_min_hours: number; reminder_mode: 'NONE' | 'REMINDER' | 'CONFIRM'; confirmation_hours: number }; onClose: () => void }) {
-  const queryClient = useQueryClient()
-  const [intervalMin, setIntervalMin] = useState(String(clinic.slot_interval_min))
-  const [noticeHours, setNoticeHours] = useState(String(clinic.earlier_notice_min_hours))
-  const [reminderMode, setReminderMode] = useState<string>(clinic.reminder_mode)
-  const [confirmHours, setConfirmHours] = useState(String(clinic.confirmation_hours))
-  const [error, setError] = useState<string | null>(null)
-
-  const save = useMutation({
-    mutationFn: () => api(`/clinics/${clinic.clinic_id}/settings`, {
-      method: 'PATCH',
-      body: { slot_interval_min: Number(intervalMin), earlier_notice_min_hours: Number(noticeHours), reminder_mode: reminderMode, confirmation_hours: Number(confirmHours) },
-    }),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['clinics'] }); onClose() },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać ustawień.'),
-  })
-
-  // długość wizyt per lekarz (krok siatki danego lekarza) — zapis natychmiast po edycji
-  const { data: docs } = useQuery({
-    queryKey: ['clinic-doctors', clinic.clinic_id],
-    queryFn: () => api<DoctorRow[]>(`/clinics/${clinic.clinic_id}/doctors`),
-  })
-  const setLen = useMutation({
-    mutationFn: ({ id, val }: { id: string; val: number | null }) =>
-      api(`/clinics/${clinic.clinic_id}/doctors/${id}/visit-length`, { method: 'PATCH', body: { slot_duration_min: val } }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }),
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać długości wizyty.'),
-  })
-  const setRoom = useMutation({
-    mutationFn: ({ id, room }: { id: string; room: string | null }) =>
-      api(`/clinics/${clinic.clinic_id}/doctors/${id}/room`, { method: 'PATCH', body: { room } }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['clinic-doctors', clinic.clinic_id] }),
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Nie udało się zapisać gabinetu.'),
-  })
-
-  return (
-    <Modal title="Ustawienia placówki" wide onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Anuluj</Button><Button disabled={save.isPending} onClick={() => save.mutate()}>Zapisz</Button></>}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Siatka terminów [min]" hint="co ile minut sloty">
-          <Select value={intervalMin} onChange={setIntervalMin} options={[5, 10, 15, 20, 30, 60].map(n => ({ value: String(n), label: `${n} min` }))} />
-        </Field>
-        <Field label="Min. wyprzedzenie [h]" hint="powiadomienia o wcześniejszym terminie">
-          <input type="number" min="0" max="720" className={inputCls} value={noticeHours} onChange={e => setNoticeHours(e.target.value)} />
-        </Field>
-        <Field label="Przypomnienia SMS o wizycie" hint="24 h przed terminem">
-          <Select value={reminderMode} onChange={setReminderMode}
-            options={[
-              { value: 'NONE', label: 'brak' },
-              { value: 'REMINDER', label: 'tylko przypomnienie' },
-              { value: 'CONFIRM', label: 'przypomnienie + potwierdzenie' },
-            ]} />
-        </Field>
-        {reminderMode === 'CONFIRM' && (
-          <Field label="Prośba o potwierdzenie [h przed]">
-            <Select value={confirmHours} onChange={setConfirmHours} options={[12, 24, 48, 72, 168].map(n => ({ value: String(n), label: `${n} h` }))} />
-          </Field>
-        )}
-      </div>
-
-      {docs && docs.length > 0 && (
-        <div className="mt-5">
-          <p className="text-sm font-extrabold text-gray-900">Lekarze: długość wizyty i gabinet</p>
-          <p className="mb-2 text-xs font-medium text-gray-500">
-            Długość pusta = siatka placówki ({intervalMin} min). Gabinet podpowiada się recepcji przy meldowaniu pacjenta. Zapis po wyjściu z pola.
-          </p>
-          <div className="space-y-1.5">
-            {docs.map(d => (
-              <div key={`${d.doctor_id}:${d.slot_duration_min ?? ''}:${d.room ?? ''}`} className="flex items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{d.name}</span>
-                <input type="number" min="5" max="120" step="5" defaultValue={d.slot_duration_min ?? ''}
-                  placeholder={String(intervalMin)} aria-label="długość wizyty [min]" className={`${inputCls} w-20 text-center`}
-                  onBlur={e => {
-                    const v = e.target.value.trim()
-                    const num = v === '' ? null : Number(v)
-                    if (num !== d.slot_duration_min) setLen.mutate({ id: String(d.doctor_id), val: num })
-                  }} />
-                <span className="text-xs font-bold text-gray-500">min</span>
-                <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="gab."
-                  aria-label="gabinet" className={`${inputCls} w-20 text-center`}
-                  onBlur={e => {
-                    const v = e.target.value.trim() || null
-                    if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v })
-                  }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 border-t border-gray-100 pt-5">
-        <ServicesManager clinicId={clinic.clinic_id} />
-      </div>
-
-      {error && <p className="mt-3 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
-    </Modal>
-  )
-}

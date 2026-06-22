@@ -2,7 +2,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './lib/api'
 import type { DocumentOut } from './lib/types'
-import { Activity, BarChart3, Building2, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, FlaskConical, KeyRound as KeyIcon, LayoutDashboard, Plug, ShieldCheck, Star, Users } from 'lucide-react'
+import { Activity, BarChart3, Building2, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, FileSignature, FileText, FlaskConical, KeyRound as KeyIcon, LayoutDashboard, Plug, ShieldCheck, Settings2, Star, Users } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { ProShell } from './components/ProShell'
 import { PowrotDoWizyty } from './components/PowrotDoWizyty'
@@ -42,6 +42,7 @@ import { PacjenciPlacowki } from './pages/poradnia/Pacjenci'
 import { Raporty } from './pages/poradnia/Raporty'
 import { Pulpit } from './pages/poradnia/Pulpit'
 import { Wyniki } from './pages/poradnia/Wyniki'
+import { UstawieniaPlacowki } from './pages/poradnia/UstawieniaPlacowki'
 import { AdminUzytkownicy } from './pages/admin/Uzytkownicy'
 import { AdminPlacowki } from './pages/admin/Placowki'
 import { AdminIntegracje } from './pages/admin/Integracje'
@@ -121,7 +122,10 @@ function PoradniaLayout() {
         { to: '/umow', label: 'Umów wizytę', icon: CalendarCheck },
         { to: '/pacjenci', label: 'Pacjenci', icon: Users },
         { to: '/wyniki', label: 'Wyniki badań', icon: FlaskConical },
-        ...(canManage ? [{ to: '/raporty', label: 'Raporty', icon: BarChart3 }] : []),
+        ...(canManage ? [
+          { to: '/ustawienia', label: 'Ustawienia placówki', icon: Settings2 },
+          { to: '/raporty', label: 'Raporty', icon: BarChart3 },
+        ] : []),
       ]}
     >
       <Outlet />
@@ -207,6 +211,7 @@ export default function App() {
           <Route path="pacjenci" element={<PacjenciPlacowki />} />
           <Route path="pacjent/:id" element={<PacjentRecord />} />
           <Route path="wyniki" element={<Wyniki />} />
+          {role === 'kierownik' && <Route path="ustawienia" element={<UstawieniaPlacowki />} />}
           {role === 'kierownik' && <Route path="raporty" element={<Raporty />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
