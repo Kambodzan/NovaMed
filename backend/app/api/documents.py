@@ -312,7 +312,7 @@ def issue_referral(
     try:
         code = p1.issue_referral(
             pesel=patient.pesel, doctor_pwz=doctor_pwz(db, user.user_id),
-            icd10=body.icd10 or "", referral_type=body.referral_type.value, notes=p1_notes,
+            icd10=body.icd10, referral_type=body.referral_type.value, notes=p1_notes,
         )
     except IntegrationError as exc:
         doc.document_status = DocumentStatus.ERROR.value

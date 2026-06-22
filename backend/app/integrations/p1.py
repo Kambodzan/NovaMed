@@ -10,11 +10,11 @@ from app.integrations.base import IntegrationError
 
 
 class P1Client(Protocol):
-    def issue_prescription(self, *, pesel: str, doctor_pwz: str, icd10: str, drugs: str) -> str:
+    def issue_prescription(self, *, pesel: str, doctor_pwz: str, icd10: str | None, drugs: str) -> str:
         """Zwraca kod e-recepty."""
         ...
 
-    def issue_referral(self, *, pesel: str, doctor_pwz: str, icd10: str, referral_type: str, notes: str | None) -> str:
+    def issue_referral(self, *, pesel: str, doctor_pwz: str, icd10: str | None, referral_type: str, notes: str | None) -> str:
         """Zwraca kod e-skierowania."""
         ...
 
@@ -54,13 +54,13 @@ class HttpP1Client:
             raise IntegrationError(f"P1 odrzuciło dokument: {detail}")
         return resp.json()
 
-    def issue_prescription(self, *, pesel: str, doctor_pwz: str, icd10: str, drugs: str) -> str:
+    def issue_prescription(self, *, pesel: str, doctor_pwz: str, icd10: str | None, drugs: str) -> str:
         data = self._post("/api/v1/prescriptions", {
             "pesel": pesel, "doctor_pwz": doctor_pwz, "icd10": icd10, "drugs": drugs,
         })
         return data["prescription_code"]
 
-    def issue_referral(self, *, pesel: str, doctor_pwz: str, icd10: str, referral_type: str, notes: str | None) -> str:
+    def issue_referral(self, *, pesel: str, doctor_pwz: str, icd10: str | None, referral_type: str, notes: str | None) -> str:
         data = self._post("/api/v1/referrals", {
             "pesel": pesel, "doctor_pwz": doctor_pwz, "icd10": icd10,
             "referral_type": referral_type, "notes": notes,

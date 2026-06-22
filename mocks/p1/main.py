@@ -20,22 +20,23 @@ _issued: dict[str, dict] = {}  # kod → dokument (pamięć procesu wystarcza dl
 class PrescriptionIn(BaseModel):
     pesel: str = Field(pattern=r"^\d{11}$")
     doctor_pwz: str = Field(min_length=7, max_length=7)
-    icd10: str = Field(min_length=3, max_length=10)
+    icd10: str | None = Field(default=None, max_length=10)  # rozpoznanie opcjonalne (diagnostyka)
     drugs: str = Field(min_length=3)
 
 
 class ReferralIn(BaseModel):
     pesel: str = Field(pattern=r"^\d{11}$")
     doctor_pwz: str = Field(min_length=7, max_length=7)
-    icd10: str = Field(min_length=3, max_length=10)
+    icd10: str | None = Field(default=None, max_length=10)  # rozpoznanie opcjonalne (diagnostyka)
     referral_type: str = Field(min_length=3, max_length=100)
     notes: str | None = None
 
 
-def _validate(pesel: str, icd10: str) -> None:
+def _validate(pesel: str, icd10: str | None) -> None:
     if pesel.startswith("00"):
         raise HTTPException(status_code=422, detail="P1: pacjent o podanym PESEL nie figuruje w rejestrze.")
-    if not re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", icd10):
+    # ICD-10 weryfikujemy tylko, gdy podane — brak rozpoznania jest dozwolony
+    if icd10 and not re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", icd10):
         raise HTTPException(status_code=422, detail="P1: nieprawidłowy kod rozpoznania ICD-10.")
 
 
