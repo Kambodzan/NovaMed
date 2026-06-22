@@ -94,6 +94,42 @@ def test_erecepta_sukces_i_wglad_pacjenta(client, visit, fakes):
     assert resp.json()[0]["document_type"] == "PRESCRIPTION"
 
 
+def test_powtorz_recepte_widocznosc(client, visit, fakes, factory):
+    """Picker „Powtórz receptę": domyślnie lekarz widzi do powtórzenia TYLKO swoje
+    recepty; recepty innego lekarza dopiero po udostępnieniu dokumentacji (kod)."""
+    pid = visit["patient"].user_id
+    # Lekarz A (z fixture) wystawia receptę
+    client.post(f"/patients/{pid}/prescriptions",
+                json={"appointment_id": visit["appointment_id"], "icd10": "I10", "drugs": "Lek A 10 mg — D.S. 1x1"},
+                headers=auth_header(visit["doctor_token"]))
+    # Lekarz B (inna placówka) — własna wizyta z tym samym pacjentem + recepta
+    _, reg_b = factory.user("rejestracja")
+    doc_b_user, doc_b_token = factory.doctor()
+    clinic_b = factory.clinic("Klinika B")
+    factory.employ(clinic_b, doc_b_user.user_id)
+    dt = (datetime.now() + timedelta(days=3)).replace(hour=9, minute=0, second=0, microsecond=0)
+    slot_b = client.post(f"/clinics/{clinic_b.clinic_id}/slots",
+                         json={"doctor_id": str(doc_b_user.user_id), "datetimes": [dt.isoformat()]},
+                         headers=auth_header(reg_b)).json()[0]["appointment_id"]
+    client.post(f"/appointments/{slot_b}/book", headers=auth_header(visit["patient_token"]))
+    client.post(f"/patients/{pid}/prescriptions",
+                json={"appointment_id": slot_b, "icd10": "E11", "drugs": "Lek B 850 mg — D.S. 2x1"},
+                headers=auth_header(doc_b_token))
+
+    # Lekarz A bez udostępnienia: widzi TYLKO swoją receptę
+    own = client.get(f"/patients/{pid}/prescriptions/repeatable", headers=auth_header(visit["doctor_token"]))
+    assert own.status_code == 200
+    drugs = [d["details"] for d in own.json()]
+    assert any("Lek A" in x for x in drugs) and not any("Lek B" in x for x in drugs)
+
+    # Pacjent udostępnia recepty, Lekarz A odbiera kod → widzi obie
+    share = client.post("/shares", json={"scope": "PRESCRIPTION"}, headers=auth_header(visit["patient_token"])).json()
+    client.post("/shares/access", json={"code": share["access_code"]}, headers=auth_header(visit["doctor_token"]))
+    after = client.get(f"/patients/{pid}/prescriptions/repeatable", headers=auth_header(visit["doctor_token"])).json()
+    drugs2 = [d["details"] for d in after]
+    assert any("Lek A" in x for x in drugs2) and any("Lek B" in x for x in drugs2)
+
+
 def test_erecepta_blad_p1_i_ponowna_wysylka(client, visit, fakes):
     p1, _ = fakes
     p1.fail = True

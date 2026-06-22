@@ -58,19 +58,24 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
   const [result, setResult] = useState<DocumentOut | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [drugQuery, setDrugQuery] = useState('')
-  const [refilling, setRefilling] = useState(false)
+  const [repeatLoading, setRepeatLoading] = useState(false)
+  const [repeatList, setRepeatList] = useState<DocumentOut[] | null>(null)  // null = panel zamknięty
 
-  // refill: skopiuj leki z ostatniej e-recepty pacjenta (kontynuacja leczenia)
-  const repeatLast = async () => {
-    setRefilling(true); setError(null)
+  // powtórzenie recepty: pokaż LISTĘ wcześniejszych recept do wyboru (nie tylko ostatnią).
+  // Backend pilnuje widoczności: domyślnie tylko recepty tego lekarza, pełna historia
+  // dopiero po udostępnieniu dokumentacji przez pacjenta (kod).
+  const toggleRepeat = async () => {
+    if (repeatList !== null) { setRepeatList(null); return }  // drugi klik zamyka
+    setRepeatLoading(true); setError(null)
     try {
-      const docs = await api<DocumentOut[]>(`/patients/${patientId}/documents`)
-      const last = docs.find(d => d.document_type === 'PRESCRIPTION' && d.document_status !== 'REVOKED')
-      if (last?.details) setForm(f => ({ ...f, drugs: last.details! }))
-      else setError('Brak wcześniejszej recepty do powtórzenia.')
+      setRepeatList(await api<DocumentOut[]>(`/patients/${patientId}/prescriptions/repeatable`))
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Nie udało się wczytać poprzedniej recepty.')
-    } finally { setRefilling(false) }
+      setError(e instanceof ApiError ? e.message : 'Nie udało się wczytać wcześniejszych recept.')
+    } finally { setRepeatLoading(false) }
+  }
+  const pickRepeat = (doc: DocumentOut) => {
+    if (doc.details) setForm(f => ({ ...f, drugs: doc.details! }))
+    setRepeatList(null)
   }
 
   const [form, setForm] = useState({
@@ -226,10 +231,34 @@ export function WystawDokument({ patientId, appointmentId, hideKinds = [], icd10
               <span>Uwaga — alergie pacjenta: {allergies}. Sprawdź przed wystawieniem recepty.</span>
             </p>
           )}
-          <div>
-            <Button type="button" size="sm" variant="ghost" disabled={refilling} onClick={() => void repeatLast()}>
-              <RotateCcw size={14} /> {refilling ? 'Wczytywanie…' : 'Powtórz ostatnią receptę'}
+          <div className="space-y-2">
+            <Button type="button" size="sm" variant="ghost" disabled={repeatLoading} onClick={() => void toggleRepeat()}>
+              <RotateCcw size={14} /> {repeatLoading ? 'Wczytywanie…' : 'Powtórz receptę'}
             </Button>
+            {repeatList !== null && (
+              repeatList.length === 0 ? (
+                <p className="rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm font-medium text-gray-500">
+                  Brak wcześniejszych recept do powtórzenia. Pełną historię zobaczysz po udostępnieniu dokumentacji przez pacjenta (kod).
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {repeatList.map(d => (
+                    <li key={d.document_id}>
+                      <button type="button" onClick={() => pickRepeat(d)}
+                        className="w-full cursor-pointer rounded-xl bg-white px-3.5 py-2.5 text-left ring-1 ring-gray-200 transition-colors hover:bg-primary-soft/40 hover:ring-primary/30">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-extrabold tracking-wider text-gray-500 uppercase">
+                            {new Date(d.issued_at).toLocaleDateString('pl-PL')}
+                          </span>
+                          <span className="text-[11px] font-semibold text-gray-400">{d.doctor_name}</span>
+                        </span>
+                        <span className="mt-1 block line-clamp-2 whitespace-pre-line text-sm font-medium text-gray-800">{d.details}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
           </div>
           <Field label="Dodaj lek ze słownika" hint="wybór dopisuje lek do pola poniżej">
             <Typeahead

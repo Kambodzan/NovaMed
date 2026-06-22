@@ -480,12 +480,12 @@ ${others.length ? `<div class="sec"><h2>Wystawione dokumenty</h2>${others.map(d 
                 ))}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button size="sm" disabled={saveDraft.isPending || composed.length < 2} onClick={() => saveDraft.mutate()}>
-                  {saveDraft.isPending ? 'Zapisywanie…' : 'Zapisz szkic'}
-                </Button>
-                <Button size="sm" variant="secondary" disabled={signNote.isPending || (composed.length < 2 && savedContent.length < 2)}
+                <Button size="sm" disabled={signNote.isPending || (composed.length < 2 && savedContent.length < 2)}
                   onClick={() => unsavedNote ? saveDraft.mutate(undefined, { onSuccess: () => signNote.mutate() }) : signNote.mutate()}>
                   <FileCheck2 size={14} /> Podpisz notę
+                </Button>
+                <Button size="sm" variant="secondary" disabled={saveDraft.isPending || composed.length < 2} onClick={() => saveDraft.mutate()}>
+                  {saveDraft.isPending ? 'Zapisywanie…' : 'Zapisz szkic'}
                 </Button>
                 {noteSaved && <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700"><Check size={13} /> Zapisano</span>}
               </div>

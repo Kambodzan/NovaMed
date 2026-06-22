@@ -22,7 +22,7 @@ from app.integrations.lab import LabClient, get_lab_client
 from app.integrations.p1 import P1Client, get_p1_client
 from app.integrations.zus import ZusClient, get_zus_client
 from app.models import (
-    Appointment, AppUser, Certificate, Doctor, LabResult, MedicalDocument, Patient,
+    Appointment, AppUser, Certificate, Doctor, DocumentShare, LabResult, MedicalDocument, Patient,
     Prescription, Referral, SickLeave,
 )
 
@@ -763,6 +763,42 @@ def patient_documents(
         .where(MedicalDocument.patient_id == patient_id)
         .order_by(MedicalDocument.issued_at.desc())
     )
+    return [document_out(db, d) for d in rows]
+
+
+@router.get("/patients/{patient_id}/prescriptions/repeatable", response_model=list[DocumentOut])
+def repeatable_prescriptions(
+    patient_id: UUID,
+    user: AppUser = Depends(require_roles("lekarz")),
+    db: Session = Depends(get_db),
+):
+    """Recepty pacjenta do powtórzenia w gabinecie (lista, nie „ostatnia").
+
+    Widoczność jak przy reszcie dokumentacji: domyślnie lekarz widzi do powtórzenia
+    TYLKO recepty wystawione przez SIEBIE; pełna historia recept (także z innych
+    placówek/lekarzy) dopiero gdy pacjent udostępnił dokumentację — odebrany,
+    nieodwołany kod o zakresie obejmującym recepty (ALL/PRESCRIPTION/LAST_12M)."""
+    assert_staff_can_access_patient(db, user, patient_id)
+    share = db.scalar(
+        select(DocumentShare).where(
+            DocumentShare.patient_id == patient_id,
+            DocumentShare.recipient_id == user.user_id,
+            DocumentShare.redeemed_at.is_not(None),
+            DocumentShare.revoked.is_(False),
+            DocumentShare.scope.in_(("ALL", "PRESCRIPTION", "LAST_12M")),
+        )
+    )
+    q = select(MedicalDocument).where(
+        MedicalDocument.patient_id == patient_id,
+        MedicalDocument.document_type == DocumentType.PRESCRIPTION.value,
+        MedicalDocument.document_status != DocumentStatus.REVOKED.value,
+    )
+    if share is None:
+        q = q.where(MedicalDocument.doctor_id == user.user_id)  # bez udostępnienia — tylko własne
+    elif share.scope == "LAST_12M":
+        q = q.where(MedicalDocument.issued_at >= datetime.now() - timedelta(days=365))
+    rows = db.scalars(q.order_by(MedicalDocument.issued_at.desc()))
+    log_access(db, actor=user, action="VIEW_DOCUMENTS", patient_id=patient_id, detail="recepty do powtórzenia")
     return [document_out(db, d) for d in rows]
 
 
