@@ -10,6 +10,9 @@ import { pushToast } from '../../lib/toast'
 import type { AdminUser } from '../../lib/types'
 
 const ROLES = ['administrator', 'lekarz', 'pielegniarka', 'rejestracja', 'kierownik', 'pacjent']
+// kolejność na liście: personel wg ważności, PACJENCI na szarym końcu (jest ich
+// najwięcej i są najmniej istotni w zarządzaniu kontami)
+const ROLE_ORDER = ['administrator', 'kierownik', 'lekarz', 'pielegniarka', 'rejestracja', 'pacjent']
 
 export function AdminUzytkownicy() {
   const queryClient = useQueryClient()
@@ -57,8 +60,12 @@ export function AdminUzytkownicy() {
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Anonimizacja nie powiodła się.'),
   })
 
-  const filtered = (users ?? []).filter(u =>
-    `${u.username} ${u.email} ${u.role}`.toLowerCase().includes(q.toLowerCase()))
+  const filtered = (users ?? [])
+    .filter(u => `${u.username} ${u.email} ${u.role}`.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => {
+      const ra = ROLE_ORDER.indexOf(a.role), rb = ROLE_ORDER.indexOf(b.role)
+      return (ra - rb) || a.username.localeCompare(b.username, 'pl')
+    })
 
   return (
     <div className="space-y-6">
