@@ -25,6 +25,9 @@ const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
 
 interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
 
+// inicjały do awatara (bez tytułu „dr/lek/prof")
+const initials = (name: string) => name.replace(/^(dr|lek\.?|prof\.?)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
+
 // tor tablicy dnia (czeka / następni / zakończone) — wspólna ramka z nagłówkiem i licznikiem
 function Lane({ title, count, tone, collapsible, open, onToggle, children }: {
   title: string; count: number; tone?: 'primary'; collapsible?: boolean; open?: boolean; onToggle?: () => void; children: ReactNode
@@ -312,13 +315,13 @@ export function Kalendarz() {
           onDone={() => { setRescheduleFor(null); void queryClient.invalidateQueries({ queryKey: ['clinic-day'] }) }} />
       )}
 
-      {showRooms && clinic && <GabinetyModal clinicId={clinic.clinic_id} onClose={() => setShowRooms(false)} />}
+      {showRooms && clinic && <GabinetyModal clinicId={clinic.clinic_id} clinicName={clinic.clinic_name} onClose={() => setShowRooms(false)} />}
     </div>
   )
 }
 
-// ---- modal: gabinety lekarzy (ustawia recepcja — gdzie dziś który lekarz siedzi) ----
-function GabinetyModal({ clinicId, onClose }: { clinicId: string; onClose: () => void }) {
+// ---- modal: gabinety lekarzy tej PLACÓWKI (ustawia recepcja przydzielona tutaj) ----
+function GabinetyModal({ clinicId, clinicName, onClose }: { clinicId: string; clinicName: string; onClose: () => void }) {
   const qc = useQueryClient()
   const [err, setErr] = useState<string | null>(null)
   const { data: docs } = useQuery({
@@ -332,19 +335,22 @@ function GabinetyModal({ clinicId, onClose }: { clinicId: string; onClose: () =>
     onError: (e) => setErr(e instanceof ApiError ? e.message : 'Nie udało się zapisać gabinetu.'),
   })
   return (
-    <Modal title="Gabinety lekarzy" overline="gdzie dziś który lekarz przyjmuje — podpowiada się przy meldowaniu"
-      onClose={onClose} footer={<Button onClick={onClose}>Gotowe</Button>}>
+    <Modal title="Gabinety lekarzy" overline={clinicName} onClose={onClose} footer={<Button onClick={onClose}>Gotowe</Button>}>
+      <p className="mb-3 text-sm font-medium text-gray-500">Gdzie dziś który lekarz przyjmuje — numer podpowiada się przy meldowaniu pacjenta.</p>
       {!docs ? <Loading /> : docs.length === 0 ? (
-        <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Brak lekarzy w placówce.</p>
+        <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-sm font-medium text-gray-500">Brak lekarzy w tej placówce.</p>
       ) : (
         <div className="space-y-1.5">
           {docs.map(d => (
-            <div key={`${d.doctor_id}:${d.room ?? ''}`} className="flex items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-900">{d.name}</span>
-              {d.specializations.length > 0 && <span className="hidden truncate text-xs font-medium text-gray-400 sm:block">{d.specializations.join(' · ')}</span>}
-              <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="gab."
-                aria-label={`Gabinet — ${d.name}`} className={`${inputCls} w-24 text-center`}
-                onBlur={e => { const v = e.target.value.trim() || null; if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v }) }} />
+            <div key={`${d.doctor_id}:${d.room ?? ''}`} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-3.5 py-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-extrabold text-primary">{initials(d.name)}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-gray-900">{d.name}</span>
+              <span className="shrink-0 text-xs font-bold text-gray-400">gab.</span>
+              <div className="w-20 shrink-0">
+                <input type="text" maxLength={20} defaultValue={d.room ?? ''} placeholder="—"
+                  aria-label={`Gabinet — ${d.name}`} className={cx(inputCls, 'w-full text-center')}
+                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== d.room) setRoom.mutate({ id: String(d.doctor_id), room: v }) }} />
+              </div>
             </div>
           ))}
         </div>
