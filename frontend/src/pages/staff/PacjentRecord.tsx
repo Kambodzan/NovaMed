@@ -127,7 +127,7 @@ export function PacjentRecord() {
       <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
         <Tile className="p-5" delay={60}>
           <TileHeader title={<span className="inline-flex items-center gap-1.5"><FolderOpen size={13} /> Dokumentacja</span>} />
-          <div className="max-h-[65vh] overflow-y-auto pr-1">
+          <div className="max-h-[65vh] overflow-y-auto p-1">
             <DokumentyLista documents={documents ?? []} emptyHint="Brak dokumentów w kartotece." />
           </div>
         </Tile>
