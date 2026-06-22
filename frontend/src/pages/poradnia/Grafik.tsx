@@ -15,7 +15,7 @@ import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DodajTerminy } from '../../components/DodajTerminy'
 
-interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[]; room: string | null }
 interface Pick { key: string; label: string; specs: string[] }
 
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

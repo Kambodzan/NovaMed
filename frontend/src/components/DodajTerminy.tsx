@@ -11,7 +11,7 @@ import { DatePicker } from './DatePicker'
 import { type ServiceOut } from './ServicesManager'
 import { api, ApiError } from '../lib/api'
 
-interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[]; room: string | null }
 
 // generuje godziny startu slotów od „from" (włącznie) do „to" (wyłącznie) co `step` min;
 // gdy zakres pusty/odwrotny → pojedynczy slot o godzinie „from"

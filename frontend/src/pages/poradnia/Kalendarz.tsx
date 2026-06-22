@@ -23,7 +23,7 @@ const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').to
 const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']
 
-interface DoctorRow { doctor_id: string; name: string; specializations: string[]; slot_duration_min: number | null; room: string | null }
+interface DoctorRow { doctor_id: string; name: string; specializations: string[]; room: string | null }
 
 // inicjały do awatara (bez tytułu „dr/lek/prof")
 const initials = (name: string) => name.replace(/^(dr|lek\.?|prof\.?)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
