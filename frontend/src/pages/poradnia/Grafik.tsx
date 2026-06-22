@@ -6,8 +6,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, CalendarRange, ChevronLeft, ChevronRight, MapPin, Plus, Search, Video, X } from 'lucide-react'
-import { Button, EmptyState, Loading, PageHeader, Tile, cx, inputCls } from '../../ui'
+import { Building2, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, MapPin, Plus, Search, Video, X } from 'lucide-react'
+import { Button, EmptyState, Loading, Modal, PageHeader, Tile, cx, inputCls } from '../../ui'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { formatTime } from '../../lib/format'
@@ -37,6 +37,8 @@ export function Grafik() {
   const [weekStart, setWeekStart] = useState(todayIso())
   const [doctorKey, setDoctorKey] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  // wybór rodzaju wizyty, gdy o jednej godzinie jest kilka wolnych slotów (różne usługi)
+  const [chooser, setChooser] = useState<{ time: string; options: AppointmentOut[] } | null>(null)
 
   const { data: doctors } = useQuery({
     queryKey: ['clinic-doctors', clinic?.clinic_id],
@@ -189,24 +191,32 @@ export function Grafik() {
               {days.map(d => {
                 const list = byDay.get(d) ?? []
                 const isToday = d === todayIso()
+                // jedna pigułka na GODZINĘ — recepcja wybiera czas, nie usługę. Kilka
+                // slotów o tej samej godzinie (różne usługi) zwija się; rodzaj wybiera
+                // się dopiero po kliknięciu (gdy jest więcej niż jedna opcja).
+                const byTime = new Map<string, AppointmentOut[]>()
+                for (const s of list) { const t = formatTime(s.appointment_datetime); const g = byTime.get(t); if (g) g.push(s); else byTime.set(t, [s]) }
                 return (
                   <div key={d} className={cx('flex flex-wrap items-start gap-2 rounded-2xl px-3.5 py-2.5', isToday ? 'bg-primary-soft/50' : 'bg-gray-50')}>
                     <span className={cx('w-28 shrink-0 pt-1 text-sm font-extrabold capitalize', isToday ? 'text-primary' : 'text-gray-900')}>{dayLabel(d)}</span>
-                    {list.length === 0 ? (
+                    {byTime.size === 0 ? (
                       <span className="pt-1 text-xs font-semibold text-gray-400">brak wolnych</span>
                     ) : (
                       <div className="flex flex-1 flex-wrap gap-1.5">
-                        {list.map(s => (
-                          <button key={s.appointment_id} onClick={() => book(s)}
-                            className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-extrabold text-gray-900 ring-1 ring-gray-200 transition-colors hover:bg-primary hover:text-white hover:ring-primary">
-                            {s.appointment_type === 'ONLINE' ? <Video size={12} /> : <MapPin size={12} />}
-                            {formatTime(s.appointment_datetime)}
-                            {s.price ? <span className="font-bold opacity-70">· {s.price} zł</span> : null}
-                            {scope === 'network' && s.clinic_id !== clinic?.clinic_id && (
-                              <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-700"><Building2 size={9} /> {s.clinic_name}</span>
-                            )}
-                          </button>
-                        ))}
+                        {[...byTime.entries()].map(([t, opts]) => {
+                          const s0 = opts[0]
+                          const multi = opts.length > 1
+                          const tag = scope === 'network' && s0.clinic_id !== clinic?.clinic_id ? s0.clinic_name : null
+                          return (
+                            <button key={s0.appointment_id} onClick={() => multi ? setChooser({ time: t, options: opts }) : book(s0)}
+                              className="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-xs font-extrabold text-gray-900 ring-1 ring-gray-200 transition-colors hover:bg-primary hover:text-white hover:ring-primary">
+                              {!multi && (s0.appointment_type === 'ONLINE' ? <Video size={12} /> : <MapPin size={12} />)}
+                              {t}
+                              {multi && <ChevronDown size={12} className="opacity-60" />}
+                              {tag && <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-700"><Building2 size={9} /> {tag}</span>}
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -215,6 +225,29 @@ export function Grafik() {
             </div>
           </Tile>
         </>
+      )}
+
+      {chooser && (
+        <Modal title={`Wizyta o ${chooser.time}`} overline={active?.label} onClose={() => setChooser(null)}>
+          <p className="mb-3 text-sm font-semibold text-gray-500">Wybierz rodzaj wizyty na tę godzinę:</p>
+          <div className="space-y-1.5">
+            {chooser.options.map(s => (
+              <button key={s.appointment_id} onClick={() => { setChooser(null); book(s) }}
+                className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left transition-colors hover:bg-primary-soft">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-primary tile-shadow">
+                  {s.appointment_type === 'ONLINE' ? <Video size={15} /> : <MapPin size={15} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-extrabold text-gray-900">{s.service_name ?? 'Zwykła wizyta (NFZ)'}</span>
+                  <span className="block truncate text-xs font-medium text-gray-500">
+                    {s.appointment_type === 'ONLINE' ? 'teleporada' : 'stacjonarna'}{s.referral_required ? ' · wymaga skierowania' : ''}
+                  </span>
+                </span>
+                <span className="shrink-0 text-sm font-extrabold text-gray-900">{s.price ? `${s.price} zł` : 'NFZ'}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {showAdd && clinic && (
