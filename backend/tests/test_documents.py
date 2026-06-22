@@ -72,6 +72,7 @@ def visit(client, factory):
         "appointment_id": slot_id,
         "doctor": doctor_user, "doctor_token": doctor_token,
         "patient": patient_user, "patient_token": patient_token,
+        "clinic": clinic, "reg_token": reg_token,
     }
 
 
@@ -177,6 +178,53 @@ def test_skierowanie_nursing_wewnetrzne(client, visit, fakes, factory):
 
     # pacjent nie ma dostępu do kolejki pielęgniarskiej
     assert client.get("/referrals/nursing", headers=auth_header(visit["patient_token"])).status_code == 403
+
+
+def _types(docs):
+    return {d["document_type"] for d in docs}
+
+
+def test_rbac_zakres_dokumentacji_per_rola(client, visit, fakes, factory):
+    """RODO/minimum niezbędne: pielęgniarka/recepcja/kierownik widzą tylko swój
+    zakres dokumentacji, dane kliniczne i przebieg wizyt — wg roli (lekarz: pełnia)."""
+    pid = visit["patient"].user_id
+    doc = auth_header(visit["doctor_token"])
+    aid = visit["appointment_id"]
+    # lekarz wystawia komplet dokumentów
+    client.post(f"/patients/{pid}/prescriptions", headers=doc, json={"appointment_id": aid, "drugs": "Lek 10 mg"})
+    client.post(f"/patients/{pid}/referrals", headers=doc, json={"appointment_id": aid, "referral_type": "NURSING", "notes": "iniekcja"})
+    client.post(f"/patients/{pid}/referrals", headers=doc, json={"appointment_id": aid, "referral_type": "SPECIALIST", "specialization": "Kardiolog"})
+    client.post(f"/patients/{pid}/lab-results", headers=doc, json={"appointment_id": aid, "test_type": "Morfologia", "test_description": "ok"})
+    client.post(f"/patients/{pid}/sick-leaves", headers=doc, json={"appointment_id": aid, "date_from": date.today().isoformat(), "date_to": (date.today() + timedelta(days=3)).isoformat()})
+    client.post(f"/patients/{pid}/certificates", headers=doc, json={"appointment_id": aid, "purpose": "praca", "content": "zdolny"})
+
+    # personel zatrudniony w tej samej placówce (ma dostęp do pacjenta wg tenancy)
+    nurse_u, nurse_t = factory.user("pielegniarka"); factory.employ(visit["clinic"], nurse_u.user_id)
+    reg_u, reg_t = factory.user("rejestracja"); factory.employ(visit["clinic"], reg_u.user_id)
+    kier_u, kier_t = factory.user("kierownik"); factory.employ(visit["clinic"], kier_u.user_id)
+
+    def docs(tok):
+        return client.get(f"/patients/{pid}/documents", headers=auth_header(tok)).json()
+
+    # lekarz — wszystko
+    assert _types(docs(visit["doctor_token"])) == {"PRESCRIPTION", "REFERRAL", "LAB_RESULT", "SICK_LEAVE", "CERTIFICATE"}
+    # pielęgniarka — recepty, wyniki, skierowania ZABIEGOWE (NURSING/LAB); BEZ specjalisty/zwolnienia/zaświadczenia
+    nurse_docs = docs(nurse_t)
+    assert _types(nurse_docs) == {"PRESCRIPTION", "REFERRAL", "LAB_RESULT"}
+    assert all(d["referral_type"] in ("NURSING", "LAB") for d in nurse_docs if d["document_type"] == "REFERRAL")
+    # recepcja — tylko wyniki badań (obsługuje wgrywanie); kierownik — nic klinicznego
+    assert _types(docs(reg_t)) == {"LAB_RESULT"}
+    assert docs(kier_t) == []
+
+    # dane kliniczne pacjenta: klinicysta TAK, administracja NIE
+    client.patch(f"/patients/{pid}/clinical", headers=doc, json={"allergies": "penicylina"})
+    assert client.get(f"/patients/{pid}", headers=auth_header(nurse_t)).json()["allergies"] == "penicylina"
+    assert client.get(f"/patients/{pid}", headers=auth_header(reg_t)).json()["allergies"] is None
+    assert client.get(f"/patients/{pid}", headers=auth_header(kier_t)).json()["allergies"] is None
+
+    # PDF poza zakresem roli → 403 (pielęgniarka próbuje pobrać e-zwolnienie)
+    sick = next(d for d in docs(visit["doctor_token"]) if d["document_type"] == "SICK_LEAVE")
+    assert client.get(f"/documents/{sick['document_id']}/pdf", headers=auth_header(nurse_t)).status_code == 403
 
 
 def test_skierowanie_specjalisty_realizuje_sie_przy_rezerwacji(client, factory, fakes):

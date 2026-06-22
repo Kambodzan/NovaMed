@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
+from app.domain.access import can_view_clinical_data, can_view_document, filter_documents
 from app.domain.tenancy import assert_staff_can_access_patient
 from app.core.db import get_db
 from app.domain.audit import log_access
@@ -577,15 +578,19 @@ class PatientInfoOut(BaseModel):
     guardian_phone: str | None = None
 
 
-def patient_info_out(db: Session, p: Patient) -> PatientInfoOut:
+def patient_info_out(db: Session, p: Patient, viewer_role: str | None = None) -> PatientInfoOut:
     user = db.get(AppUser, p.patient_id)
     guardian = db.get(AppUser, p.guardian_id) if p.guardian_id else None
+    # dane kliniczne (alergie/choroby/leki) tylko dla klinicystów; role administracyjne
+    # (rejestracja/kierownik/admin) dostają nagłówek bez treści medycznej
+    clinical = viewer_role is None or can_view_clinical_data(viewer_role)
     return PatientInfoOut(
         patient_id=p.patient_id, first_name=p.first_name, last_name=p.last_name,
         pesel=p.pesel, birth_date=p.birth_date, insurance_status=p.insurance_status,
         phone_number=user.phone_number,
-        allergies=p.allergies, chronic_diseases=p.chronic_diseases,
-        chronic_medications=p.chronic_medications,
+        allergies=p.allergies if clinical else None,
+        chronic_diseases=p.chronic_diseases if clinical else None,
+        chronic_medications=p.chronic_medications if clinical else None,
         guardian_name=guardian.username if guardian else None,
         guardian_phone=guardian.phone_number if guardian else None,
     )
@@ -603,7 +608,7 @@ def patient_info(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
     assert_staff_can_access_patient(db, user, patient_id)
     log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id)
-    return patient_info_out(db, p)
+    return patient_info_out(db, p, user.role.role_name)
 
 
 class PatientContactIn(BaseModel):
@@ -635,7 +640,7 @@ def update_patient_contact(
         p.last_name = body.last_name
     user.username = f"{p.first_name} {p.last_name}"
     db.commit()
-    return patient_info_out(db, p)
+    return patient_info_out(db, p, actor.role.role_name)
 
 
 class PatientClinicalIn(BaseModel):
@@ -664,7 +669,7 @@ def update_patient_clinical(
     log_access(db, actor=user, action="EDIT_CLINICAL", patient_id=patient_id,
                detail="dane kliniczne (alergie/choroby/leki)")
     db.commit()
-    return patient_info_out(db, p)
+    return patient_info_out(db, p, user.role.role_name)
 
 
 @router.post("/patients/{patient_id}/verify-insurance", response_model=PatientInfoOut)
@@ -686,7 +691,7 @@ def verify_insurance(
     log_access(db, actor=user, action="VERIFY_INSURANCE", patient_id=patient_id,
                detail=f"eWUS -> {p.insurance_status}")
     db.commit()
-    return patient_info_out(db, p)
+    return patient_info_out(db, p, user.role.role_name)
 
 
 class HistoryDocOut(BaseModel):
@@ -724,6 +729,10 @@ def patient_history(
     if db.get(Patient, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
     assert_staff_can_access_patient(db, user, patient_id)
+    # przebieg wizyt (nota lekarska) to dokumentacja kliniczna — tylko lekarz; pozostały
+    # personel widzi same terminy wizyt przez /patients/{id}/appointments
+    if user.role.role_name != "lekarz":
+        return []
     log_access(db, actor=user, action="VIEW_RECORD", patient_id=patient_id, detail="historia wizyt")
 
     visits = db.scalars(
@@ -776,11 +785,14 @@ def patient_documents(
     if user.role.role_name != "pacjent":
         assert_staff_can_access_patient(db, user, patient_id)
         log_access(db, actor=user, action="VIEW_DOCUMENTS", patient_id=patient_id)
-    rows = db.scalars(
+    rows = list(db.scalars(
         select(MedicalDocument)
         .where(MedicalDocument.patient_id == patient_id)
         .order_by(MedicalDocument.issued_at.desc())
-    )
+    ))
+    # pacjent (własne) widzi wszystko; personel — wg zakresu roli (RODO/minimum)
+    if user.role.role_name != "pacjent":
+        rows = filter_documents(db, user.role.role_name, rows)
     return [document_out(db, d) for d in rows]
 
 
@@ -922,6 +934,10 @@ def document_pdf(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Brak uprawnień.")
     if role != "pacjent":
         assert_staff_can_access_patient(db, user, doc.patient_id)
+        # ta sama widoczność co lista: rola nie pobierze PDF dokumentu spoza swojego zakresu
+        if not can_view_document(db, role, doc):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Ten dokument jest poza zakresem Twojej roli.")
         log_access(db, actor=user, action="DOWNLOAD_PDF", patient_id=doc.patient_id,
                    detail=DOC_LABELS.get(doc.document_type, doc.document_type))
 

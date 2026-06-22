@@ -127,6 +127,11 @@ export function PacjentRecord() {
       <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
         <Tile className="p-5" delay={60}>
           <TileHeader title={<span className="inline-flex items-center gap-1.5"><FolderOpen size={13} /> Dokumentacja</span>} />
+          {isReception && (
+            <p className="mb-2 rounded-xl bg-gray-50 px-3.5 py-2 text-xs font-medium text-gray-500">
+              Zakres administracyjny — pełna dokumentacja kliniczna (recepty, noty, skierowania) dostępna personelowi medycznemu.
+            </p>
+          )}
           <div className="max-h-[65vh] overflow-y-auto p-1 [scrollbar-gutter:stable]">
             <DokumentyLista documents={documents ?? []} emptyHint="Brak dokumentów w kartotece." />
           </div>
