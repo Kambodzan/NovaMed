@@ -4,8 +4,8 @@
 export const colors = {
   bg: '#F9FAFB',          // tło aplikacji (gray-50)
   surface: '#FFFFFF',     // kafle, nav
-  primary: '#0D9488',     // teal-600 — akcje, marka
-  primaryHover: '#0F766E',
+  primary: '#0F766E',     // teal-700 — akcje, marka (WCAG AA: biały tekst 5.4:1; teal-600 #0D9488 dawał 3.7:1)
+  primaryHover: '#115E59',
   primarySoft: '#F0FDFA', // teal-50 — tła ikon, zaznaczenia
   text: '#111827',        // gray-900
   textMute: '#6B7280',    // gray-500

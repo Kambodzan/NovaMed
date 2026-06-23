@@ -470,20 +470,31 @@ function PublicCard({ c, onPick, addrOf, disabled }: {
   })
   return (
     <div className="rounded-2xl bg-gray-50">
-      <button onClick={() => setOpen(o => !o)} className="flex w-full cursor-pointer items-center gap-3 p-4 text-left">
-        <Avatar initials={c.name.replace(/^(dr|lek\.)\s+/i, '').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()} size="sm" />
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-900">
-            {c.name}
-            {rating && rating.count > 0 && rating.average != null && (
-              <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
-            )}
+      {/* Nakładkowy przycisk zamiast <button> opakowującego kartę — RatingBadge to
+          osobny interaktywny element, więc nie może być zagnieżdżony (WCAG nested-interactive). */}
+      <div className="relative">
+        <button
+          onClick={() => setOpen(o => !o)} aria-expanded={open}
+          aria-label={`${c.name} — pokaż terminy`}
+          className="absolute inset-0 cursor-pointer rounded-2xl"
+        />
+        <div className="pointer-events-none flex items-center gap-3 p-4">
+          <Avatar initials={c.name.replace(/^(dr|lek\.)\s+/i, '').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()} size="sm" />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-900">
+              {c.name}
+              {rating && rating.count > 0 && rating.average != null && (
+                <span className="pointer-events-auto relative">
+                  <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
+                </span>
+              )}
+            </span>
+            {c.sub && <span className="block text-xs font-semibold text-gray-500">{c.sub}</span>}
           </span>
-          {c.sub && <span className="block text-xs font-semibold text-gray-500">{c.sub}</span>}
-        </span>
-        <span className="text-xs font-extrabold text-primary">{dayNo(nearest.appointment_datetime)} {monthShort(nearest.appointment_datetime)}, {formatTime(nearest.appointment_datetime)}</span>
-        <ChevronDown size={15} className={cx('text-gray-500 transition-transform', open && 'rotate-180')} />
-      </button>
+          <span className="text-xs font-extrabold text-primary">{dayNo(nearest.appointment_datetime)} {monthShort(nearest.appointment_datetime)}, {formatTime(nearest.appointment_datetime)}</span>
+          <ChevronDown size={15} className={cx('text-gray-500 transition-transform', open && 'rotate-180')} />
+        </div>
+      </div>
       {open && (
         <div className="border-t border-gray-200/70 p-4 pt-3">
           {services.length > 1 && (

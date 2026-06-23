@@ -296,9 +296,9 @@ export function Kalendarz() {
             {detail.appointment_status === 'CONFIRMED' && (
               <p><span className="font-semibold text-gray-500">Obecność:</span>{' '}
                 {detail.patient_confirmed
-                  ? <span className="font-bold text-emerald-600">potwierdzona przez pacjenta</span>
+                  ? <span className="font-bold text-emerald-700">potwierdzona przez pacjenta</span>
                   : detail.confirmation_requested
-                    ? <span className="font-bold text-amber-600">wysłano prośbę — czeka na potwierdzenie</span>
+                    ? <span className="font-bold text-amber-700">wysłano prośbę — czeka na potwierdzenie</span>
                     : <span className="text-gray-500">brak prośby o potwierdzenie</span>}
               </p>
             )}
@@ -306,8 +306,8 @@ export function Kalendarz() {
             {detail.price ? (
               <p><span className="font-semibold text-gray-500">Płatność:</span>{' '}
                 {detail.payment_status === 'PAID'
-                  ? <span className="font-bold text-emerald-600">opłacona{detail.invoice_number ? ` · faktura ${detail.invoice_number}` : ''}</span>
-                  : <span className="font-bold text-amber-600">do zapłaty {detail.price} zł (na miejscu)</span>}
+                  ? <span className="font-bold text-emerald-700">opłacona{detail.invoice_number ? ` · faktura ${detail.invoice_number}` : ''}</span>
+                  : <span className="font-bold text-amber-700">do zapłaty {detail.price} zł (na miejscu)</span>}
               </p>
             ) : null}
             {detail.appointment_status === 'CONFIRMED' && detail.appointment_type !== 'ONLINE' && day === todayIso() && (

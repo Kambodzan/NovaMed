@@ -18,7 +18,7 @@ const FINISHED = ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'INTERRUPTED']
 function Stat({ label, value, hint, tone }: { label: string; value: string | number; hint?: string; tone?: 'amber' | 'primary' }) {
   return (
     <Tile className="p-5">
-      <Overline className={tone === 'amber' ? '!text-amber-600' : undefined}>{label}</Overline>
+      <Overline className={tone === 'amber' ? '!text-amber-700' : undefined}>{label}</Overline>
       <p className={cx('mt-2 text-4xl font-extrabold tracking-tight [font-variant-numeric:tabular-nums]',
         tone === 'amber' ? 'text-amber-700' : tone === 'primary' ? 'text-primary' : 'text-gray-900')}>{value}</p>
       {hint && <p className="mt-1 text-xs font-semibold text-gray-500">{hint}</p>}

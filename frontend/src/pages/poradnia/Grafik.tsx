@@ -142,7 +142,7 @@ export function Grafik() {
                 {(['clinic', 'network'] as const).map(s => (
                   <button key={s} onClick={() => setScope(s)}
                     className={cx('cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-colors',
-                      scope === s ? 'bg-surface text-primary tile-shadow' : 'text-gray-500 hover:text-gray-900')}>
+                      scope === s ? 'bg-surface text-primary tile-shadow' : 'text-gray-600 hover:text-gray-900')}>
                     {s === 'clinic' ? 'Ta placówka' : 'Cała sieć'}
                   </button>
                 ))}
@@ -209,8 +209,8 @@ export function Grafik() {
                   className={cx('flex min-w-44 flex-col items-start gap-0.5 rounded-2xl px-4 py-3 text-left transition-colors',
                     isActive ? 'bg-primary text-white tile-shadow' : 'bg-surface tile-shadow hover:bg-gray-50')}>
                   <span className={cx('truncate text-sm font-extrabold', isActive ? 'text-white' : 'text-gray-900')}>{p.label}</span>
-                  {p.specs.length > 0 && <span className={cx('truncate text-[11px] font-semibold', isActive ? 'text-white/80' : 'text-gray-500')}>{p.specs.join(' · ')}</span>}
-                  <span className={cx('text-[11px] font-extrabold', isActive ? 'text-white' : !nf ? 'text-gray-300' : nf.slice(0, 10) === todayIso() ? 'text-emerald-600' : 'text-primary')}>
+                  {p.specs.length > 0 && <span className={cx('truncate text-[11px] font-semibold', isActive ? 'text-white/90' : 'text-gray-500')}>{p.specs.join(' · ')}</span>}
+                  <span className={cx('text-[11px] font-extrabold', isActive ? 'text-white' : !nf ? 'text-gray-500' : nf.slice(0, 10) === todayIso() ? 'text-emerald-700' : 'text-primary')}>
                     {!nf ? 'brak wolnych' : nf.slice(0, 10) === todayIso() ? 'wolne dziś' : `najbliższy: ${shortDate(nf.slice(0, 10))}`}
                   </span>
                 </button>

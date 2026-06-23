@@ -45,33 +45,37 @@ export function SkierowaniaPacjenta() {
             const active = ['ACTIVE', 'CONFIRMED'].includes(doc.document_status)
             return (
               <li key={doc.document_id}>
-                <button type="button" className="block w-full cursor-pointer text-left"
-                  onClick={() => setPreviewFor(doc)} title={t('Podgląd')}>
-                  <Tile className="p-5 transition-shadow hover:ring-2 hover:ring-primary/20" delay={80 + i * 40}>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
-                        <FileSignature size={19} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <Overline>{formatDatePL(doc.issued_at)} · {doc.doctor_name}</Overline>
-                        <p className="mt-1 text-sm leading-relaxed font-medium text-gray-700">{doc.details}</p>
-                        {active && doc.referral_type === 'NURSING' && (
-                          <p className="mt-1 text-xs font-medium text-gray-500">
-                            {t('Zabieg zaplanuje pielęgniarka — skierowanie czeka w jej kolejce.')}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <StatusBadge status={doc.document_status} />
-                        {active && doc.referral_type !== 'NURSING' && (
+                {/* Nakładkowy przycisk „Podgląd" zamiast <button> obejmującego kafel —
+                    przycisk „Umów termin" to osobny interaktywny element (WCAG nested-interactive). */}
+                <Tile className="relative p-5 transition-shadow hover:ring-2 hover:ring-primary/20" delay={80 + i * 40}>
+                  <button type="button" onClick={() => setPreviewFor(doc)}
+                    title={t('Podgląd')} aria-label={`${t('Podgląd')} — ${doc.doctor_name}`}
+                    className="absolute inset-0 cursor-pointer rounded-[20px]" />
+                  <div className="pointer-events-none flex flex-wrap items-center gap-4">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+                      <FileSignature size={19} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <Overline>{formatDatePL(doc.issued_at)} · {doc.doctor_name}</Overline>
+                      <p className="mt-1 text-sm leading-relaxed font-medium text-gray-700">{doc.details}</p>
+                      {active && doc.referral_type === 'NURSING' && (
+                        <p className="mt-1 text-xs font-medium text-gray-500">
+                          {t('Zabieg zaplanuje pielęgniarka — skierowanie czeka w jej kolejce.')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge status={doc.document_status} />
+                      {active && doc.referral_type !== 'NURSING' && (
+                        <span className="pointer-events-auto relative">
                           <Button size="sm" onClick={e => { e.stopPropagation(); umow(doc) }}>
                             <CalendarPlus size={14} /> {t('Umów termin')}
                           </Button>
-                        )}
-                      </div>
+                        </span>
+                      )}
                     </div>
-                  </Tile>
-                </button>
+                  </div>
+                </Tile>
               </li>
             )
           })}

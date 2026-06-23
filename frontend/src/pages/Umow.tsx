@@ -110,38 +110,46 @@ function DoctorCard({ d, multiClinic, onPick, addressOf }: {
 
   return (
     <div className="rounded-2xl bg-gray-50">
-      <button
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-3 p-4 text-left"
-      >
-        <Avatar initials={doctorInitials(d.name)} size="md" />
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-2 font-bold text-gray-900">
-            {d.name}
-            {rating && rating.count > 0 && rating.average != null && (
-              <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
-            )}
+      {/* Nakładkowy przycisk zamiast <button> opakowującego kartę — RatingBadge to osobny
+          interaktywny element, nie może być zagnieżdżony (WCAG nested-interactive). */}
+      <div className="relative">
+        <button
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+          aria-label={`${d.name} — pokaż terminy`}
+          className="absolute inset-0 cursor-pointer rounded-2xl"
+        />
+        <div className="pointer-events-none flex items-center gap-3 p-4">
+          <Avatar initials={doctorInitials(d.name)} size="md" />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2 font-bold text-gray-900">
+              {d.name}
+              {rating && rating.count > 0 && rating.average != null && (
+                <span className="pointer-events-auto relative">
+                  <RatingBadge average={rating.average} count={rating.count} onOpen={() => setShowReviews(true)} />
+                </span>
+              )}
+            </span>
+            <span className="block truncate text-xs font-semibold text-gray-500">
+              {[
+                d.specs.join(' · ') || null,
+                hasNfz ? <span key="nfz" className="text-emerald-700">NFZ</span> : null,
+                minPrice != null ? `${t('prywatnie od')} ${minPrice} zł` : null,
+                multiClinic ? d.clinics.map(shortLoc).join(', ') : null,
+              ].filter(Boolean).map((part, i) => (
+                <span key={i}>{i > 0 && ' · '}{part}</span>
+              ))}
+            </span>
           </span>
-          <span className="block truncate text-xs font-semibold text-gray-500">
-            {[
-              d.specs.join(' · ') || null,
-              hasNfz ? <span key="nfz" className="text-emerald-700">NFZ</span> : null,
-              minPrice != null ? `${t('prywatnie od')} ${minPrice} zł` : null,
-              multiClinic ? d.clinics.map(shortLoc).join(', ') : null,
-            ].filter(Boolean).map((part, i) => (
-              <span key={i}>{i > 0 && ' · '}{part}</span>
-            ))}
+          <span className="text-right">
+            <span className="block text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">{t('najbliższy')}</span>
+            <span className="block text-sm font-extrabold text-primary [font-variant-numeric:tabular-nums]">
+              {dayLabel(nearest.appointment_datetime.slice(0, 10))}, {formatTime(nearest.appointment_datetime)}
+            </span>
           </span>
-        </span>
-        <span className="text-right">
-          <span className="block text-[10px] font-extrabold tracking-wider text-gray-500 uppercase">{t('najbliższy')}</span>
-          <span className="block text-sm font-extrabold text-primary [font-variant-numeric:tabular-nums]">
-            {dayLabel(nearest.appointment_datetime.slice(0, 10))}, {formatTime(nearest.appointment_datetime)}
-          </span>
-        </span>
-        <ChevronDown size={16} className={cx('shrink-0 text-gray-500 transition-transform', open && 'rotate-180')} />
-      </button>
+          <ChevronDown size={16} className={cx('shrink-0 text-gray-500 transition-transform', open && 'rotate-180')} />
+        </div>
+      </div>
 
       {open && (
         <div className="border-t border-gray-200/70 p-4 pt-3">

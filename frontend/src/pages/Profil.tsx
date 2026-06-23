@@ -107,10 +107,10 @@ export function Profil() {
           className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left hover:bg-gray-100">
           <span>
             <span className="block text-sm font-bold text-gray-900">{t('Powiadomienia SMS')}</span>
-            <span className="block text-xs font-medium text-gray-500">{t('Przypomnienia o wizytach i nowe dokumenty SMS-em. Powiadomienia w aplikacji są zawsze aktywne.')}</span>
+            <span className="block text-xs font-medium text-gray-600">{t('Przypomnienia o wizytach i nowe dokumenty SMS-em. Powiadomienia w aplikacji są zawsze aktywne.')}</span>
           </span>
           <span className={cx('shrink-0 rounded-full px-3 py-1 text-xs font-extrabold uppercase',
-            profile.notify_sms ? 'bg-primary-soft text-primary' : 'bg-gray-200 text-gray-500')}>
+            profile.notify_sms ? 'bg-primary-soft text-primary' : 'bg-gray-200 text-gray-700')}>
             {profile.notify_sms ? t('wł.') : t('wył.')}
           </span>
         </button>

@@ -130,7 +130,7 @@ export function ClinicMap({ clinics, selected, onSelect, geo, selectLabel }: {
                 <button
                   onClick={() => onSelect(`cli:${c.clinic_name}`)}
                   style={{
-                    marginTop: 8, background: '#0D9488', color: '#fff', border: 0,
+                    marginTop: 8, background: '#0F766E', color: '#fff', border: 0,
                     borderRadius: 9999, padding: '6px 14px', fontWeight: 800,
                     fontSize: 12, cursor: 'pointer',
                   }}

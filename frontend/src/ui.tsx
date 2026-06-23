@@ -88,7 +88,7 @@ const chipTone: Record<Tone, string> = {
   success: 'bg-emerald-50 text-emerald-700',
   warn: 'bg-amber-50 text-amber-700',
   error: 'bg-red-50 text-red-700',
-  neutral: 'bg-gray-100 text-gray-500',
+  neutral: 'bg-gray-100 text-gray-600',
   info: 'bg-sky-50 text-sky-700',
 }
 
@@ -160,7 +160,7 @@ export function Avatar({ initials, size = 'md' }: { initials: string; size?: 'sm
 export function DateChip({ month, day, time }: { month: string; day: string; time?: string }) {
   return (
     <div className="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-primary px-4 py-2.5 text-white">
-      <span className="text-[11px] font-bold tracking-wider uppercase opacity-80">{month}</span>
+      <span className="text-[11px] font-bold tracking-wider uppercase opacity-90">{month}</span>
       <span className="text-3xl leading-none font-extrabold">{day}</span>
       {time && <span className="mt-0.5 text-sm font-bold">{time}</span>}
     </div>

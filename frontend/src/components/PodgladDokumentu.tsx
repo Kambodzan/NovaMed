@@ -87,7 +87,7 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
       <div className="space-y-4 pb-2">
         {doc.code && (
           <div className="rounded-2xl border-2 border-dashed border-primary/30 bg-primary-soft/40 py-4 text-center">
-            <p className="text-[10px] font-extrabold tracking-wider text-primary/60 uppercase">{t('kod dokumentu')}</p>
+            <p className="text-[10px] font-extrabold tracking-wider text-primary uppercase">{t('kod dokumentu')}</p>
             <p className="text-3xl font-extrabold tracking-[0.3em] text-primary">{doc.code}</p>
           </div>
         )}

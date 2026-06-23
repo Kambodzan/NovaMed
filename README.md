@@ -53,7 +53,7 @@ docs/        dokumentacja, plan, odstępstwa, diagramy
 
 **`system designu` obowiązuje przy KAŻDYM ekranie** (web i mobile). Kierunek v3 (zatwierdzony
 przez autora): hybryda „Soft Clinical × Bento" — tło gray-50, białe kafle 20px z miękkim cieniem,
-pigułkowe przyciski, Plus Jakarta Sans, primary teal #0D9488 (jeden, bez akcentów per rola),
+pigułkowe przyciski, Plus Jakarta Sans, primary teal #0F766E (teal-700, WCAG AA; jeden, bez akcentów per rola),
 siatka bento na dashboardach (sama składa się na mobile), soft chipy statusów.
 **Zasada nadrzędna: restraint** — max 1 akcja primary + 1 secondary na kafel, dashboard 4–5
 kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementacja referencyjna:

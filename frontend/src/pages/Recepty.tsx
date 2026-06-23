@@ -41,7 +41,7 @@ export function Recepty() {
                   <div className="flex flex-wrap items-center gap-4">
                     {doc.code && (
                       <div className="rounded-2xl bg-primary-soft px-5 py-3 text-center">
-                        <p className="text-[10px] font-extrabold tracking-wider text-primary/60 uppercase">{t('kod recepty')}</p>
+                        <p className="text-[10px] font-extrabold tracking-wider text-primary uppercase">{t('kod recepty')}</p>
                         <p className="text-2xl font-extrabold tracking-[0.3em] text-primary">{doc.code}</p>
                       </div>
                     )}

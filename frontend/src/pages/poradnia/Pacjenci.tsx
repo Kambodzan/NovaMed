@@ -220,7 +220,7 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
               </span>
             ) : (
               <span className="flex items-center gap-1.5 font-bold text-gray-900">
-                {patient.phone_number ?? <span className="font-medium text-gray-400">brak numeru</span>}
+                {patient.phone_number ?? <span className="font-medium text-gray-500">brak numeru</span>}
                 <button onClick={() => setEditing(true)} className="cursor-pointer text-gray-400 hover:text-primary"><Pencil size={12} /></button>
               </span>
             )}

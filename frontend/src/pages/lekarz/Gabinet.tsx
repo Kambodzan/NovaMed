@@ -230,17 +230,17 @@ export function Gabinet() {
     .sheet { page-break-after: always; padding-bottom:8px; }
     .sheet:last-child { page-break-after: auto; }
     .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #0D9488; padding-bottom:9px; }
-    .brand { font-size:21px; font-weight:800; letter-spacing:-0.02em; color:#0D9488; }
+    .brand { font-size:21px; font-weight:800; letter-spacing:-0.02em; color:#0F766E; }
     .meta { text-align:right; font-size:11px; color:#64748b; line-height:1.55; }
     .title { font-size:17px; font-weight:800; margin:20px 0 12px; }
     .patient { display:flex; gap:30px; flex-wrap:wrap; background:#f8fafc; border:1px solid #eef2f6; border-radius:10px; padding:11px 16px; }
     .patient .k { display:block; font-size:8.5px; text-transform:uppercase; letter-spacing:.09em; color:#94a3b8; font-weight:800; }
     .patient .v { font-size:13px; font-weight:700; }
     .block { margin-top:18px; }
-    .block h2 { font-size:9.5px; text-transform:uppercase; letter-spacing:.09em; color:#0D9488; font-weight:800; margin:0 0 7px; border-bottom:1px solid #e2e8f0; padding-bottom:5px; }
+    .block h2 { font-size:9.5px; text-transform:uppercase; letter-spacing:.09em; color:#0F766E; font-weight:800; margin:0 0 7px; border-bottom:1px solid #e2e8f0; padding-bottom:5px; }
     pre { white-space:pre-wrap; font:inherit; font-size:12.5px; line-height:1.62; margin:0; }
     .addendum { margin-top:11px; padding-left:12px; border-left:3px solid #5eead4; }
-    .addendum .lbl { display:block; font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; color:#0D9488; font-weight:800; margin-bottom:2px; }
+    .addendum .lbl { display:block; font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; color:#0F766E; font-weight:800; margin-bottom:2px; }
     .codebox { display:inline-flex; align-items:center; gap:14px; margin-top:14px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:9px 16px; }
     .codebox .k { font-size:8.5px; text-transform:uppercase; letter-spacing:.09em; color:#64748b; font-weight:800; }
     .code { font-family:'Courier New',monospace; font-size:18px; font-weight:700; letter-spacing:.2em; }
@@ -616,7 +616,7 @@ export function Gabinet() {
                   </span>
                 </button>
               ))}
-              {!canPrintNote && <p className="px-1 pt-1 text-xs font-medium text-gray-400">Notę można wydrukować dopiero po jej podpisaniu.</p>}
+              {!canPrintNote && <p className="px-1 pt-1 text-xs font-medium text-gray-500">Notę można wydrukować dopiero po jej podpisaniu.</p>}
             </div>
           </Modal>
         )}

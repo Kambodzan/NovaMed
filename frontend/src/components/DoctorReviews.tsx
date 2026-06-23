@@ -27,7 +27,7 @@ export function RatingBadge({ average, count, onOpen }: { average: number; count
   return (
     <span role="button" tabIndex={0} onClick={open}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') open(e) }}
-      title="Zobacz opinie" className="flex cursor-pointer items-center gap-0.5 text-xs font-extrabold text-amber-600 hover:underline">
+      title="Zobacz opinie" className="flex cursor-pointer items-center gap-0.5 text-xs font-extrabold text-amber-700 hover:underline">
       <Star size={12} className="fill-amber-400 text-amber-400" />
       {average.toFixed(1)}
       <span className="font-semibold text-gray-500">({count})</span>

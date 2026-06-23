@@ -69,7 +69,7 @@ function ClinicDoctors({ clinic }: { clinic: ClinicLite }) {
         <div className="flex flex-wrap gap-1.5">
           {docs.map(d => (
             <span key={d.doctor_id} className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 px-3 py-1.5 text-sm font-bold text-gray-900">
-              {d.name}{d.specializations.length > 0 && <span className="font-medium text-gray-400">· {d.specializations.join(' · ')}</span>}
+              {d.name}{d.specializations.length > 0 && <span className="font-medium text-gray-500">· {d.specializations.join(' · ')}</span>}
             </span>
           ))}
         </div>

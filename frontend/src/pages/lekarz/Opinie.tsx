@@ -17,7 +17,7 @@ function plOpinie(n: number): string {
 
 function Stars({ value, size = 16 }: { value: number; size?: number }) {
   return (
-    <span className="inline-flex gap-0.5" aria-label={`${value} z 5 gwiazdek`}>
+    <span className="inline-flex gap-0.5" role="img" aria-label={`${value} z 5 gwiazdek`}>
       {[1, 2, 3, 4, 5].map(i => (
         <Star key={i} size={size} className={i <= value ? 'fill-amber-400 text-amber-400' : 'text-gray-200'} />
       ))}

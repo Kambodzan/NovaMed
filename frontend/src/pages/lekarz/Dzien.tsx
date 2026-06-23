@@ -125,7 +125,7 @@ export function LekarzDzien() {
               const past = new Date(v.appointment_datetime) < now
               const nowLine = isToday && i === nowIdx && (
                 <li aria-label="Bieżąca godzina" className="flex items-center gap-2 px-1">
-                  <span className="text-[11px] font-extrabold text-red-500 [font-variant-numeric:tabular-nums]">
+                  <span className="text-[11px] font-extrabold text-red-600 [font-variant-numeric:tabular-nums]">
                     {`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`}
                   </span>
                   <span className="h-0.5 flex-1 rounded-full bg-red-400/70" />
@@ -137,7 +137,8 @@ export function LekarzDzien() {
                     {nowLine}
                     <li className={cx(
                       'flex items-center gap-4 rounded-2xl border border-dashed border-gray-200 px-4 py-3',
-                      past && 'opacity-50',
+                      // przeszłe wolne sloty: subtelnie wyblakły OBRAMOWANIE, nie tekst (kontrast AA)
+                      past && 'border-gray-100',
                     )}>
                       <span className="w-12 text-sm font-bold text-gray-500 [font-variant-numeric:tabular-nums]">{formatTime(v.appointment_datetime)}</span>
                       <span className="text-sm font-medium text-gray-500">wolny termin</span>
@@ -156,7 +157,7 @@ export function LekarzDzien() {
                     finished && 'opacity-60 transition-opacity hover:opacity-100',
                   )}
                 >
-                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : paused ? 'text-amber-600' : 'text-gray-500')}>
+                  <span className={cx('flex w-16 items-center gap-1 text-sm font-extrabold [font-variant-numeric:tabular-nums]', live ? 'text-primary' : paused ? 'text-amber-700' : 'text-gray-500')}>
                     {paused && <Pause size={13} className="shrink-0" />}
                     {v.appointment_status === 'COMPLETED' && <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />}
                     {(v.appointment_status === 'NO_SHOW' || v.appointment_status === 'CANCELLED') && <XCircle size={14} className="shrink-0 text-gray-300" />}
@@ -226,7 +227,7 @@ export function LekarzDzien() {
             })}
             {isToday && nowIdx === -1 && (visits ?? []).length > 0 && (
               <li aria-label="Bieżąca godzina" className="flex items-center gap-2 px-1">
-                <span className="text-[11px] font-extrabold text-red-500 [font-variant-numeric:tabular-nums]">
+                <span className="text-[11px] font-extrabold text-red-600 [font-variant-numeric:tabular-nums]">
                   {`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`}
                 </span>
                 <span className="h-0.5 flex-1 rounded-full bg-red-400/70" />
