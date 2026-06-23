@@ -1,0 +1,87 @@
+# Topologia HIGH-AVAILABILITY NovaMed (NFR M10). Ilustruje docelowe wdrozenie:
+#   nginx (load-balancer) -> 2x backend (repliki, bezstanowe) -> Postgres primary
+#                                                              -> Postgres hot-standby (streaming replication, failover)
+# Bezstanowy backend skaluje sie poziomo (`--scale api=N`); LB rozklada ruch i wypina
+# instancje, ktore zwroca 503 na /health/db (readiness). Baza: primary do zapisu,
+# standby do odczytow/failover. Uwaga: na maszynie deweloperskiej Docker nie dziala
+# (uszkodzony WSL) — to artefakt wdrozeniowy. Sekrety przez zmienne srodowiskowe / secret store.
+#
+# Start:  docker compose -f docker-compose.ha.yml up --build --scale api=2
+services:
+  db-primary:
+    image: bitnami/postgresql:16
+    environment:
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?ustaw w .env}
+      POSTGRESQL_USERNAME: novamed
+      POSTGRESQL_PASSWORD: ${DB_PASSWORD:?ustaw w .env}
+      POSTGRESQL_DATABASE: novamed
+    volumes:
+      - pg_primary:/bitnami/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novamed -d novamed"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Hot-standby: ciagla replikacja z primary; promowany na primary przy awarii (failover).
+  db-standby:
+    image: bitnami/postgresql:16
+    depends_on:
+      db-primary:
+        condition: service_healthy
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?ustaw w .env}
+      POSTGRESQL_MASTER_HOST: db-primary
+      POSTGRESQL_MASTER_PORT_NUMBER: "5432"
+    volumes:
+      - pg_standby:/bitnami/postgresql
+
+  # Migracje jako JEDNORAZOWY job (nie per-replika — inaczej wyscig alembica).
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db-primary:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://novamed:${DB_PASSWORD}@db-primary:5432/novamed
+    env_file: [backend/.env]
+    restart: "no"
+
+  # Backend — BEZSTANOWY, skalowalny poziomo (docker compose ... --scale api=N).
+  api:
+    build: ./backend
+    command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-4}"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql+psycopg://novamed:${DB_PASSWORD}@db-primary:5432/novamed
+      DEV_MODE: "false"
+    env_file: [backend/.env]
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/db').status==200 else 1)\""]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+
+  # Load-balancer: rozklada ruch na repliki api, wypina nie-gotowe (readiness 503).
+  lb:
+    image: nginx:1.27-alpine
+    depends_on: [api]
+    ports: ["8000:80"]
+    volumes:
+      - ./deploy/nginx.lb.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  pg_primary:
+  pg_standby:

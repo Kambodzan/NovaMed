@@ -38,3 +38,6 @@ certs/
 
 # Lokalne notatki/sekrety (konta testowe, dane Supabase, klucze Twilio itp.)
 external/
+
+# kopie zapasowe bazy (backup-db.ps1)
+backups/

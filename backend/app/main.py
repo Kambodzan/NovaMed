@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -95,12 +96,19 @@ app.include_router(family_router)
 app.include_router(public_router)
 
 
+# Sondy dla orkiestratora / load-balancera (HA):
+#  - /health      = LIVENESS: proces żyje (bez zależności) — restart gdy nie odpowiada
+#  - /health/db   = READINESS: instancja może obsługiwać ruch (DB osiągalna) — gdy 503,
+#    load-balancer wypina ją z puli (np. podczas utraty łączności z bazą), nie zabijając.
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "app": settings.app_name}
 
 
 @app.get("/health/db")
-def health_db(db: Session = Depends(get_db)) -> dict:
-    db.execute(text("SELECT 1"))
+def health_db(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 — readiness: każdy błąd DB = nie-gotowy
+        return JSONResponse(status_code=503, content={"status": "unavailable", "database": "unreachable"})
     return {"status": "ok", "database": "reachable"}
