@@ -77,6 +77,7 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
   (uszkodzony WSL); `docker-compose.yml` to wariant wdrożeniowy. URL: `backend/.env` (`DATABASE_URL`).
 - **Backend** (z `backend/`, venv w `backend/.venv`):
   - testy: `.\.venv\Scripts\python.exe -m pytest -q`
+  - pokrycie (NFR M10, próg ≥90%): `.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing` (konfiguracja w `backend/.coveragerc`)
   - serwer: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
   - migracje: `.\.venv\Scripts\python.exe -m alembic upgrade head` (nowa: `... revision --autogenerate -m "..."`)
 - **Mock-serwisy** (venv backendu; z katalogu danego mocka, `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port <PORT>`):

@@ -8,5 +8,6 @@ PyJWT>=2.10
 email-validator>=2.2
 python-multipart>=0.0.18
 pytest>=8.3
+pytest-cov>=5.0
 httpx>=0.28
 reportlab>=4.2
