@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FlaskConical, Plus, Search, Trash2, UserRound, X } from 'lucide-react'
-import { Badge, Button, EmptyState, Field, PageHeader, Tile, TileHeader, cx, inputCls } from '../../ui'
+import { Badge, Button, EmptyState, Field, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { formatDatePL } from '../../lib/format'
 import type { DocumentOut } from '../../lib/types'
@@ -212,7 +212,7 @@ export function Wyniki() {
                     <span className="block truncate text-sm font-bold text-gray-900">{d.details ?? 'Wynik badania'}</span>
                     <span className="block text-xs font-medium text-gray-500">{formatDatePL(d.issued_at)} · {d.doctor_name}</span>
                   </span>
-                  <Badge tone="success">{d.document_status}</Badge>
+                  <StatusBadge status={d.document_status} />
                 </li>
               ))}
             </ul>

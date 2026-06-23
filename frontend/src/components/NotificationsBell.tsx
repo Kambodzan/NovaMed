@@ -74,7 +74,6 @@ export function NotificationsBell() {
 
       {open && (
         <Modal
-          overline="UC-P7"
           title="Powiadomienia"
           onClose={() => setOpen(false)}
           footer={count > 0 ? (

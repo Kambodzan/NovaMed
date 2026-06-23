@@ -141,7 +141,7 @@ const EN: Record<string, string> = {
   'Wybierz nowy termin': 'Pick a new slot',
   'obecnie': 'currently',
   'Ten lekarz nie ma teraz wolnych terminów.': 'This doctor has no available slots right now.',
-  'Opinia po wizycie (UC-P8)': 'Post-visit review (UC-P8)',
+  'Opinia po wizycie': 'Post-visit review',
   'Wyślij opinię': 'Submit review',
   'Zapisywanie…': 'Saving…',
   'Oceń lekarza': 'Rate the doctor',

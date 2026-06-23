@@ -45,7 +45,7 @@ export function Login() {
           <HeartPulse size={28} />
         </span>
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-gray-900">NovaMed</h1>
-        <p className="mt-1 text-sm font-semibold text-gray-500">Portal Pacjenta</p>
+        <p className="mt-1 text-sm font-semibold text-gray-500">Portal medyczny</p>
       </div>
 
       <Tile className="w-full max-w-sm p-6" delay={80}>

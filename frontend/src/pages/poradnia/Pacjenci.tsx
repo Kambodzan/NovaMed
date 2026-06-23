@@ -43,7 +43,7 @@ export function PacjenciPlacowki() {
 
   const verify = useMutation({
     mutationFn: (patientId: string) => api(`/patients/${patientId}/verify-insurance`, { method: 'POST' }),
-    onSuccess: () => { setError(null); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
+    onSuccess: (_d, patientId) => { setError(null); setDetail(p => (p && p.patient_id === patientId ? { ...p, insurance_status: true } : p)); void queryClient.invalidateQueries({ queryKey: ['clinic-patients'] }) },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Weryfikacja eWUŚ nie powiodła się.'),
   })
   const saveContact = useMutation({
@@ -146,8 +146,8 @@ function ApptLine({ a, tone, onReschedule, onCancel, busy }: {
       </p>
       {(onReschedule || onCancel) && (
         <div className="mt-2 flex gap-2">
-          {onReschedule && <button onClick={onReschedule} disabled={busy} className="cursor-pointer rounded-full bg-surface px-3 py-1 text-xs font-extrabold text-gray-700 tile-shadow hover:text-primary disabled:opacity-50">Przełóż</button>}
-          {onCancel && <button onClick={onCancel} disabled={busy} className="cursor-pointer rounded-full bg-surface px-3 py-1 text-xs font-extrabold text-red-600 tile-shadow hover:bg-red-50 disabled:opacity-50">Odwołaj</button>}
+          {onReschedule && <button aria-label="Przełóż wizytę" onClick={onReschedule} disabled={busy} className="cursor-pointer rounded-full bg-surface px-3 py-1 text-xs font-extrabold text-gray-700 tile-shadow hover:text-primary disabled:opacity-50">Przełóż</button>}
+          {onCancel && <button aria-label="Odwołaj wizytę" onClick={onCancel} disabled={busy} className="cursor-pointer rounded-full bg-surface px-3 py-1 text-xs font-extrabold text-red-600 tile-shadow hover:bg-red-50 disabled:opacity-50">Odwołaj</button>}
         </div>
       )}
     </div>
@@ -221,7 +221,7 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
             ) : (
               <span className="flex items-center gap-1.5 font-bold text-gray-900">
                 {patient.phone_number ?? <span className="font-medium text-gray-500">brak numeru</span>}
-                <button onClick={() => setEditing(true)} className="cursor-pointer text-gray-400 hover:text-primary"><Pencil size={12} /></button>
+                <button aria-label="Edytuj telefon" onClick={() => setEditing(true)} className="cursor-pointer text-gray-400 hover:text-primary"><Pencil size={12} /></button>
               </span>
             )}
           </span>

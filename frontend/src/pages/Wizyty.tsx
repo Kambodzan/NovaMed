@@ -92,25 +92,25 @@ export function Wizyty() {
         <DateChip month={monthShort(v.appointment_datetime)} day={dayNo(v.appointment_datetime)} time={formatTime(v.appointment_datetime)} />
         <div className="min-w-0 flex-1">
           <p className="font-extrabold text-gray-900">{v.doctor_name}</p>
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-500">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-gray-500">
             {v.specializations.join(' · ')}
             {' · '}
-            {v.appointment_type === 'ONLINE' ? <Video size={13} /> : <MapPin size={13} />}
+            {v.appointment_type === 'ONLINE' ? <Video size={13} className="shrink-0" /> : <MapPin size={13} className="shrink-0" />}
             {v.appointment_type === 'ONLINE' ? t('teleporada') : v.clinic_name}
           </p>
         </div>
         {v.patient_confirmed && ['CONFIRMED', 'IN_PROGRESS'].includes(v.appointment_status) && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
             <Check size={12} /> {t('Obecność potwierdzona')}
           </span>
         )}
         {v.payment_status === 'PAID' && v.appointment_status !== 'CANCELLED' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{t('opłacona')}</span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{t('opłacona')}</span>
         )}
         {v.payment_status === 'REFUNDED' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">{t('zwrot środków')}</span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">{t('zwrot środków')}</span>
         )}
-        <StatusBadge status={v.appointment_status} />
+        <div className="shrink-0"><StatusBadge status={v.appointment_status} /></div>
         {actions && v.appointment_status === 'CONFIRMED' && (
           <div className="flex gap-2">
             {v.confirmation_requested && !v.patient_confirmed && (
@@ -293,7 +293,7 @@ function ReviewModal({ visit, onClose, onDone }: {
 
   return (
     <Modal
-      overline={t('Opinia po wizycie (UC-P8)')}
+      overline={t('Opinia po wizycie')}
       title={visit.doctor_name}
       onClose={onClose}
       footer={<>

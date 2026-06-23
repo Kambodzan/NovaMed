@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, ChevronDown, ClipboardPen, FileCheck2, FolderOpen, History, Lock, Pause, Play, Plus, Printer, ShieldCheck, Square, User, Users, Video } from 'lucide-react'
 import { Badge, Button, Field, Modal, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
+import { confirm as askConfirm } from '../../lib/confirm'
 import { formatDatePL, formatTime } from '../../lib/format'
 import type { AppointmentOut, ClinicalNote, DocumentOut, HistoryEntry, PatientInfo } from '../../lib/types'
 import { KIND_LABEL, WystawDokument, searchIcd10 } from '../../components/WystawDokument'
@@ -211,6 +212,13 @@ export function Gabinet() {
   const pauseVisit = () => unsavedNote
     ? saveDraft.mutate(undefined, { onSuccess: () => changeStatus.mutate('PAUSED') })
     : changeStatus.mutate('PAUSED')
+  // zakończenie: potwierdzenie (akcja nieodwracalna), potem dotychczasowa logika —
+  // niezapisany szkic prowadzi do modala COMPLETE_UNSAVED (zachowuje zapis szkicu)
+  const completeVisit = async () => {
+    if (!await askConfirm({ title: 'Zakończyć wizytę?', message: 'Wizyta zostanie zamknięta i dokumentacja sfinalizowana. Tej operacji nie cofniesz.', confirmLabel: 'Zakończ wizytę' })) return
+    if (unsavedNote) setConfirm('COMPLETE_UNSAVED')
+    else changeStatus.mutate('COMPLETED')
+  }
   // wizytę rozpoczyna się w dniu jej terminu
   const visitToday = new Date(visit.appointment_datetime).toDateString() === new Date().toDateString()
   const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
@@ -302,7 +310,7 @@ export function Gabinet() {
                 <Button variant="secondary" disabled={changeStatus.isPending || saveDraft.isPending} onClick={pauseVisit}>
                   <Pause size={14} /> Wstrzymaj
                 </Button>
-                <Button disabled={changeStatus.isPending} onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
+                <Button disabled={changeStatus.isPending} onClick={() => void completeVisit()}>
                   <Square size={14} /> Zakończ wizytę
                 </Button>
               </>
@@ -312,7 +320,7 @@ export function Gabinet() {
                 <Button disabled={changeStatus.isPending} onClick={() => changeStatus.mutate('IN_PROGRESS')}>
                   <Play size={15} /> Wznów wizytę
                 </Button>
-                <Button variant="ghost" disabled={changeStatus.isPending} onClick={() => unsavedNote ? setConfirm('COMPLETE_UNSAVED') : changeStatus.mutate('COMPLETED')}>
+                <Button variant="ghost" disabled={changeStatus.isPending} onClick={() => void completeVisit()}>
                   <Square size={14} /> Zakończ
                 </Button>
               </>

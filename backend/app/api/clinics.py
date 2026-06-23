@@ -244,9 +244,9 @@ def list_clinic_patients(
     user: AppUser = Depends(require_roles(*RECEPTION, "lekarz", "pielegniarka")),
     db: Session = Depends(get_db),
 ):
-    get_clinic_or_404(clinic_id, db)
+    clinic = get_clinic_or_404(clinic_id, db)
     assert_staff_in_clinic(db, user, clinic_id)
-    log_access(db, actor=user, action="VIEW_PATIENT_LIST", detail=f"placowka {clinic_id}")
+    log_access(db, actor=user, action="VIEW_PATIENT_LIST", detail=f"placówka {clinic.clinic_name}")
     # widoczni pacjenci placówki = jawnie przypisani (patient_clinic) LUB mający
     # ślad wizytowy w tej placówce (gość publiczny/telefoniczny też ma wizytę, a
     # nie dostaje patient_clinic) — spójnie ze śladem z kontroli dostępu (#25),

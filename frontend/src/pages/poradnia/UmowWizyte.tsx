@@ -196,7 +196,7 @@ export function UmowWizyte() {
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="fade-up">
         <PageHeader
-          overline="Rejestracja"
+          overline={clinic?.clinic_name ?? '…'}
           title="Umów wizytę"
           sub="Rezerwacja w imieniu pacjenta (telefon / okienko) — UC-PP1"
         />
