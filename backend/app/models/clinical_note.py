@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.crypto import Encrypted
 from app.core.db import Base
 
 
@@ -18,7 +19,7 @@ class ClinicalNote(Base):
     appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.appointment_id"), unique=True)
     patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patient.patient_id"))
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctor.doctor_id"))
-    content: Mapped[str] = mapped_column(Text, default="")
+    content: Mapped[str] = mapped_column(Encrypted, default="")  # szyfrowane at-rest
     status: Mapped[str] = mapped_column(String(20), default="DRAFT")  # DRAFT / SIGNED
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -39,7 +40,7 @@ class NoteAddendum(Base):
     addendum_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     note_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinical_note.note_id"))
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctor.doctor_id"))
-    content: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Encrypted)  # szyfrowane at-rest
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     note: Mapped["ClinicalNote"] = relationship(back_populates="addenda")
@@ -55,7 +56,7 @@ class NoteEvent(Base):
     note_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinical_note.note_id"))
     actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"))
     action: Mapped[str] = mapped_column(String(20))
-    content_snapshot: Mapped[str | None] = mapped_column(Text)
+    content_snapshot: Mapped[str | None] = mapped_column(Encrypted)  # szyfrowane at-rest
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     note: Mapped["ClinicalNote"] = relationship(back_populates="events")

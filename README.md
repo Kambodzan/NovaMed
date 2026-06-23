@@ -22,6 +22,10 @@ mobilna pacjenta + integracje z systemami krajowymi (mockowane).
   backend weryfikuje JWT (Bearer) i mapuje `sub` → `app_user.supabase_uid`; role/RBAC nasze
   (tabela `role`). Sekrety w `backend/.env`: `SUPABASE_URL`, `SUPABASE_JWT_SECRET`,
   `SUPABASE_SERVICE_ROLE_KEY` (tylko dla `scripts/provision-users.py`)
+- **Dane wrażliwe at-rest**: szyfrowane **AES-256-GCM** kolumnowo (`app/core/crypto.py`,
+  typ `Encrypted`) — treść dokumentów/not, wyniki, dane kliniczne, PESEL; PESEL wyszukiwany
+  przez blind index `pesel_bidx`=HMAC. Klucze: `DATA_ENCRYPTION_KEY`/`DATA_INDEX_KEY`
+  (prod wymaga; dev = pochodna z JWT-secret).
 - **Frontend web**: React (Vite + TypeScript) — 5 portali w jednej aplikacji, routing per rola
 - **Mobile**: React Native (Expo) — aplikacja pacjenta (push, offline cache)
 - **Integracje zewnętrzne** (P1, ZUS e-ZLA, eWUŚ, laboratoria, płatności): **własne

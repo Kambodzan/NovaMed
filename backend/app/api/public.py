@@ -24,6 +24,7 @@ from app.api.appointments import (
 from app.integrations.p1 import P1Client, get_p1_client
 from app.api.family import pesel_valid
 from app.core.config import settings
+from app.core.crypto import blind_index
 from app.core.db import get_db
 from app.domain.appointments import AppointmentStatus, AppointmentType
 from app.domain.confirm import audience_links, confirm_link, ensure_confirm_token
@@ -229,7 +230,7 @@ def guest_book(
                                 detail=f"„{a.service_name}” wymaga skierowania — podaj kod e-skierowania z P1 albo zaznacz oświadczenie.")
 
     # gość: po PESEL-u — istniejące AKTYWNE konto → logowanie zamiast dubla
-    patient = db.scalar(select(Patient).where(Patient.pesel == body.pesel))
+    patient = db.scalar(select(Patient).where(Patient.pesel_bidx == blind_index(body.pesel)))
     if patient:
         owner = db.get(AppUser, patient.patient_id)
         if owner.active_account:

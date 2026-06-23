@@ -7,6 +7,7 @@ from datetime import date, datetime
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.crypto import Encrypted
 from app.core.db import Base
 
 
@@ -21,7 +22,7 @@ class MedicalDocument(Base):
     doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"))
     issued_at: Mapped[datetime] = mapped_column(DateTime)
     document_type: Mapped[str] = mapped_column(String(50))  # PRESCRIPTION/REFERRAL/LAB_RESULT/SICK_LEAVE/NOTE
-    document_content: Mapped[str | None] = mapped_column(Text)
+    document_content: Mapped[str | None] = mapped_column(Encrypted)  # szyfrowane at-rest
     document_status: Mapped[str] = mapped_column(String(50))
     # kiedy pacjent obejrzał dokument (NULL = jeszcze nie) — do „nowych" wyników
     # badań w „Do zrobienia" na pulpicie pacjenta.
@@ -74,7 +75,7 @@ class LabResult(Base):
     file_url: Mapped[str | None] = mapped_column(String(255))
     # ustrukturyzowane wyniki z laboratorium: JSON listy analitów
     # [{name, value, unit, ref_low, ref_high}] — do oznaczania „poza normą"
-    values_json: Mapped[str | None] = mapped_column(Text)
+    values_json: Mapped[str | None] = mapped_column(Encrypted)  # szyfrowane at-rest (wyniki badań)
 
     document = relationship("MedicalDocument")
 
@@ -100,7 +101,7 @@ class Certificate(Base):
     document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medical_document.document_id"))
     certificate_code: Mapped[str] = mapped_column(String(50))
     purpose: Mapped[str] = mapped_column(String(200))   # np. „do pracodawcy", „do klubu sportowego"
-    content: Mapped[str] = mapped_column(Text)          # treść zaświadczenia
+    content: Mapped[str] = mapped_column(Encrypted)     # treść zaświadczenia — szyfrowane at-rest
     valid_until: Mapped[date | None] = mapped_column(Date)
 
     document = relationship("MedicalDocument")

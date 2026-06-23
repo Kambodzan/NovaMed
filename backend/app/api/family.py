@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
+from app.core.crypto import blind_index
 from app.core.db import get_db
 from app.models import AppUser, Patient, Role
 
@@ -93,7 +94,7 @@ def add_dependent(
             status_code=status.HTTP_409_CONFLICT,
             detail="Osoba pełnoletnia powinna założyć własne konto — nie można jej dodać jako podopiecznego.",
         )
-    if db.scalar(select(Patient).where(Patient.pesel == body.pesel)):
+    if db.scalar(select(Patient).where(Patient.pesel_bidx == blind_index(body.pesel))):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Pacjent z tym numerem PESEL już istnieje.")
     role = db.scalar(select(Role).where(Role.role_name == "pacjent"))
     account = AppUser(

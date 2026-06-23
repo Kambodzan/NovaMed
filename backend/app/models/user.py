@@ -5,8 +5,9 @@ from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from app.core.crypto import Encrypted, blind_index
 from app.core.db import Base
 
 
@@ -92,14 +93,23 @@ class Patient(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_user.user_id"), primary_key=True)
     first_name: Mapped[str] = mapped_column(String(50))
     last_name: Mapped[str] = mapped_column(String(50))
-    pesel: Mapped[str] = mapped_column(String(11))
+    # PESEL szyfrowany at-rest (AES-256-GCM); wyszukiwanie równościowe idzie po blind
+    # index `pesel_bidx` = HMAC(PESEL), utrzymywanym automatycznie przez @validates.
+    pesel: Mapped[str] = mapped_column(Encrypted)
+    pesel_bidx: Mapped[str | None] = mapped_column(String(64), index=True)
     birth_date: Mapped[date] = mapped_column(Date)
     insurance_status: Mapped[bool] = mapped_column(Boolean, default=False)  # aktualizowane z eWUŚ
     # Dane kliniczne istotne przy wystawianiu recept (bezpieczeństwo pacjenta) —
-    # prowadzi lekarz; alergie pokazują się banerem nad każdą receptą.
-    allergies: Mapped[str | None] = mapped_column(Text)
-    chronic_diseases: Mapped[str | None] = mapped_column(Text)
-    chronic_medications: Mapped[str | None] = mapped_column(Text)
+    # prowadzi lekarz; alergie pokazują się banerem nad każdą receptą. Szyfrowane at-rest.
+    allergies: Mapped[str | None] = mapped_column(Encrypted)
+    chronic_diseases: Mapped[str | None] = mapped_column(Encrypted)
+    chronic_medications: Mapped[str | None] = mapped_column(Encrypted)
+
+    @validates("pesel")
+    def _sync_pesel_bidx(self, _key: str, value: str | None) -> str | None:
+        # blind index liczony z JAWNEGO PESEL-u (przed zaszyfrowaniem kolumny)
+        self.pesel_bidx = blind_index(value) if value else None
+        return value
     # Konta rodzinne (rozszerzenie ERD): opiekun zarządza
     # wizytami i dokumentacją podopiecznego; podopieczny nie loguje się sam.
     guardian_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("app_user.user_id"))

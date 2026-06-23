@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     smtp_from: str = ""          # nadawca, np. "NovaMed <noreply@novamed.dev>"
     email_redirect_to: str = ""  # DEV: przekieruj wszystkie maile na ten adres (jak sms_redirect_to)
 
+    # Szyfrowanie danych wrażliwych at-rest (AES-256-GCM) + blind index PESEL (HMAC).
+    # base64 32-bajtowego klucza. Puste = pochodna dev (NIE do produkcji). Wygeneruj:
+    #   python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+    data_encryption_key: str = ""
+    data_index_key: str = ""
+
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
     # dev: front otwierany z adresów LAN (testy z innych urządzeń w sieci lokalnej)
     cors_origin_regex: str = r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+$"
@@ -83,6 +89,9 @@ class Settings(BaseSettings):
                 raise ValueError("Produkcja (DEV_MODE=false) wymaga ustawienia własnego SUPABASE_JWT_SECRET.")
             if not self.supabase_url:
                 raise ValueError("Produkcja (DEV_MODE=false) wymaga SUPABASE_URL.")
+            if not self.data_encryption_key or not self.data_index_key:
+                raise ValueError("Produkcja (DEV_MODE=false) wymaga DATA_ENCRYPTION_KEY i DATA_INDEX_KEY "
+                                 "(szyfrowanie danych medycznych at-rest).")
         return self
 
 

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user, get_token_claims, require_roles
 from app.core.config import settings
+from app.core.crypto import blind_index
 from app.core.db import get_db
 from app.domain.otp import normalize_phone, require_verified_phone
 from app.models import AppUser, Patient, Role
@@ -116,7 +117,7 @@ def register_profile(
         want = normalize_phone(body.phone_number)
         candidates = db.scalars(
             select(Patient).join(AppUser, AppUser.user_id == Patient.patient_id).where(
-                Patient.pesel == body.pesel,
+                Patient.pesel_bidx == blind_index(body.pesel),
                 AppUser.active_account.is_(False),
                 Patient.guardian_id.is_(None),  # podopiecznych nie przejmujemy tym trybem
             )).all()

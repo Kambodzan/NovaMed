@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.family import allowed_patient_ids, pesel_valid, resolve_patient_id
 from app.core.auth import get_current_user, require_roles
+from app.core.crypto import blind_index
 from app.domain.confirm import audience_links, confirm_link, ensure_confirm_token
 from app.domain.coreservation import block_overlapping, restore_blocked
 from app.domain.holds import acquire_hold, held_by, release_hold
@@ -724,7 +725,7 @@ def reception_register_patient(
     (gdy dzwoniący nie ma jeszcze konta). Konto nieaktywne (jak gość z M8.6) —
     pacjent przejmuje je przy samodzielnej rejestracji tym samym e-mailem.
     Dedup po PESEL: istniejący pacjent jest zwracany (existing=True), bez dubla."""
-    existing = db.scalar(select(Patient).where(Patient.pesel == body.pesel))
+    existing = db.scalar(select(Patient).where(Patient.pesel_bidx == blind_index(body.pesel)))
     if existing:
         owner = db.get(AppUser, existing.patient_id)
         if not owner.active_account and body.phone_number:
