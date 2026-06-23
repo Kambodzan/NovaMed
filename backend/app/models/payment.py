@@ -14,7 +14,7 @@ class Payment(Base):
     __tablename__ = "payment"
 
     payment_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.appointment_id"))
+    appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.appointment_id"), index=True)
     amount: Mapped[float] = mapped_column(Numeric(8, 2))
     payment_status: Mapped[str] = mapped_column(String(20))  # PENDING / PAID / FAILED
     provider_ref: Mapped[str] = mapped_column(String(50))    # id płatności u operatora

@@ -19,7 +19,7 @@ class Review(Base):
     # Powiązanie z wizytą (rozszerzenie ERD): UC-P8 wymaga
     # oceniania tylko ODBYTYCH wizyt i blokady duplikatów per wizyta.
     appointment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("appointment.appointment_id"))
-    doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"))
+    doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"), index=True)
     clinic_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("clinic.clinic_id"))
     rating: Mapped[int] = mapped_column(Integer)  # 1-5
     comment: Mapped[str | None] = mapped_column(Text)

@@ -2,7 +2,7 @@ import uuid
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -16,13 +16,15 @@ class Appointment(Base):
     """
 
     __tablename__ = "appointment"
+    # indeks pod wyszukiwarkę slotów: WHERE status='FREE' AND datetime>now() ORDER BY datetime
+    __table_args__ = (Index("ix_appointment_status_dt", "appointment_status", "appointment_datetime"),)
 
     appointment_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    patient_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("patient.patient_id"))
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("patient.patient_id"), index=True)
     # NULL dla terminów BADAŃ — badanie wykonuje pracownia placówki, nie lekarz
-    doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"))
+    doctor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("doctor.doctor_id"), index=True)
     nurse_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("nurse.nurse_id"))
-    clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinic.clinic_id"))
+    clinic_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clinic.clinic_id"), index=True)
     appointment_datetime: Mapped[datetime] = mapped_column(DateTime)
     appointment_status: Mapped[str] = mapped_column(String(50))
     appointment_type: Mapped[str] = mapped_column(String(50))  # ONLINE / STATIONARY

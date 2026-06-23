@@ -1,0 +1,5 @@
+# Outputy testu obciążeniowego: fixtures.json (tokeny) + CSV-e Locusta — nie commitujemy.
+# Wersjonujemy tylko harness (locustfile.py, gen_fixtures.py).
+*
+!*.py
+!.gitignore

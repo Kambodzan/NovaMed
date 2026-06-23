@@ -17,7 +17,7 @@ class ClinicalNote(Base):
     note_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # jedna nota na wizytę — unikalność po appointment_id
     appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.appointment_id"), unique=True)
-    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patient.patient_id"))
+    patient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("patient.patient_id"), index=True)
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("doctor.doctor_id"))
     content: Mapped[str] = mapped_column(Encrypted, default="")  # szyfrowane at-rest
     status: Mapped[str] = mapped_column(String(20), default="DRAFT")  # DRAFT / SIGNED
