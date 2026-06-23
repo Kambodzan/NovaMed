@@ -18,6 +18,7 @@ from app.integrations.lab import get_lab_client
 from app.integrations.p1 import get_p1_client
 from app.integrations.payments import get_payments_client
 from app.integrations.email import set_email_client
+from app.integrations.push import set_push_client
 from app.integrations.sms import set_sms_client
 from app.main import app
 from app.models import AppUser, Clinic, Doctor, DoctorSpecialization, Patient, Role, StaffClinic
@@ -71,6 +72,14 @@ class FakeEmail:
 
     def send(self, *, to: str, subject: str, body: str) -> None:
         self.sent.append({"to": to, "subject": subject, "body": body})
+
+
+class FakePush:
+    def __init__(self):
+        self.sent: list[dict] = []
+
+    def send(self, *, tokens, title, body, data=None) -> None:
+        self.sent.append({"tokens": list(tokens), "title": title, "body": body, "data": data})
 
 
 class FakePayments:
@@ -158,7 +167,7 @@ def db_session():
 @pytest.fixture()
 def integration_fakes():
     """Fake-klienty integracji — testy są hermetyczne (zero HTTP)."""
-    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments(), sms=FakeSms(), p1=FakeP1(), email=FakeEmail())
+    return SimpleNamespace(ewus=FakeEwus(), lab=FakeLab(), payments=FakePayments(), sms=FakeSms(), p1=FakeP1(), email=FakeEmail(), push=FakePush())
 
 
 @pytest.fixture()
@@ -176,11 +185,13 @@ def client(db_session, monkeypatch, integration_fakes):
     app.dependency_overrides[get_p1_client] = lambda: integration_fakes.p1
     set_sms_client(integration_fakes.sms)  # SMS nie jest dependency FastAPI — singleton modułu
     set_email_client(integration_fakes.email)
+    set_push_client(integration_fakes.push)
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
     set_sms_client(None)
     set_email_client(None)
+    set_push_client(None)
 
 
 def make_token(sub: str | None = None, email: str = "jan.testowy@example.com", secret: str = TEST_SECRET) -> str:

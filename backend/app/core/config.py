@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # SMS dotarł niezależnie od numeru wpisanego w formularzu (Twilio trial dostarcza
     # tylko na zweryfikowane numery). Pusty = brak przekierowania. E.164, np. +48500000000.
     sms_redirect_to: str = ""
+    # Powiadomienia push (Expo Push API). "expo" = realna dostawa na zarejestrowane
+    # tokeny urządzeń; gdy wyłączone, kanał jest cichym no-op (w dev po prostu brak tokenów).
+    push_enabled: bool = True
+    push_provider: str = "expo"
     # E-mail (powiadomienia/potwierdzenia). "mock" = log+outbox (dev), "smtp" = realna dostawa.
     email_provider: str = "mock"
     smtp_host: str = ""

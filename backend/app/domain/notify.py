@@ -3,13 +3,16 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
 
+from sqlalchemy import select
+
 from app.integrations.email import get_email_client
+from app.integrations.push import get_push_client
 from app.integrations.sms import get_sms_client
-from app.models import AppUser, Notification, Patient
+from app.models import AppUser, Notification, Patient, PushToken
 
 
 def notify(db: Session, user_id: UUID, title: str, content: str, *,
-           email: bool = False, sms: bool = True) -> None:
+           email: bool = False, sms: bool = True, push: bool = True) -> None:
     """Dopisuje powiadomienie w ramach bieżącej transakcji wywołującego.
     SMS wysyłany od razu (poza transakcją DB) — jego awaria niczego nie psuje.
     Powiadomienia podopiecznego (konta rodzinne) trafiają do opiekuna —
@@ -17,6 +20,9 @@ def notify(db: Session, user_id: UUID, title: str, content: str, *,
 
     Kanały poza in-app są zawężane wg wartości zdarzenia:
     - **in-app** (dzwonek) — ZAWSZE (pełna historia).
+    - **push** (`push`, domyślnie True) — na zarejestrowane urządzenia mobilne
+      (apka pacjenta); idzie do TEGO SAMEGO adresata co in-app (po przekierowaniu
+      podopieczny→opiekun). Cichy no-op, gdy adresat nie ma tokenów (np. tylko web).
     - **SMS** (`sms`, domyślnie True) — szeroki, ale wyłączany dla przejściowego
       szumu, który adresat i tak widzi na ekranie (odrzucona płatność, wygasła
       rezerwacja) lub który jest kolejką pracy personelu (wynik do opisania).
@@ -33,6 +39,12 @@ def notify(db: Session, user_id: UUID, title: str, content: str, *,
         is_read=False,
     ))
     user = db.get(AppUser, user_id)
+    # push — na urządzenia mobilne adresata (best-effort, poza transakcją DB)
+    if push:
+        tokens = list(db.scalars(select(PushToken.token).where(PushToken.user_id == user_id)))
+        if tokens:
+            get_push_client().send(tokens=tokens, title=title, body=content,
+                                   data={"kind": "notification"})
     if sms and user is not None and user.phone_number and user.notify_sms:
         get_sms_client().send(to=user.phone_number, message=f"NovaMed: {title}. {content}")
     # e-mail — tylko dla zdarzeń z whitelisty (email=True); best-effort, gdy konto ma adres

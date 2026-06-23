@@ -1029,6 +1029,28 @@ def confirm_attendance(
     return appointment_out(db, a)
 
 
+@router.get("/appointments/{appointment_id}/teleporada-link")
+def teleporada_link(
+    appointment_id: UUID,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Link do pokoju teleporady (webowy adres gościa z tokenem wizyty). Używa go
+    aplikacja mobilna, która nie ma natywnego WebRTC i otwiera pokój w przeglądarce."""
+    a = get_appointment_or_404(appointment_id, db)
+    if user.role.role_name == "pacjent" and a.patient_id not in allowed_patient_ids(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="To nie jest Twoja wizyta.")
+    if a.appointment_type != AppointmentType.ONLINE.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ta wizyta nie jest teleporadą.")
+    if a.appointment_status not in (
+        AppointmentStatus.CONFIRMED.value, AppointmentStatus.IN_PROGRESS.value,
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Teleporada nie jest jeszcze dostępna.")
+    token = ensure_confirm_token(a)
+    db.commit()
+    return {"url": f"{settings.public_base_url}/teleporada/{a.appointment_id}?vt={token}"}
+
+
 @router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentOut)
 def cancel_appointment(
     appointment_id: UUID,

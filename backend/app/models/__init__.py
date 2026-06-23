@@ -9,6 +9,7 @@ from app.models.review import Review
 from app.models.share import DocumentShare
 from app.models.dictionaries import Icd10Entry, MedicationEntry
 from app.models.notification import Notification
+from app.models.push_token import PushToken
 from app.models.waitlist import WaitingListEntry
 from app.models.clinical_note import ClinicalNote, NoteAddendum, NoteEvent
 from app.models.audit import AuditLog
@@ -20,7 +21,7 @@ __all__ = [
     "Clinic", "PatientClinic", "StaffClinic",
     "Appointment",
     "MedicalDocument", "Prescription", "Referral", "LabResult", "SickLeave", "Certificate",
-    "NursingProcedure", "Payment", "Review", "Notification", "WaitingListEntry",
+    "NursingProcedure", "Payment", "Review", "Notification", "PushToken", "WaitingListEntry",
     "DocumentShare", "Icd10Entry", "MedicationEntry",
     "ClinicalNote", "NoteAddendum", "NoteEvent",
     "AuditLog",

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
 from app.core.db import get_db
-from app.models import AppUser, Notification
+from app.models import AppUser, Notification, PushToken
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -23,6 +23,11 @@ class NotificationOut(BaseModel):
 
 class UnreadOut(BaseModel):
     unread: int
+
+
+class PushTokenIn(BaseModel):
+    token: str
+    platform: str = "expo"
 
 
 @router.get("/my", response_model=list[NotificationOut])
@@ -82,3 +87,37 @@ def mark_all_read(user: AppUser = Depends(get_current_user), db: Session = Depen
     )
     db.commit()
     return UnreadOut(unread=0)
+
+
+@router.post("/push-token", status_code=status.HTTP_204_NO_CONTENT)
+def register_push_token(
+    body: PushTokenIn,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Rejestruje token push urządzenia (apka mobilna po zalogowaniu). Idempotentny:
+    ten sam token na innym koncie = przepięcie właściciela (np. nowy login na tym
+    samym telefonie), więc powiadomienia nie idą do poprzedniego użytkownika."""
+    existing = db.scalar(select(PushToken).where(PushToken.token == body.token))
+    if existing is not None:
+        existing.user_id = user.user_id
+        existing.platform = body.platform
+    else:
+        db.add(PushToken(user_id=user.user_id, token=body.token, platform=body.platform))
+    db.commit()
+
+
+@router.delete("/push-token", status_code=status.HTTP_204_NO_CONTENT)
+def unregister_push_token(
+    body: PushTokenIn,
+    user: AppUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Usuwa token przy wylogowaniu — żeby na współdzielonym urządzeniu kolejny
+    użytkownik nie dostawał cudzych powiadomień."""
+    db.execute(
+        PushToken.__table__.delete().where(
+            PushToken.token == body.token, PushToken.user_id == user.user_id
+        )
+    )
+    db.commit()
