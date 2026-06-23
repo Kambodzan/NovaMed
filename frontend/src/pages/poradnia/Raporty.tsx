@@ -6,10 +6,10 @@ import { API_URL, api, apiText, getAuthToken } from '../../lib/api'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { DatePicker } from '../../components/DatePicker'
 import { MonthPicker } from '../../components/MonthPicker'
+import { todayIso } from '../../lib/format'
 import type { ReportOut } from '../../lib/types'
 
 const currentMonth = () => new Date().toISOString().slice(0, 7)
-const todayIso = () => new Date().toISOString().slice(0, 10)
 // wybrany miesiąc trzyma się przez sesję (jak data w „Mój dzień" lekarza)
 const MONTH_KEY = 'novamed-report-month'
 
@@ -54,7 +54,7 @@ export function Raporty() {
       a.href = URL.createObjectURL(blob)
       a.download = `raport-${report?.month ?? 'okres'}.csv`.replace(/[^a-z0-9.\-]+/gi, '_')
       a.click()
-      URL.revokeObjectURL(a.href)
+      setTimeout(() => URL.revokeObjectURL(a.href), 0)
     } catch { setError('Nie udało się pobrać CSV.') }
   }
 
@@ -69,7 +69,7 @@ export function Raporty() {
       a.href = URL.createObjectURL(blob)
       a.download = `raport-${report?.month ?? 'okres'}.pdf`.replace(/[^a-z0-9.\-]+/gi, '_')
       a.click()
-      URL.revokeObjectURL(a.href)
+      setTimeout(() => URL.revokeObjectURL(a.href), 0)
     } catch { setError('Nie udało się pobrać PDF.') }
   }
 

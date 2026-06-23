@@ -7,12 +7,11 @@ import { AlertTriangle, BellRing, CalendarCheck, CalendarDays, CalendarRange, Ch
 import { Button, Loading, Overline, PageHeader, Tile, TileHeader, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
 import { pushToast } from '../../lib/toast'
-import { formatTime } from '../../lib/format'
+import { formatTime, todayIso } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
 import { PaymentCheckIn, needsDeskPayment } from '../../components/PaymentCheckIn'
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
 const FINISHED = ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'INTERRUPTED']
 
 function Stat({ label, value, hint, tone }: { label: string; value: string | number; hint?: string; tone?: 'amber' | 'primary' }) {

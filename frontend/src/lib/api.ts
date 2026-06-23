@@ -26,6 +26,10 @@ export function getAuthToken(): string | null {
   return tokenProvider()
 }
 
+// 401 na publicznym flow gościa (lub przy logowaniu) nie może wylogować
+// zalogowanego użytkownika — to nie wygaśnięcie jego sesji.
+const skipUnauthorized = (path: string) => path.startsWith('/public/') || path.startsWith('/auth/')
+
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const token = tokenProvider()
   const resp = await fetch(`${API_URL}${path}`, {
@@ -58,7 +62,7 @@ export async function api<T>(path: string, options: { method?: string; body?: un
       }
     } catch { /* odpowiedź bez JSON-a */ }
     // wygaśnięcie sesji w trakcie pracy — AuthProvider nasłuchuje i wylogowuje
-    if (resp.status === 401) window.dispatchEvent(new CustomEvent('novamed:unauthorized'))
+    if (resp.status === 401 && !skipUnauthorized(path)) window.dispatchEvent(new CustomEvent('novamed:unauthorized'))
     throw new ApiError(resp.status, detail)
   }
   return resp.json() as Promise<T>
@@ -70,6 +74,9 @@ export async function apiText(path: string): Promise<string> {
   const resp = await fetch(`${API_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
-  if (!resp.ok) throw new ApiError(resp.status, `Błąd ${resp.status}`)
+  if (!resp.ok) {
+    if (resp.status === 401 && !skipUnauthorized(path)) window.dispatchEvent(new CustomEvent('novamed:unauthorized'))
+    throw new ApiError(resp.status, `Błąd ${resp.status}`)
+  }
   return resp.text()
 }

@@ -4,11 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CheckCircle2, Clock, DoorOpen, MapPin, Pause, UserCheck, Users, Video, XCircle } from 'lucide-react'
 import { Badge, Button, EmptyState, Modal, PageHeader, StatusBadge, Tile, cx } from '../../ui'
 import { api, ApiError } from '../../lib/api'
-import { formatDatePL, formatTime } from '../../lib/format'
+import { formatDatePL, formatTime, todayIso } from '../../lib/format'
 import type { AppointmentOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
-
-const todayIso = () => new Date().toISOString().slice(0, 10)
 
 // wybrana data trzyma się przez sesję — powrót z kartoteki/gabinetu nie resetuje
 // jej na dziś (przycisk „Dziś" zawsze wraca na bieżący dzień)

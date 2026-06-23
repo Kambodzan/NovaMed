@@ -224,7 +224,7 @@ export function Telewizyta() {
     a.href = URL.createObjectURL(blob)
     a.download = name
     a.click()
-    URL.revokeObjectURL(a.href)
+    setTimeout(() => URL.revokeObjectURL(a.href), 0)
   }
 
   const toggleTrack = (kind: 'audio' | 'video', on: boolean) => {

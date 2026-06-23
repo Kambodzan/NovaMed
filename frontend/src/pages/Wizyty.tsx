@@ -21,7 +21,7 @@ async function downloadIcs(appointmentId: string) {
   a.href = URL.createObjectURL(blob)
   a.download = `wizyta-${appointmentId}.ics`
   a.click()
-  URL.revokeObjectURL(a.href)
+  setTimeout(() => URL.revokeObjectURL(a.href), 0)
 }
 import { dayNo, formatDatePL, formatTime, isFuture, monthShort } from '../lib/format'
 import type { AppointmentOut, BookOut } from '../lib/types'

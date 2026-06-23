@@ -59,7 +59,7 @@ export function PodgladDokumentu({ doc, onClose, onCancel }: {
     a.href = URL.createObjectURL(blob)
     a.download = `novamed-dokument-${doc.document_id}.pdf`
     a.click()
-    URL.revokeObjectURL(a.href)
+    setTimeout(() => URL.revokeObjectURL(a.href), 0)
   }
 
   // druk: PDF w nowej karcie — przeglądarkowa drukarka robi resztę

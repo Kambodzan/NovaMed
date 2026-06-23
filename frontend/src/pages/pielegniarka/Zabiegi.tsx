@@ -4,13 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, ClipboardList, Search, X } from 'lucide-react'
 import { Button, EmptyState, Field, Loading, Modal, Overline, PageHeader, StatusBadge, Tile, TileHeader, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
-import { formatDatePL, formatTime } from '../../lib/format'
+import { formatDatePL, formatTime, todayIso } from '../../lib/format'
 import type { ProcedureOut } from '../../lib/types'
 import { DatePicker } from '../../components/DatePicker'
 import { TimePicker } from '../../components/TimePicker'
 import { confirm } from '../../lib/confirm'
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 // wybrana data trzyma się przez sesję — powrót z innej zakładki nie resetuje

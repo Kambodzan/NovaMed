@@ -2,7 +2,7 @@
 // po nazwisku/PESEL albo nowy dzwoniący), 2) wolny termin (szukaj lekarza/
 // specjalizacji, terminy grupowane po dniach), 3) potwierdzenie → CONFIRMED + SMS.
 // Ukończone kroki zwijają się do podsumowania — jeden aktywny naraz.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, CalendarCheck, Check, Clock, MapPin, Pencil, Search, UserPlus, Video, X } from 'lucide-react'
@@ -148,6 +148,15 @@ export function UmowWizyte() {
     }
     setHoldToken(null)
   }
+  // porzucenie kreatora z aktywnym holdem (nawigacja gdzie indziej) — zwolnij slot.
+  // Po udanej rezerwacji resetAll() zeruje holdToken, więc unmount jest już no-opem.
+  const holdRef = useRef<{ appointment_id: string; token: string } | null>(null)
+  holdRef.current = slot && holdToken ? { appointment_id: slot.appointment_id, token: holdToken } : null
+  useEffect(() => () => {
+    const h = holdRef.current
+    if (h) void api(`/appointments/${h.appointment_id}/release?hold_token=${encodeURIComponent(h.token)}`,
+      { method: 'POST' }).catch(() => {})
+  }, [])
 
   const register = useMutation({
     mutationFn: () => api<PickedPatient & { existing: boolean; first_name: string; last_name: string }>('/patients/register', {

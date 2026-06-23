@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight, DoorOpen, MapPin, Search, UserCheck, Video, X } from 'lucide-react'
 import { Button, EmptyState, Loading, Modal, PageHeader, StatusBadge, Tile, cx, inputCls } from '../../ui'
 import { api, ApiError } from '../../lib/api'
-import { formatDatePL, formatTime } from '../../lib/format'
+import { formatDatePL, formatTime, isoLocal, todayIso } from '../../lib/format'
 import { confirm } from '../../lib/confirm'
 import type { AppointmentOut } from '../../lib/types'
 import { ClinicSelect, useClinicSelection } from '../../components/ClinicPicker'
@@ -17,9 +17,6 @@ import { StaffReschedule } from '../../components/StaffReschedule'
 import { PaymentCheckIn, needsDeskPayment } from '../../components/PaymentCheckIn'
 
 const DAY_KEY = 'novamed-kalendarz-day'
-// data LOKALNA (toISOString daje UTC → strzałki ‹›/„Dziś" skakały o ±dzień)
-const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const todayIso = () => isoLocal(new Date())
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 const hm = (iso: string) => iso.slice(11, 16)
 const FINISHED = ['COMPLETED', 'NO_SHOW', 'INTERRUPTED']

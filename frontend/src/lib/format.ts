@@ -30,3 +30,7 @@ export const formatTime = (iso: string) => {
 export const dayNo = (iso: string) => String(new Date(iso).getDate())
 export const monthShort = (iso: string) => LOCALE[dateLang].monthsShort[new Date(iso).getMonth()]
 export const isFuture = (iso: string) => new Date(iso).getTime() > Date.now()
+
+// data LOKALNA (toISOString daje UTC → „dziś" skakało wieczorem na jutro)
+export const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+export const todayIso = () => isoLocal(new Date())
