@@ -718,7 +718,7 @@ class ReceptionPatientOut(BaseModel):
 @router.post("/patients/register", status_code=status.HTTP_201_CREATED, response_model=ReceptionPatientOut)
 def reception_register_patient(
     body: RegisterPatientIn,
-    _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    user: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
     db: Session = Depends(get_db),
 ):
     """Rejestracja zakłada konto pacjenta przy zgłoszeniu telefonicznym/osobistym
@@ -727,6 +727,9 @@ def reception_register_patient(
     Dedup po PESEL: istniejący pacjent jest zwracany (existing=True), bez dubla."""
     existing = db.scalar(select(Patient).where(Patient.pesel_bidx == blind_index(body.pesel)))
     if existing:
+        # nie ujawniaj PII pacjenta spoza swojej placówki — inaczej endpoint służy jako
+        # wyrocznia danych po PESEL (cross-tenant). Pacjent bez śladu (świeży) pozostaje dostępny.
+        assert_staff_can_access_patient(db, user, existing.patient_id)
         owner = db.get(AppUser, existing.patient_id)
         if not owner.active_account and body.phone_number:
             owner.phone_number = body.phone_number  # uzupełnij kontakt na koncie-gościu
@@ -771,7 +774,7 @@ class BookForIn(BaseModel):
 def book_for_patient(
     appointment_id: UUID,
     body: BookForIn,
-    _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    user: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
     db: Session = Depends(get_db),
     ewus: EwusClient = Depends(get_ewus_client),
     p1: P1Client = Depends(get_p1_client),
@@ -789,6 +792,7 @@ def book_for_patient(
     patient = db.get(Patient, body.patient_id)
     if patient is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacjent nie istnieje.")
+    assert_staff_can_access_patient(db, user, body.patient_id)  # nie przypinaj cudzego (innej placówki) pacjenta
     p1_code = body.p1_referral_code.strip() if body.p1_referral_code else None
     if a.referral_required and not body.external_referral and body.referral_document_id is None and not p1_code:
         raise HTTPException(
@@ -954,13 +958,18 @@ class SettlePaymentIn(BaseModel):
 def settle_payment(
     appointment_id: UUID,
     body: SettlePaymentIn,
-    _: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
+    user: AppUser = Depends(require_roles(*RECEPTION_ROLES)),
     db: Session = Depends(get_db),
     payments: PaymentsClient = Depends(get_payments_client),
 ):
     """Recepcja oznacza, że pacjent zapłacił NA MIEJSCU (płatna wizyta umówiona przez
     rejestrację nie jest z góry opłacona). Opcjonalnie wystawia fakturę (mini-mock)."""
     a = get_appointment_or_404(appointment_id, db)
+    assert_staff_in_clinic(db, user, a.clinic_id)  # tylko wizyty własnej placówki
+    if a.patient_id is None or a.appointment_status in (
+        AppointmentStatus.FREE.value, AppointmentStatus.TEMP_LOCK.value, AppointmentStatus.CANCELLED.value,
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tej wizyty nie można rozliczyć.")
     if a.price is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wizyta bezpłatna (NFZ) — nie ma czego rozliczać.")
     if db.scalar(select(Payment).where(
@@ -1076,6 +1085,9 @@ def cancel_appointment(
         a.appointment_status = AppointmentStatus.FREE.value
         a.patient_id = None
         a.notify_earlier = False
+        a.confirmation_token = None
+        a.lock_expires_at = None
+        restore_blocked(db, a)  # nakładające się sloty współrezerwacji wracają do puli
         notify_earlier_watchers(db, doctor_id=a.doctor_id, clinic_id=a.clinic_id, slot_dts=[a.appointment_datetime])
         db.commit()
         return appointment_out(db, a)
@@ -1216,7 +1228,11 @@ def reschedule_appointment(
             detail=f"Wizyty nie można przełożyć na mniej niż {CANCEL_MIN_HOURS} h przed terminem. Skontaktuj się z rejestracją.",
         )
 
-    new = get_appointment_or_404(body.new_appointment_id, db)
+    # blokada wiersza nowego slotu przed walidacją statusu — serializuje z /book i innym
+    # reschedule (inaczej dwóch piszących mogło wskoczyć w ten sam wolny termin)
+    new = db.get(Appointment, body.new_appointment_id, with_for_update=True)
+    if new is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wybrany termin nie istnieje.")
     perform_reschedule(db, old, new)
     db.commit()
     return appointment_out(db, new)

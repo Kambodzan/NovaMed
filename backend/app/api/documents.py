@@ -395,6 +395,7 @@ def add_lab_result(
         a = db.get(Appointment, body.appointment_id)
         if a is None or a.patient_id != patient_id:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Wizyta nie dotyczy tego pacjenta.")
+        assert_staff_can_access_patient(db, user, patient_id)  # rejestracja tylko pacjenta swojej placówki
         author_id, appt_id = a.doctor_id, body.appointment_id  # podpis lekarza wizyty (może być None dla pracowni)
     else:
         # wynik z papieru luzem — rejestracja, bez wizyty/lekarza

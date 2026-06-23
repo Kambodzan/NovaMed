@@ -11,12 +11,13 @@ from tests.conftest import auth_header
 
 @pytest.fixture()
 def setup(client, factory):
-    _, reg_token = factory.user("rejestracja")
+    reg_user, reg_token = factory.user("rejestracja")
     _, admin_token = factory.user("administrator")
     doctor_user, doctor_token = factory.doctor()
     patient_user, patient_token = factory.patient()
     clinic = factory.clinic()
     factory.employ(clinic, doctor_user.user_id)
+    factory.employ(clinic, reg_user.user_id)  # recepcja przypisana do placówki (jak provision-users w prod)
     return {
         "clinic": clinic, "doctor": doctor_user, "doctor_token": doctor_token,
         "patient": patient_user, "patient_token": patient_token,

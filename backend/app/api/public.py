@@ -236,6 +236,15 @@ def guest_book(
         if owner.active_account:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail="Masz już konto w NovaMed — zaloguj się, aby zarezerwować.")
+        # konto nieaktywne (gość/podopieczny): przypnij rezerwację TYLKO gdy dane zgadzają się
+        # z kartoteką — inaczej sam PESEL pozwalałby przejąć cudzą rezerwację/dokumentację.
+        if patient.guardian_id is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Ten pacjent jest podopiecznym konta rodzinnego — rezerwację złóż przez opiekuna po zalogowaniu.")
+        if patient.birth_date != body.birth_date or \
+                patient.last_name.strip().lower() != body.last_name.strip().lower():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Dane nie zgadzają się z istniejącą kartoteką dla tego numeru PESEL — skontaktuj się z rejestracją.")
         guest = owner
         guest.phone_number = body.phone_number
     else:
@@ -430,7 +439,8 @@ def public_reschedule(token: str, body: PublicRescheduleIn, db: Session = Depend
     if a.appointment_status != AppointmentStatus.CONFIRMED.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="Tej wizyty nie można już przełożyć (odwołana lub odbyta).")
-    new = db.get(Appointment, body.new_appointment_id)
+    # blokada wiersza nowego slotu przed walidacją — serializuje z /book i innym reschedule
+    new = db.get(Appointment, body.new_appointment_id, with_for_update=True)
     if new is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wybrany termin nie istnieje.")
     tok = a.confirmation_token

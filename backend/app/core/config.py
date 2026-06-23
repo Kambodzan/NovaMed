@@ -1,3 +1,5 @@
+import re
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,9 +11,9 @@ class Settings(BaseSettings):
 
     app_name: str = "NovaMed API"
     database_url: str = "***REMOVED***"
-    # bazowy URL frontendu — do linków w SMS (np. potwierdzenie wizyty z linka).
-    # Na razie sztywno na adres LAN; w produkcji domena z env.
-    public_base_url: str = "https://192.168.111.201:5174"
+    # bazowy URL frontendu — do linków w SMS/e-mail (potwierdzenie wizyty, teleporada).
+    # Dev = localhost; w produkcji PUBLIC_BASE_URL z env (guard niżej wymusza realną domenę).
+    public_base_url: str = "http://localhost:5174"
 
     # Tryb deweloperski: login bez hasła (/auth/dev-token), fallback HS256 i luźny
     # CORS dla LAN. W PRODUKCJI ustaw DEV_MODE=false — wtedy akceptowane są
@@ -92,6 +94,11 @@ class Settings(BaseSettings):
             if not self.data_encryption_key or not self.data_index_key:
                 raise ValueError("Produkcja (DEV_MODE=false) wymaga DATA_ENCRYPTION_KEY i DATA_INDEX_KEY "
                                  "(szyfrowanie danych medycznych at-rest).")
+            # PUBLIC_BASE_URL trafia do linków SMS/e-mail (potwierdzenie wizyty, teleporada) —
+            # adres LAN/localhost w produkcji daje pacjentom niedziałające linki.
+            if re.search(r"(localhost|127\.0\.0\.1|192\.168\.|10\.\d+\.|://$|^$)", self.public_base_url):
+                raise ValueError("Produkcja (DEV_MODE=false) wymaga PUBLIC_BASE_URL z realną domeną "
+                                 "(nie localhost/adres LAN) — linki w SMS/e-mail muszą działać dla pacjenta.")
         return self
 
 
