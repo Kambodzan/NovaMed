@@ -36,7 +36,7 @@ STAFF_ROLES = ("lekarz", "pielegniarka", "rejestracja", "kierownik", "administra
 PRESCRIPTION_VALID_DAYS = 30  # ważność e-recepty (standardowo 30 dni)
 
 
-# ---------- schematy ----------
+# Schematy wejścia/wyjścia
 
 class PrescriptionIn(BaseModel):
     appointment_id: UUID
@@ -111,7 +111,7 @@ class DocumentOut(BaseModel):
     seen: bool = True  # czy pacjent już obejrzał (dla „nowych" wyników badań)
 
 
-# ---------- pomocnicze ----------
+# Helpery — mapowanie dokumentu na DocumentOut, walidacje, powiadomienia
 
 REFERRAL_TYPE_LABEL = {
     "NURSING": "zabieg pielęgniarski",
@@ -231,7 +231,7 @@ def notify_new_document(db: Session, doc: MedicalDocument, code: str | None = No
            f"W Twojej dokumentacji pojawił się nowy dokument ({label}).{extra}", email=True)
 
 
-# ---------- wystawianie (lekarz) ----------
+# Wystawianie dokumentów (lekarz)
 
 @router.post("/patients/{patient_id}/prescriptions", status_code=status.HTTP_201_CREATED, response_model=DocumentOut)
 def issue_prescription(
@@ -563,7 +563,7 @@ def cancel_document(
     return document_out(db, doc)
 
 
-# ---------- wgląd ----------
+# Wgląd: karta pacjenta i jego dokumentacja
 
 class PatientInfoOut(BaseModel):
     patient_id: UUID

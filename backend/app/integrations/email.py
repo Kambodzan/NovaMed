@@ -1,5 +1,5 @@
-# Port + adapter kanału e-mail. Best-effort (jak SMS): awaria nie blokuje operacji
-# domenowej. Mock-first: w dev loguje + trzyma outbox; realnie SMTP (sekrety w .env).
+# Kanał e-mail (port/adapter). Best-effort. Mock-first: w dev loguje i trzyma outbox,
+# na produkcji SMTP (sekrety w .env).
 import logging
 import smtplib
 from email.header import Header
@@ -27,7 +27,7 @@ class MockEmailClient:
 
 
 class SmtpEmailClient:
-    """Realna dostawa przez SMTP (np. Gmail/SendGrid/own). Best-effort — awaria nie psuje."""
+    """Realna dostawa przez SMTP (np. Gmail/SendGrid/własny serwer)."""
 
     def __init__(self, host: str, port: int, user: str, password: str, sender: str):
         self.host, self.port, self.user, self.password, self.sender = host, port, user, password, sender

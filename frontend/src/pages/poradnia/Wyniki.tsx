@@ -103,7 +103,6 @@ export function Wyniki() {
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* 1 — pacjent */}
         <Tile className="p-5" delay={60}>
           <TileHeader title="1. Pacjent" action={picked && (
             <button onClick={() => { setPicked(null); setDone(null) }} className="inline-flex cursor-pointer items-center gap-1 text-xs font-extrabold text-gray-500 hover:text-red-600">
@@ -150,7 +149,6 @@ export function Wyniki() {
           )}
         </Tile>
 
-        {/* 2 — wynik */}
         <Tile className="p-5" delay={90}>
           <TileHeader title="2. Wynik badania" />
           <div className="space-y-3">

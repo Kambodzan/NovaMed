@@ -205,7 +205,6 @@ export function UmowWizyte() {
       {done && <p className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700 fade-up"><Check size={15} /> {done}</p>}
       {error && <p className="rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-bold text-red-700">{error}</p>}
 
-      {/* KROK 1 — pacjent */}
       <Tile className="p-5" delay={60}>
         <StepHead n={1} title="Pacjent" done={!!picked} summary={picked ? `${picked.name} · PESEL ${picked.pesel}` : undefined} onEdit={() => { setPicked(null); setDone(null) }} />
         {picked ? (
@@ -261,7 +260,6 @@ export function UmowWizyte() {
         )}
       </Tile>
 
-      {/* KROK 2 — termin */}
       <Tile className={cx('p-5', !picked && 'pointer-events-none opacity-50')} delay={90}>
         <StepHead n={2} title="Wolny termin" done={!!slot}
           summary={slot ? `${formatDatePL(slot.appointment_datetime)}, ${formatTime(slot.appointment_datetime)} · ${slot.doctor_name}` : undefined}
@@ -352,7 +350,6 @@ export function UmowWizyte() {
         )}
       </Tile>
 
-      {/* KROK 3 — potwierdzenie */}
       <Tile className={cx('p-5', !(picked && slot) && 'pointer-events-none opacity-50')} delay={120}>
         <StepHead n={3} title="Potwierdzenie" />
         <div className="mt-3 space-y-3">

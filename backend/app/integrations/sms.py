@@ -1,6 +1,4 @@
-# Port + adapter HTTP do bramki SMS. Kanał jest best-effort:
-# awaria bramki nigdy nie blokuje operacji domenowej (SMS to dodatek
-# do powiadomienia in-app, nie jego warunek).
+# Port/adapter bramki SMS. Best-effort: awaria bramki nie blokuje operacji domenowej.
 import logging
 from typing import Protocol
 
@@ -21,7 +19,6 @@ class HttpSmsClient:
         self.timeout = timeout
 
     def send(self, *, to: str, message: str) -> None:
-        # bez wyjątków na zewnątrz — best-effort
         try:
             httpx.post(
                 f"{self.base_url}/api/v1/sms",
@@ -41,7 +38,7 @@ def _to_e164(number: str) -> str:
 
 
 class TwilioSmsClient:
-    """Realna dostawa przez Twilio REST API (best-effort — awaria nie blokuje)."""
+    """Realna dostawa przez Twilio REST API."""
 
     def __init__(self, sid: str, token: str, sender: str, timeout: float = 6.0):
         self.sid, self.token, self.sender, self.timeout = sid, token, sender, timeout

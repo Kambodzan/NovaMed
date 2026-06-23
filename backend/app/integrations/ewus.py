@@ -8,9 +8,7 @@ from app.integrations.base import IntegrationError
 
 
 class EwusClient(Protocol):
-    def verify(self, *, pesel: str) -> bool:
-        """True = ubezpieczony."""
-        ...
+    def verify(self, *, pesel: str) -> bool: ...
 
 
 class HttpEwusClient:

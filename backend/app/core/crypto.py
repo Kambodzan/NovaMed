@@ -2,14 +2,14 @@
 # noty lekarskie, wyniki, dane kliniczne i PESEL są szyfrowane PRZED zapisem do bazy
 # i odszyfrowywane przy odczycie — transparentnie, przez typ kolumny SQLAlchemy.
 #
-# Algorytm: **AES-256-GCM** (AEAD — poufność + integralność; wykrywa manipulację
+# Algorytm: AES-256-GCM (AEAD — poufność + integralność; wykrywa manipulację
 # szyfrogramem). Losowy 96-bitowy nonce per wartość, doklejony do szyfrogramu.
 # Klucz 32 B z konfiguracji (`DATA_ENCRYPTION_KEY`, base64); w produkcji wymagany,
 # w dev pochodna deterministyczna (działa bez setupu, NIE do produkcji).
 #
 # PESEL jest równościowo wyszukiwany (dedup/rejestracja, integracje) — szyfrogram
 # z losowym nonce nie nadaje się do `WHERE`. Dlatego obok szyfrowanego PESEL-u trzymamy
-# **blind index**: `pesel_bidx = HMAC-SHA256(klucz_indeksu, znormalizowany PESEL)` —
+# blind index: `pesel_bidx = HMAC-SHA256(klucz_indeksu, znormalizowany PESEL)` —
 # deterministyczny, indeksowalny, nieodwracalny. Lookup idzie po HMAC, integracje po
 # odszyfrowanym PESEL-u.
 import base64
@@ -75,12 +75,12 @@ class Encrypted(TypeDecorator):
     impl = Text  # szyfrogram base64 jako tekst (bez limitu długości)
     cache_ok = True
 
-    def process_bind_param(self, value, dialect):  # zapis → szyfr
+    def process_bind_param(self, value, dialect):
         if value is None:
             return None
         return encrypt(value)
 
-    def process_result_value(self, value, dialect):  # odczyt → jawne
+    def process_result_value(self, value, dialect):
         if value is None:
             return None
         return decrypt(value)

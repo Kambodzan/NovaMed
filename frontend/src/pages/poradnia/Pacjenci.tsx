@@ -231,7 +231,6 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
           </span>
         </div>
 
-        {/* kiedy do nas wpada */}
         <div>
           <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-extrabold tracking-wide text-gray-500 uppercase"><CalendarClock size={13} /> Najbliższa wizyta</p>
           {appts === undefined ? <p className="px-1 text-sm text-gray-400">Wczytywanie…</p>
@@ -245,7 +244,6 @@ function PatientDetail({ patient, onClose, onVerify, verifying, onSaveContact, s
           )}
         </div>
 
-        {/* kiedy był ostatnio */}
         <div>
           <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-extrabold tracking-wide text-gray-500 uppercase">
             <Clock size={13} /> Ostatnia wizyta{totalVisits > 0 ? ` · ${totalVisits} odbytych` : ''}

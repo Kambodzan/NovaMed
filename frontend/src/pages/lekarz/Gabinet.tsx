@@ -212,7 +212,6 @@ export function Gabinet() {
     ? saveDraft.mutate(undefined, { onSuccess: () => changeStatus.mutate('PAUSED') })
     : changeStatus.mutate('PAUSED')
   // wizytę rozpoczyna się w dniu jej terminu
-  // wizytę rozpoczyna się w dniu jej terminu
   const visitToday = new Date(visit.appointment_datetime).toDateString() === new Date().toDateString()
   const age = patient ? Math.floor((Date.now() - new Date(patient.birth_date).getTime()) / 31_557_600_000) : null
   const visitDocs = (documents ?? []).filter(d => d.appointment_id === id)

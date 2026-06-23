@@ -6,7 +6,7 @@ o potwierdzenie) miały po kilka wariantów rozsianych po `appointments.py`,
 bierze `notify()`.
 
 Zasada treści maila/SMS: to INFORMACJA (co/gdzie/kiedy), bez linków zarządzania.
-Jedyny dopuszczony link to **dostęp do teleporady** (`join_link`) — bo bez niego
+Jedyny dopuszczony link to dostęp do teleporady (`join_link`) — bo bez niego
 gość/pacjent nie ma jak wejść na wideo. Prośba o potwierdzenie obecności trzyma
 swój link, ale ona nie idzie mailem (tylko in-app + SMS).
 

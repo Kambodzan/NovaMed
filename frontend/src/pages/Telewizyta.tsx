@@ -275,7 +275,6 @@ export function Telewizyta() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        {/* wideo */}
         <Tile className="overflow-hidden p-0" delay={60}>
           <div className="relative aspect-video bg-gray-900">
             <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
@@ -321,7 +320,6 @@ export function Telewizyta() {
           </div>
         </Tile>
 
-        {/* czat */}
         <Tile className="flex h-[28rem] flex-col p-0 lg:h-auto" delay={120}>
           <p className="border-b border-gray-100 px-4 py-3 text-xs font-extrabold tracking-wider text-gray-500 uppercase">
             Czat wizyty

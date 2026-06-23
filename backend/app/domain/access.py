@@ -4,13 +4,13 @@ poszerzana ŚWIADOMYM udostępnieniem pacjenta (kod, UC-P6).
 Bramka placówkowa (`tenancy`) rozstrzyga, O KTÓRYM pacjencie personel może czytać;
 tu rozstrzygamy, CO z jego dokumentacji widzi dana rola:
 
-- **lekarz** — pełnia (zespół opiekuńczy placówki; cross-placówka i tak za kodem).
-- **pielęgniarka** — leki (recepty), wyniki badań, skierowania zabiegowe
+- lekarz — pełnia (zespół opiekuńczy placówki; cross-placówka i tak za kodem).
+- pielęgniarka — leki (recepty), wyniki badań, skierowania zabiegowe
   (pielęgniarskie/laboratoryjne) + dane kliniczne (alergie/choroby/leki). Bez not
   z wizyt, e-zwolnień, zaświadczeń, skierowań do specjalisty (docx UC-N1, §7.3).
-- **rejestracja** — rola administracyjna; z klinicznych tylko wyniki badań
+- rejestracja — rola administracyjna; z klinicznych tylko wyniki badań
   (obsługuje ich wgrywanie). Bez recept, not, skierowań, danych klinicznych.
-- **kierownik / administrator** — role administracyjne; bez dokumentacji klinicznej.
+- kierownik / administrator — role administracyjne; bez dokumentacji klinicznej.
 
 PONAD tym: jeśli pacjent UDOSTĘPNIŁ pracownikowi dokumentację kodem (odebrany,
 nieodwołany `DocumentShare`), to ten pracownik widzi też dokumenty/noty w zakresie

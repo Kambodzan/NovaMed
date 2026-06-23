@@ -74,7 +74,6 @@ export function Start() {
       )}
 
       <div className="grid grid-cols-12 gap-4">
-        {/* najbliższa wizyta */}
         <Tile className="col-span-12 p-5 sm:p-6 lg:col-span-7" delay={60}>
           <TileHeader title={t('Najbliższa wizyta')} />
           {next ? (
@@ -100,7 +99,6 @@ export function Start() {
           )}
         </Tile>
 
-        {/* skróty */}
         <Tile className="col-span-12 p-5 lg:col-span-5" delay={120}>
           <TileHeader title={t('Na skróty')} />
           <ul className="space-y-1.5">
@@ -125,7 +123,6 @@ export function Start() {
           </ul>
         </Tile>
 
-        {/* ostatnie dokumenty */}
         <Tile className="col-span-12 p-5" delay={180}>
           <TileHeader
             title={t('Ostatnie dokumenty')}

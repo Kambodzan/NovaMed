@@ -58,7 +58,7 @@ def is_adult(birth_date: date) -> bool:
     return age >= 18
 
 
-def resolve_patient_id(db: Session, user: AppUser, as_patient: UUID | None) -> int:
+def resolve_patient_id(db: Session, user: AppUser, as_patient: UUID | None) -> UUID:
     """Pacjent działa za siebie albo za podopiecznego (patient.guardian_id)."""
     if as_patient is None or as_patient == user.user_id:
         return user.user_id

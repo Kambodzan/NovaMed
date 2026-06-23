@@ -93,7 +93,6 @@ export function Pulpit() {
 
       {day === undefined ? <Loading label="Wczytywanie dnia…" /> : (
         <>
-          {/* statystyki dnia */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Wizyty dziś" value={booked.length} hint={`${completed.length} zakończonych${waiting ? ` · ${waiting} czeka` : ''}`} tone="primary" />
             <Stat label="Wolne terminy" value={free.length} hint="do umówienia" />
@@ -101,7 +100,6 @@ export function Pulpit() {
             <Stat label="Teleporady dziś" value={booked.filter(a => a.appointment_type === 'ONLINE').length} hint="wideo" />
           </div>
 
-          {/* szybkie akcje */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ACTIONS.map(a => (
               <Link key={a.to} to={a.to}
@@ -119,7 +117,6 @@ export function Pulpit() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* najbliższe wizyty dziś */}
             <Tile className="p-5" delay={60}>
               <TileHeader title="Najbliższe wizyty dziś" action={
                 <Link to="/kalendarz" className="text-xs font-extrabold text-primary hover:underline">cały dzień</Link>
@@ -164,7 +161,6 @@ export function Pulpit() {
               )}
             </Tile>
 
-            {/* wymaga uwagi — niepotwierdzone */}
             <Tile className="p-5" delay={90}>
               <TileHeader title="Wymaga uwagi" action={unconfirmed.length > 0 && (
                 <Button size="sm" variant="secondary" disabled={remind.isPending} onClick={() => remind.mutate()}>

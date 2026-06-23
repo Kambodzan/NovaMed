@@ -9,9 +9,7 @@ from app.integrations.base import IntegrationError
 
 
 class ZusClient(Protocol):
-    def issue_sick_leave(self, *, pesel: str, doctor_pwz: str, date_from: date, date_to: date, indication: str) -> str:
-        """Zwraca kod e-ZLA."""
-        ...
+    def issue_sick_leave(self, *, pesel: str, doctor_pwz: str, date_from: date, date_to: date, indication: str) -> str: ...
 
     def revoke_sick_leave(self, *, code: str) -> None:
         """Anuluje e-ZLA (np. błędnie wystawione zwolnienie)."""
@@ -55,5 +53,4 @@ class HttpZusClient:
 
 
 def get_zus_client() -> ZusClient:
-    """Dependency FastAPI — w testach podmieniane na fake."""
     return HttpZusClient()

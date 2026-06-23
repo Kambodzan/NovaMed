@@ -10,9 +10,7 @@ from app.integrations.base import IntegrationError
 
 
 class PaymentsClient(Protocol):
-    def create_payment(self, *, amount: float, reference: str) -> str:
-        """Zwraca id płatności u operatora."""
-        ...
+    def create_payment(self, *, amount: float, reference: str) -> str: ...
 
     def confirm(self, *, provider_ref: str, outcome: str) -> str:
         """Symulacja autoryzacji (mock). Zwraca status: PAID / FAILED."""

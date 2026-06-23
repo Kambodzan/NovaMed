@@ -46,13 +46,13 @@ def assert_participant(db: Session, appointment_id: UUID, user: AppUser) -> Appo
     return a
 
 
-# ---------- WebSocket: pokój wizyty ----------
+# WebSocket — pokój wizyty (sygnalizacja + relay czatu)
 
 class RoomManager:
     """Pokoje per wizyta: user_id → WebSocket. Relay wiadomości do pozostałych."""
 
     def __init__(self):
-        self.rooms: dict[int, dict[int, WebSocket]] = {}
+        self.rooms: dict[UUID, dict[UUID, WebSocket]] = {}
 
     async def join(self, appointment_id: UUID, user_id: UUID, ws: WebSocket) -> None:
         room = self.rooms.setdefault(appointment_id, {})
@@ -126,7 +126,7 @@ async def telemed_ws(
         await manager.relay(appointment_id, room_uid, {"type": "peer-left", "role": role})
 
 
-# ---------- załączniki (UC-P5: przesyłanie zdjęć/skanów w trakcie wizyty) ----------
+# Załączniki (UC-P5) — zdjęcia/skany przesyłane w trakcie wizyty
 
 class AttachmentOut(BaseModel):
     filename: str

@@ -21,7 +21,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 ADMIN = ("administrator",)
 
 
-# ---------- użytkownicy (UC-A1) ----------
+# Zarządzanie użytkownikami (UC-A1)
 
 class AdminUserOut(BaseModel):
     user_id: UUID
@@ -125,7 +125,7 @@ def request_password_reset(
     return {"email": user.email}
 
 
-# ---------- RODO: dziennik dostępu + prawo do bycia zapomnianym (NFR 8.2) ----------
+# RODO (NFR 8.2): dziennik dostępu + prawo do bycia zapomnianym
 
 class AuditEntryOut(BaseModel):
     created_at: datetime
@@ -181,8 +181,7 @@ def anonymize_patient(
     return {"status": "anonymized"}
 
 
-# ---------- integracje (UC-A2) ----------
-
+# Integracje (UC-A2)
 class IntegrationStatusOut(BaseModel):
     id: str
     name: str
@@ -245,7 +244,7 @@ def integration_errors(_: AppUser = Depends(require_roles(*ADMIN)), db: Session 
     return out
 
 
-# ---------- monitoring (UC-A3) ----------
+# Monitoring (UC-A3)
 
 class AdminStatsOut(BaseModel):
     users_by_role: dict[str, int]

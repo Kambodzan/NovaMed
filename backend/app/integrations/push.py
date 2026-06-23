@@ -1,10 +1,6 @@
-# Port + adapter do powiadomień push (Expo Push API). Kanał best-effort:
-# awaria nigdy nie blokuje operacji domenowej (push to dodatek do powiadomienia
-# in-app, nie jego warunek) — tak samo jak SMS/e-mail.
-#
-# Expo Push: tokeny urządzeń (ExponentPushToken[...]) autoryzują dostawę,
-# żaden sekret serwera nie jest wymagany dla podstawowej wysyłki. Endpoint:
-# https://exp.host/--/api/v2/push/send  (przyjmuje pojedynczy obiekt lub listę).
+# Powiadomienia push przez Expo Push API — best-effort, błąd dostawy nie wstrzymuje operacji.
+# Tokeny urządzeń (ExponentPushToken[...]) autoryzują wysyłkę, sekret serwera nie jest
+# potrzebny. Endpoint przyjmuje pojedynczy obiekt albo listę.
 import logging
 from typing import Protocol
 
@@ -23,7 +19,7 @@ class PushClient(Protocol):
 
 
 class ExpoPushClient:
-    """Realna dostawa przez Expo Push API (best-effort — awaria nie blokuje)."""
+    """Realna dostawa przez Expo Push API."""
 
     def __init__(self, timeout: float = 6.0):
         self.timeout = timeout

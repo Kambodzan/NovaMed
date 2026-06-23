@@ -10,13 +10,9 @@ from app.integrations.base import IntegrationError
 
 
 class P1Client(Protocol):
-    def issue_prescription(self, *, pesel: str, doctor_pwz: str, icd10: str | None, drugs: str) -> str:
-        """Zwraca kod e-recepty."""
-        ...
+    def issue_prescription(self, *, pesel: str, doctor_pwz: str, icd10: str | None, drugs: str) -> str: ...
 
-    def issue_referral(self, *, pesel: str, doctor_pwz: str, icd10: str | None, referral_type: str, notes: str | None) -> str:
-        """Zwraca kod e-skierowania."""
-        ...
+    def issue_referral(self, *, pesel: str, doctor_pwz: str, icd10: str | None, referral_type: str, notes: str | None) -> str: ...
 
     def revoke_document(self, *, code: str) -> None:
         """Anuluje wystawiony dokument w P1 (storno e-recepty/e-skierowania)."""
@@ -91,5 +87,4 @@ class HttpP1Client:
 
 
 def get_p1_client() -> P1Client:
-    """Dependency FastAPI — w testach podmieniane na fake."""
     return HttpP1Client()

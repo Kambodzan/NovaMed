@@ -19,14 +19,14 @@ def notify(db: Session, user_id: UUID, title: str, content: str, *,
     podopieczny nie loguje się sam.
 
     Kanały poza in-app są zawężane wg wartości zdarzenia:
-    - **in-app** (dzwonek) — ZAWSZE (pełna historia).
-    - **push** (`push`, domyślnie True) — na zarejestrowane urządzenia mobilne
+    - in-app (dzwonek) — ZAWSZE (pełna historia).
+    - push (`push`, domyślnie True) — na zarejestrowane urządzenia mobilne
       (apka pacjenta); idzie do TEGO SAMEGO adresata co in-app (po przekierowaniu
       podopieczny→opiekun). Cichy no-op, gdy adresat nie ma tokenów (np. tylko web).
-    - **SMS** (`sms`, domyślnie True) — szeroki, ale wyłączany dla przejściowego
+    - SMS (`sms`, domyślnie True) — szeroki, ale wyłączany dla przejściowego
       szumu, który adresat i tak widzi na ekranie (odrzucona płatność, wygasła
       rezerwacja) lub który jest kolejką pracy personelu (wynik do opisania).
-    - **e-mail** (`email`, domyślnie False) — WHITELISTA: tylko rzeczy trwałe/ważne
+    - e-mail (`email`, domyślnie False) — WHITELISTA: tylko rzeczy trwałe/ważne
       (potwierdzenie/zmiana/przypomnienie wizyty, link do teleporady, nowy dokument)."""
     patient = db.get(Patient, user_id)
     if patient is not None and patient.guardian_id is not None:
