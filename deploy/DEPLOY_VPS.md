@@ -2,7 +2,7 @@
 
 Turnkey: świeży VPS → działający `https://twoja-domena` z całym stosem (backend + 5 mocków
 integracji + Postgres + frontend) za reverse-proxy Caddy z automatycznym TLS. Supabase Auth
-zostaje w chmurze. Architektura/zmienne w szczegółach: `docs/WDROZENIE.md`.
+zostaje w chmurze. Wszystkie zmienne środowiskowe opisane są w `deploy/.env.prod.example`.
 
 > Idź po kolei. Każdy krok ma komendy do wklejenia. Tam, gdzie coś łatwo przeoczyć, jest **⚠️**.
 
@@ -150,7 +150,7 @@ cd deploy && docker compose -f docker-compose.prod.yml up -d --build
 ```bash
 docker compose -f docker-compose.prod.yml exec db pg_dump -U novamed -Fc novamed > novamed_$(date +%F).dump
 ```
-Restore i HA: `docs/BACKUP_HA.md`.
+Restore: `pg_restore` z pliku `.dump` do osobnej bazy, po weryfikacji podmiana.
 
 ---
 
@@ -171,4 +171,4 @@ Restore i HA: `docs/BACKUP_HA.md`.
 ## 10. Uwaga o integracjach
 P1, eWUŚ, ZUS e-ZLA, laboratorium, płatności, SMS działają jako **mock-serwisy** — realne wymagają
 umów/certyfikatów/statusu podmiotu leczniczego (poza zakresem pracy inż.). Wyjście na realne = zmiana
-`*_BASE_URL`/`SMS_PROVIDER` w env, bez zmian w kodzie (`docs/WDROZENIE.md` §5).
+`*_BASE_URL`/`SMS_PROVIDER` w env, bez zmian w kodzie.

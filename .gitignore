@@ -39,3 +39,8 @@ external/
 
 # kopie zapasowe bazy (backup-db.ps1)
 backups/
+
+# Materiały wewnętrzne / robocze — trzymane lokalnie, poza repo
+docs/
+mockupy-ui/
+*.docx

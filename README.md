@@ -98,7 +98,11 @@ Całe środowisko jedną komendą (Windows, PowerShell):
 powershell -ExecutionPolicy Bypass -File scripts\start-dev.ps1
 ```
 Podnosi backend (`:8000`), frontend (`:5174`) i 6 mocków (`:8101–8106`) + konta i słowniki.
-Pełny przewodnik deweloperski (krok po kroku, testy, migracje, LAN/HTTPS) → **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)**.
+
+Pojedyncze komponenty: backend z `backend/` na własnym venv (`python -m uvicorn app.main:app --reload`,
+testy `python -m pytest -q`, migracje `python -m alembic upgrade head`); frontend z `frontend/`
+(`npm install && npm run dev`). Konta i dane: `scripts/provision-users.py`, `scripts/import-dictionaries.py`,
+`scripts/seed-services.py`, `scripts/seed-demo-data.py`.
 
 **Konta testowe** (hasło `NovaMed.Test1`):
 
@@ -118,13 +122,13 @@ cp deploy/.env.prod.example deploy/.env      # uzupełnij domenę + Supabase + k
 docker compose -f deploy/docker-compose.prod.yml up -d --build
 ```
 Świeży VPS od zera do działającego `https://twoja-domena` (DNS, firewall, Supabase ES256, dane demo) →
-**[`deploy/DEPLOY_VPS.md`](deploy/DEPLOY_VPS.md)**. Kopie zapasowe i HA → [`docs/BACKUP_HA.md`](docs/BACKUP_HA.md).
+**[`deploy/DEPLOY_VPS.md`](deploy/DEPLOY_VPS.md)** — krok po kroku, z firewallem, DNS i kontami startowymi.
 
 ## Jakość
 
 - **250+ testów** (pytest), pokrycie backendu **≥ 90 %** (próg NFR)
 - Dostępność **WCAG 2.1 AA** (audyt axe‑core na wszystkich ekranach)
-- Wydajność: indeksy hot‑ścieżek + skalowanie poziome ([`docs/PERF.md`](docs/PERF.md))
+- Wydajność: indeksy hot‑ścieżek + skalowanie poziome (backend bezstanowy, repliki za load‑balancerem)
 
 ## Struktura repozytorium
 
@@ -133,19 +137,9 @@ backend/     FastAPI — API domenowe, RBAC, szyfrowanie, integracje (port/adapt
 frontend/    React (Vite, TS) — 5 portali w jednej aplikacji
 mobile/      Expo — aplikacja pacjenta (push, offline)
 mocks/       mock-serwisy: p1, zus_ezla, ewus, lab, payments, sms
-mockupy-ui/  klikalne makiety UI (referencja wyglądu)
+scripts/     narzędzia: provisioning kont, słowniki, seed danych, backup
 deploy/      wdrożenie na VPS (Docker Compose, Caddy, runbook)
-docs/        dokumentacja, diagramy (ERD/UML jako kod), odstępstwa, wdrożenie
 ```
-
-## 📚 Dokumentacja
-
-- **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)** — uruchomienie i praca w trybie deweloperskim
-- **[`deploy/DEPLOY_VPS.md`](deploy/DEPLOY_VPS.md)** — wdrożenie produkcyjne na VPS, krok po kroku
-- **[`docs/md`]** — rejestr świadomych odstępstw od pierwotnego projektu
-- **[`docs/BACKUP_HA.md`](docs/BACKUP_HA.md)** · **[`docs/PERF.md`](docs/PERF.md)** — kopie/HA i wydajność
-- Diagramy **jako kod**: `diagramy` (ERD w DBML, UML w PlantUML)
-- Pełna dokumentacja pracy: pliki `.docx` w katalogu głównym
 
 ## Autor
 
