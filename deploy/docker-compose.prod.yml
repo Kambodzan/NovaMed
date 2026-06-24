@@ -12,7 +12,10 @@ name: novamed
 # --- wspolny zestaw env dla backendu i jednorazowego inita (ten sam klucz szyfrowania!) ---
 x-app-env: &app-env
   DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
-  DEV_MODE: "false"
+  # PRODUKCYJNIE zostaw false (ES256-only, twarde guardy, brak /auth/dev-token).
+  # Można chwilowo dać true w .env na czas dema — UWAGA: odblokowuje login bez
+  # hasła (/auth/dev-token) i HS256, więc nie zostawiaj tak publicznie na stałe.
+  DEV_MODE: "${DEV_MODE:-false}"
   SUPABASE_URL: "${SUPABASE_URL}"
   SUPABASE_JWT_SECRET: "${SUPABASE_JWT_SECRET}"
   SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
