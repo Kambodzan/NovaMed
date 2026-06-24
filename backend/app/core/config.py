@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "NovaMed API"
-    database_url: str = "***REMOVED***"
+    database_url: str = "postgresql+psycopg://novamed:novamed@localhost:5432/novamed"
     # bazowy URL frontendu — do linków w SMS/e-mail (potwierdzenie wizyty, teleporada).
     # Dev = localhost; w produkcji PUBLIC_BASE_URL z env (guard niżej wymusza realną domenę).
     public_base_url: str = "http://localhost:5174"

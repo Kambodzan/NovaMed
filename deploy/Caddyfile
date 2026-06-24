@@ -1,0 +1,29 @@
+# Reverse proxy + automatyczny HTTPS (Let's Encrypt) dla NovaMed.
+# {$DOMAIN} pochodzi ze zmiennej srodowiskowej kontenera caddy.
+# Caddy sam pobiera i odnawia certyfikat TLS dla realnej domeny wskazujacej na ten VPS.
+#
+# Routing:
+#   /api/*  -> backend:8000  (prefiks /api OBCINANY, jak w proxy Vite; WebSockety dzialaja automatycznie)
+#   reszta  -> frontend:80   (statyczne SPA serwowane przez nginx)
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# API: obetnij /api i przekaz do backendu (telemedycyna WSS dziala bez dodatkowej konfiguracji)
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# wszystko inne: frontend (SPA)
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	# wymus HSTS (po ustabilizowaniu certyfikatu)
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	log {
+		output stdout
+		format console
+	}
+}

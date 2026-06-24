@@ -1,0 +1,121 @@
+# NovaMed — produkcyjny single-host (jeden VPS, publiczny URL).
+# Caddy (TLS) -> frontend (nginx, SPA) + /api -> backend; backend -> 6 mockow + Postgres.
+# Supabase Auth = chmura (poza compose). Tylko Caddy publikuje porty (80/443).
+#
+# Uruchomienie (z katalogu deploy/, po wypelnieniu .env):
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Wszystkie sciezki budowania sa wzgledem katalogu deploy/ (context: .. = root repo).
+
+name: novamed
+
+# --- wspolny zestaw env dla backendu i jednorazowego inita (ten sam klucz szyfrowania!) ---
+x-app-env: &app-env
+  DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+  DEV_MODE: "false"
+  SUPABASE_URL: "${SUPABASE_URL}"
+  SUPABASE_JWT_SECRET: "${SUPABASE_JWT_SECRET}"
+  SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
+  DATA_ENCRYPTION_KEY: "${DATA_ENCRYPTION_KEY}"
+  DATA_INDEX_KEY: "${DATA_INDEX_KEY}"
+  PUBLIC_BASE_URL: "https://${DOMAIN}"
+  CORS_ORIGINS: '["https://${DOMAIN}"]'
+  P1_BASE_URL: "http://p1:8101"
+  ZUS_BASE_URL: "http://zus:8102"
+  EWUS_BASE_URL: "http://ewus:8103"
+  LAB_BASE_URL: "http://lab:8104"
+  PAYMENTS_BASE_URL: "http://payments:8105"
+  SMS_BASE_URL: "http://sms:8106"
+  SMS_PROVIDER: "mock"
+  EMAIL_PROVIDER: "mock"
+  PUSH_PROVIDER: "expo"
+
+x-mock: &mock
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile.mock
+  image: novamed-mock:local
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # JEDNORAZOWO: migracje + konta startowe (Supabase) + slowniki ICD-10/leki.
+  init:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.init
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ../backend
+    command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-3}"]
+    environment:
+      <<: *app-env
+      WEB_CONCURRENCY: "${WEB_CONCURRENCY:-3}"
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/db').status==200 else 1)\""]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  p1:       { <<: *mock, working_dir: /app/mocks/p1,       command: ["uvicorn","main:app","--host","0.0.0.0","--port","8101"] }
+  zus:      { <<: *mock, working_dir: /app/mocks/zus,      command: ["uvicorn","main:app","--host","0.0.0.0","--port","8102"] }
+  ewus:     { <<: *mock, working_dir: /app/mocks/ewus,     command: ["uvicorn","main:app","--host","0.0.0.0","--port","8103"] }
+  lab:      { <<: *mock, working_dir: /app/mocks/lab,      command: ["uvicorn","main:app","--host","0.0.0.0","--port","8104"] }
+  payments: { <<: *mock, working_dir: /app/mocks/payments, command: ["uvicorn","main:app","--host","0.0.0.0","--port","8105"] }
+  sms:      { <<: *mock, working_dir: /app/mocks/sms,      command: ["uvicorn","main:app","--host","0.0.0.0","--port","8106"] }
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_SUPABASE_URL: "${SUPABASE_URL}"
+        VITE_SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}"
+        VITE_API_URL: ""
+    restart: unless-stopped
+    depends_on: [backend]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [backend, frontend]
+    environment:
+      DOMAIN: "${DOMAIN}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

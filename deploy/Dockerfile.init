@@ -1,0 +1,19 @@
+# Obraz JEDNORAZOWY: migracje Alembic + seed kont (provision-users) + slowniki ICD-10/leki.
+# Zachowuje uklad repo (scripts/ obok backend/ obok data/), bo skrypty robia
+# sys.path.insert(parents[1]/backend) i czytaja data/dictionaries/.
+# Kontekst budowania: katalog glowny repo (patrz docker-compose.prod.yml).
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /repo
+
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+COPY backend/ backend/
+COPY scripts/ scripts/
+COPY data/ data/
+
+WORKDIR /repo/backend
+# uruchamiane przez compose: alembic upgrade head -> konta -> slowniki
+CMD ["sh", "-c", "alembic upgrade head && python ../scripts/provision-users.py && python ../scripts/import-dictionaries.py"]

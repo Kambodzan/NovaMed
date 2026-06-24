@@ -1,5 +1,5 @@
 # Typy i statusy dokumentów medycznych.
-# E-recepta: diagram stanów e-recepty (DRAFT→SENT_TO_P1→CONFIRMED→REALIZED, ERROR→retry).
+# E-recepta: diagram stanów e-recepty (SENT_TO_P1→CONFIRMED, ERROR→ponowna wysyłka, CONFIRMED→REVOKED).
 from enum import Enum
 
 

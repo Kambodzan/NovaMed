@@ -36,7 +36,7 @@ class MedicalDocument(Base):
 
 
 class Prescription(Base):
-    """Statusy: diagram stanów e-recepty (DRAFT/SENT_TO_P1/CONFIRMED/REALIZED/ERROR)."""
+    """Statusy: diagram stanów e-recepty (SENT_TO_P1/CONFIRMED/ERROR/REVOKED)."""
 
     __tablename__ = "prescription"
 

@@ -19,7 +19,7 @@ if (Test-Path $envFile) {
     $line = Select-String -Path $envFile -Pattern '^\s*DATABASE_URL\s*=' | Select-Object -First 1
     if ($line) { $dbUrl = ($line.Line -replace '^\s*DATABASE_URL\s*=\s*', '').Trim() }
 }
-if (-not $dbUrl) { $dbUrl = "***REMOVED***_dev" }
+if (-not $dbUrl) { $dbUrl = "postgresql+psycopg://novamed:novamed@localhost:5432/novamed_dev" }
 
 # postgresql+psycopg://user:pass@host:port/dbname
 if ($dbUrl -notmatch '://(?<user>[^:]+):(?<pass>[^@]*)@(?<host>[^:/]+):(?<port>\d+)/(?<db>[^?]+)') {
