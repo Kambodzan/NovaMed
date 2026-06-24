@@ -5,8 +5,9 @@ import { Button, Field, Tile, inputCls } from '../ui'
 import { useAuth } from '../lib/auth'
 
 // Konta testowe (Supabase, hasło wspólne) — wygodne logowanie przy testach z LAN.
-// Widoczne TYLKO na serwerze deweloperskim (import.meta.env.DEV); w buildzie
-// produkcyjnym sekcja znika. To realne konta — logują się normalnym Supabase.
+// Widoczne na serwerze dev (import.meta.env.DEV) ORAZ gdy build dostał flagę
+// VITE_DEMO_LOGINS=true (build prezentacyjny). W zwykłym buildzie produkcyjnym
+// sekcja znika. To realne konta — logują się normalnym Supabase.
 const TEST_PASSWORD = 'NovaMed.Test1'
 const TEST_ACCOUNTS: Array<[string, string]> = [
   ['janina.wisniewska@novamed.dev', 'Pacjentka'],
@@ -75,7 +76,7 @@ export function Login() {
         </p>
       </Tile>
 
-      {import.meta.env.DEV && (
+      {(import.meta.env.DEV || import.meta.env.VITE_DEMO_LOGINS === 'true') && (
         <div className="fade-up mt-5 text-center" style={{ animationDelay: '160ms' }}>
           <p className="mb-2 text-xs font-extrabold tracking-wider text-gray-500 uppercase">Konta testowe</p>
           <div className="flex flex-wrap justify-center gap-2">
