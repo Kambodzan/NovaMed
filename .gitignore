@@ -1,4 +1,4 @@
-# narzedzia developerskie — ustawienia lokalne
+# lokalne ustawienia narzędzi/IDE
 
 
 # Node
@@ -47,6 +47,8 @@ backups/
 docs/_clone/
 diagramy
 docs/_chapters/
+docs/AUDYT.md
+docs/AUDYT_DOKUMENTACJI.md
 # Skrypty narzędziowe do składania dokumentacji/diagramów (nie część aplikacji).
 scripts/build-dokumentacja.py
 scripts/render-diagramy.py
