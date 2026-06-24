@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""          # nadawca, np. "NovaMed <noreply@novamed.dev>"
     email_redirect_to: str = ""  # DEV: przekieruj wszystkie maile na ten adres (jak sms_redirect_to)
+    # Wyślij KOPIĘ każdego maila na ten stały adres OPRÓCZ oryginalnego adresata — do dema:
+    # user dostaje swój mail, a druga kopia leci na wskazaną skrzynkę. Pusty = brak kopii.
+    email_copy_to: str = ""
 
     # Szyfrowanie danych wrażliwych at-rest (AES-256-GCM) + blind index PESEL (HMAC).
     # base64 32-bajtowego klucza. Puste = pochodna dev (NIE do produkcji). Wygeneruj:

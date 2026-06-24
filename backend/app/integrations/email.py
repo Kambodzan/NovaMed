@@ -58,6 +58,20 @@ class RedirectEmailClient:
         self.inner.send(to=self.redirect_to, subject=subject, body=f"[do {to}]\n\n{body}")
 
 
+class CopyEmailClient:
+    """Wysyła do oryginalnego adresata ORAZ kopię na stały adres (podgląd dema —
+    user dostaje swój mail, a druga kopia leci na wskazaną skrzynkę)."""
+
+    def __init__(self, inner: EmailClient, copy_to: str):
+        self.inner, self.copy_to = inner, copy_to
+
+    def send(self, *, to: str, subject: str, body: str) -> None:
+        self.inner.send(to=to, subject=subject, body=body)
+        if self.copy_to and self.copy_to.strip().lower() != (to or "").strip().lower():
+            self.inner.send(to=self.copy_to, subject=f"[kopia → {to}] {subject}",
+                            body=f"(kopia wiadomości wysłanej do {to})\n\n{body}")
+
+
 _client: EmailClient | None = None
 
 
@@ -73,6 +87,9 @@ def get_email_client() -> EmailClient:
         # DEV-only redirect: wszystkie maile na jeden adres testowy (ignorowane na produkcji)
         if settings.dev_mode and settings.email_redirect_to:
             _client = RedirectEmailClient(_client, settings.email_redirect_to)
+        # Kopia każdego maila na stały adres (oprócz adresata) — niezależne od dev_mode
+        if settings.email_copy_to:
+            _client = CopyEmailClient(_client, settings.email_copy_to)
     return _client
 
 

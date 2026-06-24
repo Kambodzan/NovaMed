@@ -29,8 +29,21 @@ x-app-env: &app-env
   LAB_BASE_URL: "http://lab:8104"
   PAYMENTS_BASE_URL: "http://payments:8105"
   SMS_BASE_URL: "http://sms:8106"
-  SMS_PROVIDER: "mock"
-  EMAIL_PROVIDER: "mock"
+  # SMS: mock (kontener :8106) albo twilio. Trial Twilio dostarcza tylko na zweryfikowany
+  # numer — SMS_REDIRECT_TO + DEV_MODE=true kierują WSZYSTKIE SMS na ten jeden numer.
+  SMS_PROVIDER: "${SMS_PROVIDER:-mock}"
+  TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
+  TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN:-}"
+  TWILIO_FROM: "${TWILIO_FROM:-}"
+  SMS_REDIRECT_TO: "${SMS_REDIRECT_TO:-}"
+  # E-mail: mock albo smtp. EMAIL_COPY_TO = kopia każdego maila na stały adres (oprócz usera).
+  EMAIL_PROVIDER: "${EMAIL_PROVIDER:-mock}"
+  SMTP_HOST: "${SMTP_HOST:-}"
+  SMTP_PORT: "${SMTP_PORT:-587}"
+  SMTP_USER: "${SMTP_USER:-}"
+  SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+  SMTP_FROM: "${SMTP_FROM:-}"
+  EMAIL_COPY_TO: "${EMAIL_COPY_TO:-}"
   PUSH_PROVIDER: "expo"
 
 x-mock: &mock
