@@ -109,7 +109,8 @@ def svc(clinic_id: str, doctor_id: str, name_substr: str) -> str | None:
     return None
 
 
-KARD = svc(piastow, kow_id, "Konsultacja kardiologiczna")       # Kowalczyk, Piastów
+KARD = svc(piastow, kow_id, "Konsultacja kardiologiczna")       # Kowalczyk, Piastów (NFZ, skierowanie)
+KARD_PRIV = svc(piastow, kow_id, "Konsultacja kardiologiczna (prywatnie)")  # bez skierowania, teleporada
 INTERN_P = svc(piastow, ziel_id, "Konsultacja internistyczna")  # Zieliński, Piastów
 INTERN_U = svc(ursus, ziel_id, "Konsultacja internistyczna")    # Zieliński, Ursus
 if not all((KARD, INTERN_P, INTERN_U)):
@@ -121,7 +122,7 @@ to_backdate: list[tuple[str, int]] = []
 _slot_n = [0]
 
 
-def make_slot(clinic_id: str, doctor_id: str, dt: datetime, **extra) -> str:
+def make_slot(clinic_id: str, doctor_id: str, dt: datetime, **extra) -> str | None:
     r = api("POST", f"/clinics/{clinic_id}/slots", reg,
             json={"doctor_id": doctor_id, "datetimes": [dt.isoformat()], **extra})
     if r.status_code == 201:
@@ -130,37 +131,51 @@ def make_slot(clinic_id: str, doctor_id: str, dt: datetime, **extra) -> str:
         for s in api("GET", "/slots", reg, params={"doctor_id": doctor_id}).json():
             if s["appointment_datetime"][:16] == dt.isoformat()[:16]:
                 return s["appointment_id"]
-    r.raise_for_status()
-    return r.json()[0]["appointment_id"]
+    print(f"  ! slot {dt.isoformat()[:16]}: {r.status_code} {r.text[:100]}")
+    return None
+
+
+def book_for(aid: str | None, patient_id: str, service: bool, label: str) -> bool:
+    """Rezerwacja przez recepcję; warn-and-continue zamiast wysadzać cały seed."""
+    if aid is None:
+        return False
+    r = api("POST", f"/appointments/{aid}/book-for", reg,
+            json={"patient_id": patient_id, **({"external_referral": True} if service else {})})
+    if r.status_code != 200:
+        print(f"  ! {label}: {r.status_code} {r.text[:120]}")
+        return False
+    return True
 
 
 def completed_visit(clinic_id: str, doctor_tok: str, doctor_id: str, patient_id: str,
-                    days_ago: int, note: str, service_id: str | None = None) -> str:
+                    days_ago: int, note: str, service_id: str | None = None) -> str | None:
     """Pełne flow zakończonej wizyty (dziś), z datą cofniętą na końcu."""
     dt = next_grid_time(_slot_n[0] * 15)
     _slot_n[0] += 1
     aid = make_slot(clinic_id, doctor_id, dt, **({"service_id": service_id} if service_id else {}))
-    book = {"patient_id": patient_id, **({"external_referral": True} if service_id else {})}
-    api("POST", f"/appointments/{aid}/book-for", reg, json=book).raise_for_status()
-    api("POST", f"/appointments/{aid}/status", doctor_tok, json={"new_status": "IN_PROGRESS"}).raise_for_status()
-    api("PUT", f"/appointments/{aid}/note", doctor_tok, json={"content": note}).raise_for_status()
+    if not book_for(aid, patient_id, bool(service_id), f"wizyta zakonczona {dt.isoformat()[:16]}"):
+        return None
+    api("POST", f"/appointments/{aid}/status", doctor_tok, json={"new_status": "IN_PROGRESS"})
+    api("PUT", f"/appointments/{aid}/note", doctor_tok, json={"content": note})
     to_backdate.append((aid, days_ago))
     return aid  # dokumenty wystawiamy po; COMPLETED na końcu (autopodpis noty)
 
 
-def finish(aid: str, doctor_tok: str) -> None:
-    api("POST", f"/appointments/{aid}/status", doctor_tok, json={"new_status": "COMPLETED"}).raise_for_status()
+def finish(aid: str | None, doctor_tok: str) -> None:
+    if aid is None:
+        return
+    api("POST", f"/appointments/{aid}/status", doctor_tok, json={"new_status": "COMPLETED"})
 
 
 def upcoming_visit(clinic_id: str, doctor_id: str, patient_id: str, days_ahead: int,
-                   hour: int, online: bool = False, service_id: str | None = None) -> str:
+                   hour: int, online: bool = False, service_id: str | None = None) -> str | None:
     dt = (datetime.now() + timedelta(days=days_ahead)).replace(hour=hour, minute=0, second=0, microsecond=0)
     extra = {"appointment_type": "ONLINE"} if online else {}
     if service_id:
         extra["service_id"] = service_id
     aid = make_slot(clinic_id, doctor_id, dt, **extra)
-    book = {"patient_id": patient_id, **({"external_referral": True} if service_id else {})}
-    api("POST", f"/appointments/{aid}/book-for", reg, json=book).raise_for_status()
+    if not book_for(aid, patient_id, bool(service_id), f"wizyta nadchodzaca {dt.isoformat()[:16]}"):
+        return None
     return aid
 
 
@@ -190,7 +205,7 @@ v1 = completed_visit(piastow, kow, kow_id, jan_id, days_ago=56, note=(
     "Rozpoznanie: I10 Nadciśnienie tętnicze pierwotne.\n"
     "Zalecenia: Ramipril 5 mg rano, kontrola RR w domu, dieta niskosodowa."))
 issue(f"/patients/{jan_id}/prescriptions", kow, {"appointment_id": v1, "icd10": "I10", "drugs": "Ramipril 5 mg, 1 tabl. rano (30 tabl.)"})
-issue(f"/patients/{jan_id}/referrals", kow, {"appointment_id": v1, "referral_type": "SPECIALIST", "icd10": "I10", "notes": "Konsultacja kardiologiczna + ECHO serca"})
+issue(f"/patients/{jan_id}/referrals", kow, {"appointment_id": v1, "referral_type": "SPECIALIST", "specialization": "Kardiolog", "icd10": "I10", "notes": "Konsultacja kardiologiczna + ECHO serca"})
 finish(v1, kow)
 
 v2 = completed_visit(piastow, kow, kow_id, jan_id, days_ago=21, note=(
@@ -216,9 +231,10 @@ if nursing_ref:
         api("POST", f"/procedures/{proc['procedure_id']}/complete", lis,
             json={"notes": "Pomiar RR 134/84, iniekcja wykonana bez powikłań."})
 
-# nadchodzące wizyty Janiny (stacjonarna + teleporada) — usługowe, więc da się je przełożyć
-upcoming_visit(piastow, kow_id, jan_id, days_ahead=6, hour=9, service_id=KARD)
-upcoming_visit(piastow, kow_id, jan_id, days_ahead=20, hour=11, online=True, service_id=KARD)
+# nadchodzące wizyty Janiny (stacjonarna + teleporada) — prywatna kardiologia:
+# bez skierowania (NFZ wymaga e-skierowania z P1) i pozwala na teleporadę.
+upcoming_visit(piastow, kow_id, jan_id, days_ahead=6, hour=10, service_id=KARD_PRIV)
+upcoming_visit(piastow, kow_id, jan_id, days_ahead=20, hour=12, online=True, service_id=KARD_PRIV)
 
 # --- e-skierowania zewnętrzne w P1 (od „lekarza rodzinnego") — do rezerwacji NFZ
 # u specjalisty kodem. Mock P1 trzyma je w pamięci; po jego
