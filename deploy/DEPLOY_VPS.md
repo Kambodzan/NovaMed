@@ -122,6 +122,23 @@ Wejdź na **`https://twoja-domena`**. Konta startowe (utworzone przez `init` w S
 
 ---
 
+## 6a. (Opcjonalnie) Dane demo do klikania
+
+Świeże wdrożenie ma tylko konta, 3 placówki, personel i słowniki ICD-10/leki — **bez**
+terminów, wizyt, dokumentów (to obraz produkcyjny). Aby wypełnić bazę realistyczną treścią
+do demonstracji (katalog usług + wolne terminy, zakończone wizyty z notami i dokumentami,
+opinie, nadchodzące wizyty, zabieg pielęgniarski) uruchom RAZ, gdy stack już działa:
+```bash
+cd ~/novamed/deploy
+docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+```
+Usługa `seed` odpala `seed-services.py` → `seed-demo-data.py` przez API (logowanie realnym
+Supabase, więc działa w produkcji; konta testowe, hasło `NovaMed.Test1`). ⚠️ Uruchamiaj
+**raz** — ponowne odpalenie dołoży kolejne wizyty (duplikaty). Pełny reset: `docker compose
+-f docker-compose.prod.yml down -v`, potem od nowa `up` + `seed`.
+
+---
+
 ## 7. Aktualizacja / redeploy
 ```bash
 cd ~/novamed && git pull        # (opcja B: wgraj nowy tarball)

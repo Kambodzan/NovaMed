@@ -64,6 +64,25 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # OPCJONALNIE: wypelnienie bazy danymi demo (katalog uslug + tresc do klikania:
+  # wizyty zakonczone z notami/dokumentami, opinie, nadchodzace wizyty, zabieg).
+  # NIE startuje przy zwyklym 'up' (profil seed). Uruchom RAZ, gdy stack juz dziala:
+  #   docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+  seed:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.init
+    profiles: ["seed"]
+    environment:
+      <<: *app-env
+      SEED_API_BASE: "http://backend:8000"
+      SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}"
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: ["sh", "-c", "python ../scripts/seed-services.py && python ../scripts/seed-demo-data.py"]
+    restart: "no"
+
   backend:
     build:
       context: ../backend

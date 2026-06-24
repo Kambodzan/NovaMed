@@ -12,6 +12,7 @@
 #
 # Wymaga działającego backendu (:8000) i mocków (eWUŚ:8103, P1:8101, ZUS:8102).
 # Użycie:  cd backend; .venv\Scripts\python.exe ..\scripts\seed-demo-data.py
+import os
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -23,13 +24,25 @@ import httpx  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 
-API = "https://127.0.0.1:8000"
 ROOT = Path(__file__).resolve().parents[1]
-ANON = next(
-    line.split("=", 1)[1].strip()
-    for line in (ROOT / "frontend" / ".env.development").read_text(encoding="utf-8").splitlines()
-    if line.startswith("VITE_SUPABASE_ANON_KEY=")
-)
+# Adres backendu: lokalnie localhost; na wdrozeniu (kontener) podaj SEED_API_BASE (np. http://backend:8000).
+API = os.environ.get("SEED_API_BASE", "https://127.0.0.1:8000")
+
+
+def _anon_key() -> str:
+    """Anon key Supabase: z env SUPABASE_ANON_KEY (wdrozenie) albo z frontend/.env.development (lokalnie)."""
+    v = os.environ.get("SUPABASE_ANON_KEY")
+    if v:
+        return v
+    f = ROOT / "frontend" / ".env.development"
+    if f.exists():
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.startswith("VITE_SUPABASE_ANON_KEY="):
+                return line.split("=", 1)[1].strip()
+    raise SystemExit("Brak anon key — ustaw SUPABASE_ANON_KEY (env) lub VITE_SUPABASE_ANON_KEY w frontend/.env.development")
+
+
+ANON = _anon_key()
 PASSWORD = "NovaMed.Test1"
 c = httpx.Client(verify=False, timeout=30)
 
