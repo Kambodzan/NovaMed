@@ -13,7 +13,6 @@ mobilna pacjenta + integracje z systemami krajowymi (mockowane).
   ale KAŻDE odstępstwo zapisujemy w `docs/md` (potem trafi do finalnej dokumentacji).
 - Diagramy trzymamy **jako kod** w `diagramy` (DBML dla ERD, PlantUML dla UML).
   Oryginalne obrazki z docx: `diagramy*.{png,jpg,jpeg}`.
-- Plan i postęp: `docs/PROJEKT.md`.
 
 ## Stack (ustalony z autorem)
 
@@ -81,10 +80,10 @@ kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementa
   (uszkodzony WSL); `docker-compose.yml` to wariant wdrożeniowy. URL: `backend/.env` (`DATABASE_URL`).
 - **Backend** (z `backend/`, venv w `backend/.venv`):
   - testy: `.\.venv\Scripts\python.exe -m pytest -q`
-  - pokrycie (NFR M10, próg ≥90%): `.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing` (konfiguracja w `backend/.coveragerc`)
+  - pokrycie (NFR, próg ≥90%): `.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing` (konfiguracja w `backend/.coveragerc`)
   - serwer: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
   - migracje: `.\.venv\Scripts\python.exe -m alembic upgrade head` (nowa: `... revision --autogenerate -m "..."`)
-  - backup/restore (NFR M10): `powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1`
+  - backup/restore (NFR): `powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1`
     (pg_dump `-Fc` + retencja → `backups/`); restore do bazy testowej: `... scripts\restore-db.ps1`
     (nadpisanie produkcji: `-TargetDb novamed_dev -Force`). Szczegóły/HA: `docs/BACKUP_HA.md`
 - **Mock-serwisy** (venv backendu; z katalogu danego mocka, `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port <PORT>`):

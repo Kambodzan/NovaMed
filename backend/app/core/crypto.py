@@ -1,4 +1,4 @@
-# Szyfrowanie danych wrażliwych „at rest" (NFR M10): treść dokumentacji medycznej,
+# Szyfrowanie danych wrażliwych „at rest" (NFR): treść dokumentacji medycznej,
 # noty lekarskie, wyniki, dane kliniczne i PESEL są szyfrowane PRZED zapisem do bazy
 # i odszyfrowywane przy odczycie — transparentnie, przez typ kolumny SQLAlchemy.
 #

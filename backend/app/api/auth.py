@@ -100,7 +100,7 @@ def register_profile(
         require_verified_phone(db, body.phone_number, "REGISTRATION")
 
     # PRZEJĘCIE konta gościa: pacjent założony bez konta — rezerwacja publiczna
-    # (M8.6) albo przez rejestrację telefonicznie/w okienku (UC-PP1). Dopasowanie
+    # albo przez rejestrację telefonicznie/w okienku (UC-PP1). Dopasowanie
     # najpierw po e-mailu, a gdy się nie zgadza (gość z recepcji bywa bez maila,
     # ma placeholder) — po PESEL-u, który rejestracja zawsze zbiera. Dzięki temu
     # „skoro już u nas jesteś, wpinamy Cię do istniejącej kartoteki": historia

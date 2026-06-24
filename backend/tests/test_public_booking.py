@@ -1,4 +1,4 @@
-# M8.6: publiczne umawianie bez konta + przejęcie konta gościa przy rejestracji.
+# Publiczne umawianie bez konta + przejęcie konta gościa przy rejestracji.
 from datetime import datetime, timedelta
 
 import pytest

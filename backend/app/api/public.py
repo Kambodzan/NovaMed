@@ -1,4 +1,4 @@
-# Publiczne umawianie (M8.6): strona rezerwacji wystawiana przez klinikę
+# Publiczne umawianie: strona rezerwacji wystawiana przez klinikę
 # BEZ logowania. Gość podaje dane → powstaje nieaktywny app_user + patient
 # (jak podopieczny), wizyta CONFIRMED, potwierdzenie SMS-em. Po późniejszej
 # rejestracji w Supabase tym samym e-mailem konto jest PRZEJMOWANE

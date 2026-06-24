@@ -1,4 +1,4 @@
-# Topologia HIGH-AVAILABILITY NovaMed (NFR M10). Ilustruje docelowe wdrozenie:
+# Topologia HIGH-AVAILABILITY NovaMed (NFR). Ilustruje docelowe wdrozenie:
 #   nginx (load-balancer) -> 2x backend (repliki, bezstanowe) -> Postgres primary
 #                                                              -> Postgres hot-standby (streaming replication, failover)
 # Bezstanowy backend skaluje sie poziomo (`--scale api=N`); LB rozklada ruch i wypina

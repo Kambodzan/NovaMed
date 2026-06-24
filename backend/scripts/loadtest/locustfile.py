@@ -1,4 +1,4 @@
-# Test wydajnościowy (NFR M10) — Locust. Scenariusz pacjenta read-heavy, ważony realną
+# Test wydajnościowy (NFR) — Locust. Scenariusz pacjenta read-heavy, ważony realną
 # częstością (dzwonek pollowany najczęściej, przeglądanie slotów intensywne).
 # UWAGA: locust działa pod gevent (monkey-patch socketów), który nie znosi psycopg —
 # dlatego NIE importujemy tu app/DB. Tokeny i id wczytujemy z fixtures.json

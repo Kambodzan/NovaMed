@@ -1,4 +1,4 @@
-// M8.6: publiczne umawianie BEZ konta — strona wystawiana przez klinikę.
+// Publiczne umawianie BEZ konta — strona wystawiana przez klinikę.
 // Gość wybiera termin (NFZ lub prywatny płatny), podaje dane, potwierdza telefon
 // kodem SMS → rezerwacja; wizytę płatną opłaca od razu online (mock bramki, bez
 // zakładania konta). Konto można założyć później tym samym e-mailem (przejęcie historii).

@@ -1,4 +1,4 @@
-# Konfiguracja pomiaru pokrycia (NFR M10). Liczymy tylko kod aplikacji (app/);
+# Konfiguracja pomiaru pokrycia (NFR). Liczymy tylko kod aplikacji (app/);
 # z licznika wyłączone: testy, migracje Alembica i kod nieosiągalny w środowisku
 # deweloperskim (gałąź bez Ariala — fallback fontu PDF, blok __main__).
 [run]

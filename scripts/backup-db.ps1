@@ -1,4 +1,4 @@
-# Kopia zapasowa bazy NovaMed (NFR M10 - backup).
+# Kopia zapasowa bazy NovaMed (NFR — backup).
 # pg_dump w formacie custom (-Fc): skompresowany, pozwala na selektywny restore.
 # Nazwa ze znacznikiem czasu; retencja - trzyma ostatnie N kopii.
 #

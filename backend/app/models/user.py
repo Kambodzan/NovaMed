@@ -34,7 +34,7 @@ class AppUser(Base):
     email: Mapped[str] = mapped_column(String(100))
     phone_number: Mapped[str | None] = mapped_column(String(20))
     active_account: Mapped[bool] = mapped_column(Boolean, default=False)
-    # preferencja kanału SMS (in-app zawsze; push dojdzie w M9)
+    # preferencja kanału SMS (in-app zawsze; push dojdzie w aplikacji mobilnej)
     notify_sms: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

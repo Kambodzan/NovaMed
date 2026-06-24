@@ -722,7 +722,7 @@ def reception_register_patient(
     db: Session = Depends(get_db),
 ):
     """Rejestracja zakłada konto pacjenta przy zgłoszeniu telefonicznym/osobistym
-    (gdy dzwoniący nie ma jeszcze konta). Konto nieaktywne (jak gość z M8.6) —
+    (gdy dzwoniący nie ma jeszcze konta). Konto nieaktywne (jak gość bez konta) —
     pacjent przejmuje je przy samodzielnej rejestracji tym samym e-mailem.
     Dedup po PESEL: istniejący pacjent jest zwracany (existing=True), bez dubla."""
     existing = db.scalar(select(Patient).where(Patient.pesel_bidx == blind_index(body.pesel)))

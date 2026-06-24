@@ -39,15 +39,3 @@ external/
 
 # kopie zapasowe bazy (backup-db.ps1)
 backups/
-
-# === Pomocnicze artefakty pracy nad dokumentacją/audytem (nie wpływają na kod) ===
-# Pipeline generowania i audytu docx + rendery diagramów + dane pośrednie.
-docs/_clone/
-diagramy
-docs/_chapters/
-docs/AUDYT.md
-docs/AUDYT_DOKUMENTACJI.md
-# Skrypty narzędziowe do składania dokumentacji/diagramów (nie część aplikacji).
-scripts/build-dokumentacja.py
-scripts/render-diagramy.py
-scripts/split-erd.py

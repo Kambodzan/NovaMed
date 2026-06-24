@@ -1,4 +1,4 @@
-# Telemedycyna (UC-P5/UC-L3, M7): sygnalizacja WebRTC + czat + załączniki.
+# Telemedycyna (UC-P5/UC-L3): sygnalizacja WebRTC + czat + załączniki.
 #
 # Architektura: wideo idzie P2P (WebRTC, STUN), backend tylko sygnalizuje
 # (offer/answer/ICE) i przekazuje czat przez WebSocket pokoju wizyty.

@@ -30,7 +30,7 @@ def lab_sync(
     lab: LabClient = Depends(get_lab_client),
 ):
     """UC-I2: pobranie gotowych wyników z laboratorium do dokumentacji.
-    Docelowo wywoływane harmonogramem (konfiguracja w Panelu Admina, M8);
+    Docelowo wywoływane harmonogramem (konfiguracja w Panelu Admina);
     teraz dostępne też ręcznie. Dedup po znaczniku źródła w file_url."""
     try:
         results = lab.fetch_ready_results()

@@ -1,4 +1,4 @@
-# Odtworzenie bazy NovaMed z kopii (NFR M10 - restore / runbook DR).
+# Odtworzenie bazy NovaMed z kopii (NFR — restore / runbook DR).
 # Domyslnie odtwarza do OSOBNEJ bazy testowej (bezpieczne sprawdzenie kopii).
 # Nadpisanie bazy produkcyjnej wymaga jawnego -Force.
 #
