@@ -1253,9 +1253,14 @@ def my_appointments(
         .where(Appointment.patient_id == patient_id)
         .order_by(Appointment.appointment_datetime.desc())
     ).all()
-    reviewed_ids = set(db.scalars(select(Review.appointment_id).where(
-        Review.appointment_id.in_([a.appointment_id for a in rows] or [0]),
-    )))
+    # Tylko gdy są wizyty: placeholder `or [0]` wstawiał int 0 do porównania z
+    # kolumną UUID — na Postgresie 500 (operator does not exist: uuid = integer),
+    # choć na sqlite (typowanie dynamiczne) przechodziło. Pusty IN w ogóle pomijamy.
+    reviewed_ids: set = set()
+    if rows:
+        reviewed_ids = set(db.scalars(select(Review.appointment_id).where(
+            Review.appointment_id.in_([a.appointment_id for a in rows]),
+        )))
     out = []
     for a in rows:
         item = appointment_out(db, a)
