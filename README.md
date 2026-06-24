@@ -1,111 +1,152 @@
-# NovaMed — Uniwersalny Portal Medyczny (praca inżynierska, PJATK, s27990)
+<div align="center">
 
-Platforma SaaS dla małych/średnich placówek medycznych: rezerwacje wizyt, centralna
-dokumentacja medyczna (e-recepty, e-skierowania, e-zwolnienia, wyniki badań),
-telemedycyna, 5 portali (Pacjent, Lekarz, Pielęgniarka, Poradnia, Admin) + aplikacja
-mobilna pacjenta + integracje z systemami krajowymi (mockowane).
+# NovaMed
 
-## Źródło prawdy
+**Uniwersalny portal medyczny dla przychodni** — rezerwacje, telemedycyna,
+e‑dokumentacja i integracje z systemami krajowymi, spięte w jeden system
+z pięcioma portalami webowymi i aplikacją mobilną pacjenta.
 
-- **Zakres MVP** = całość `DokumentacjaWord_PracaInzynierska_s27990_wersja_2 (1).docx`
-  (tekst wyciągnięty do `docs/dokumentacja-docx.txt`). Wszystko z docx musi być.
-- Docx jest **poglądowy** — możemy robić inaczej, jeśli to logicznie/funkcjonalnie lepsze,
-  ale KAŻDE odstępstwo zapisujemy w `docs/md` (potem trafi do finalnej dokumentacji).
-- Diagramy trzymamy **jako kod** w `diagramy` (DBML dla ERD, PlantUML dla UML).
-  Oryginalne obrazki z docx: `diagramy*.{png,jpg,jpeg}`.
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
-## Stack (ustalony z autorem)
+</div>
 
-- **Backend**: Python, FastAPI + SQLAlchemy 2.x + Alembic, PostgreSQL
-- **Auth**: **Supabase Auth** (cloud) — rejestracja/logowanie/reset/2FA po stronie Supabase;
-  backend weryfikuje JWT (Bearer) i mapuje `sub` → `app_user.supabase_uid`; role/RBAC nasze
-  (tabela `role`). Sekrety w `backend/.env`: `SUPABASE_URL`, `SUPABASE_JWT_SECRET`,
-  `SUPABASE_SERVICE_ROLE_KEY` (tylko dla `scripts/provision-users.py`)
-- **Dane wrażliwe at-rest**: szyfrowane **AES-256-GCM** kolumnowo (`app/core/crypto.py`,
-  typ `Encrypted`) — treść dokumentów/not, wyniki, dane kliniczne, PESEL; PESEL wyszukiwany
-  przez blind index `pesel_bidx`=HMAC. Klucze: `DATA_ENCRYPTION_KEY`/`DATA_INDEX_KEY`
-  (prod wymaga; dev = pochodna z JWT-secret).
-- **Frontend web**: React (Vite + TypeScript) — 5 portali w jednej aplikacji, routing per rola
-- **Mobile**: React Native (Expo) — aplikacja pacjenta (push, offline cache)
-- **Integracje zewnętrzne** (P1, ZUS e-ZLA, eWUŚ, laboratoria, płatności): **własne
-  mock-serwisy** — osobne małe serwisy FastAPI z realistycznym API, w `mocks/`
-- **Infra dev**: Docker Compose (Postgres + serwisy)
+> **Praca inżynierska** — Polsko‑Japońska Akademia Technik Komputerowych (PJATK).
+> Autor: **Kacper Pomykała** (s27990).
 
-## Reguła integracji: mock-first, ale production-swappable
+---
 
-Każda integracja zewnętrzna przechodzi przez **port/adapter**: interfejs w warstwie domeny
-backendu, implementacja jako adapter HTTP wskazujący na mock-serwis (URL z env).
-Mock implementuje **realistyczny kontrakt** (tam gdzie się da — wzorowany na publicznej
-dokumentacji P1/eWUŚ/ZUS/operatorów płatności). Podmiana mock→real = nowy adapter +
-zmiana konfiguracji, **zero zmian w logice domenowej**. Logika biznesowa nigdy nie
-importuje niczego specyficznego dla mocka.
+## O projekcie
 
-## Planowana struktura repo
+NovaMed to kompletny system zarządzania placówką medyczną w modelu SaaS dla małych
+i średnich przychodni — od umówienia wizyty, przez telewizytę i prowadzenie
+dokumentacji, po rozliczenia i integracje z systemami krajowymi. Jedna baza kodu
+obsługuje **pięć portali webowych** (Pacjent, Lekarz, Pielęgniarka, Poradnia/Rejestracja,
+Administrator) oraz **aplikację mobilną** pacjenta, a logika domenowa pozostaje czysta
+dzięki architekturze **port/adapter** — integracje zewnętrzne (P1, ZUS, eWUŚ, lab,
+płatności, SMS) działają jako mock‑serwisy i są wymienne na produkcyjne bez zmian w kodzie.
+
+## Funkcje
+
+**Pacjent**
+- Rezerwacja wizyt NFZ i prywatnych — także **bez konta** (weryfikacja numeru kodem SMS)
+- **Telewizyty** (wideo w przeglądarce, WebRTC) — również dla opiekuna w imieniu podopiecznego
+- E‑recepty, e‑skierowania, e‑zwolnienia i wyniki badań w jednym miejscu; udostępnianie dokumentacji kodem
+- **Konta rodzinne** (opiekun + podopieczni), powiadomienia in‑app / SMS / e‑mail / push
+- Aplikacja **mobilna** (Expo) z trybem offline
+
+**Personel**
+- **Lekarz** — gabinet, ustrukturyzowana nota (SOAP), wystawianie e‑recept/e‑skierowań/e‑ZLA, szablony, dostawka (walk‑in)
+- **Pielęgniarka** — zabiegi (także seryjne), kolejka skierowań
+- **Rejestracja / Poradnia** — grafik placówki i całej sieci, meldowanie pacjentów, umawianie w imieniu, raporty
+- **Administrator** — konta i role, monitoring, **dziennik RODO**, ustawienia placówek
+
+**Integracje krajowe** *(mock‑first, production‑swappable)*
+- e‑recepta / e‑skierowanie (**P1**) · e‑zwolnienie (**ZUS e‑ZLA**) · weryfikacja ubezpieczenia (**eWUŚ**) · laboratorium · płatności · SMS
+
+## Bezpieczeństwo i zgodność
+
+- **Szyfrowanie danych wrażliwych at‑rest** — AES‑256‑GCM kolumnowo (dokumenty, noty, wyniki, dane kliniczne, PESEL), z **blind index** (HMAC) do wyszukiwania po PESEL
+- **RBAC** per rola + **izolacja multi‑tenant** (personel widzi tylko swoje placówki; dostęp międzyplacówkowy wyłącznie za zgodą pacjenta)
+- **Dziennik RODO** (kto/kiedy/co) + prawo do bycia zapomnianym (anonimizacja)
+- Uwierzytelnianie przez **Supabase**; w produkcji wyłącznie **ES256/JWKS**, twarde guardy startowe, CORS zawężony, wymuszony **HTTPS**
+
+## Architektura
 
 ```
-backend/     FastAPI — API główne (moduły domenowe)
-frontend/    React — portale webowe
-mobile/      Expo — aplikacja pacjenta
-mocks/       mock-serwisy: p1/, zus_ezla/, ewus/, lab/, payments/
-mockupy-ui/  klikalne makiety całego UI (Vite+React+Tailwind, dane statyczne)
-             — referencja wyglądu/UX dla frontend/; `npm run dev` → localhost:5173
-docs/        dokumentacja, plan, odstępstwa, diagramy
+   Pacjent (mobile)  ┐
+                     │            ┌──────────────┐   HTTPS / auto-TLS
+   5 portali web  ───┼──────────▶ │    Caddy     │
+                     ┘            │ reverse proxy│
+                                  └──────┬───────┘
+                       statyczny front ──┤── /api ──┐
+                          (nginx, SPA)              ▼
+                                            ┌──────────────┐     ┌───────────────┐
+                       Supabase Auth ─JWT─▶ │   Backend    │ ──▶ │  PostgreSQL   │
+                       (ES256/JWKS)         │  (FastAPI)   │     │ (AES-256 @rest)│
+                                            └──────┬───────┘     └───────────────┘
+                              port / adapter ──────┤
+                                                   ▼
+              mocki integracji:  P1 · ZUS e-ZLA · eWUŚ · lab · płatności · SMS
 ```
 
-## Design
+Każda integracja przechodzi przez **port/adapter** — interfejs w warstwie domeny + adapter
+HTTP wskazujący na mock (URL z konfiguracji). Podmiana mock→real = nowy adapter + zmiana
+env, **zero zmian w logice biznesowej**. Backend jest **bezstanowy** (sesja w JWT) i skaluje
+się poziomo za load‑balancerem.
 
-**`system designu` obowiązuje przy KAŻDYM ekranie** (web i mobile). Kierunek v3 (zatwierdzony
-przez autora): hybryda „Soft Clinical × Bento" — tło gray-50, białe kafle 20px z miękkim cieniem,
-pigułkowe przyciski, Plus Jakarta Sans, primary teal #0F766E (teal-700, WCAG AA; jeden, bez akcentów per rola),
-siatka bento na dashboardach (sama składa się na mobile), soft chipy statusów.
-**Zasada nadrzędna: restraint** — max 1 akcja primary + 1 secondary na kafel, dashboard 4–5
-kafli, listy skrócone + „Wszystkie". WCAG AA, microcopy po polsku. Implementacja referencyjna:
-`mockupy-ui/src/{index.css,ui.tsx}`. Nie wymyślamy stylów per ekran — tylko tokeny ze wspólnym systemem designu.
+## Stack
 
-## Komendy dev
+| Warstwa | Technologie |
+|---|---|
+| **Backend** | Python 3.12 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 16 |
+| **Frontend** | React · Vite · TypeScript · Tailwind |
+| **Mobile** | React Native (Expo) — push, offline |
+| **Auth** | Supabase Auth (JWT, ES256/JWKS w produkcji) |
+| **Integracje** | 6 mock‑serwisów FastAPI (P1, ZUS, eWUŚ, lab, płatności, SMS) |
+| **Infra** | Docker Compose · Caddy (automatyczny TLS) · nginx |
 
-- **Całe środowisko jedną komendą**: `powershell -ExecutionPolicy Bypass -File scripts\start-dev.ps1`
-  (5 mocków + backend + frontend + seed; idempotentny). Stop: `scripts\stop-dev.ps1`.
-- **Dostęp z sieci lokalnej**: front i API słuchają na 0.0.0.0; frontend sam celuje w API
-  na hoście/protokole z paska adresu (puste `VITE_API_URL`), CORS wpuszcza adresy prywatne.
-  Wymaga reguły firewalla (raz, jako admin):
-  `New-NetFirewallRule -DisplayName 'NovaMed dev' -Direction Inbound -Protocol TCP -LocalPort 5174,8000 -Action Allow`
-- **HTTPS dev** (wymagane przez kamerę/mikrofon przy wejściu z LAN): certy generuje
-  `backend\.venv\Scripts\python.exe scripts\make-cert.py` (→ `certs/`, gitignore; SAN z IP
-  maszyny — po zmianie sieci wygeneruj ponownie). start-dev podnosi wtedy front i API po
-  HTTPS. Na każdym urządzeniu testowym trzeba RAZ zaakceptować ostrzeżenie przeglądarki
-  dla **obu** originów: `https://HOST:5174` i `https://HOST:8000` (np. otwierając /health).
+## Szybki start (dev)
 
-- **Baza**: lokalna usługa PostgreSQL 16 (Windows, port 5432) — Docker na tej maszynie nie działa
-  (uszkodzony WSL); `docker-compose.yml` to wariant wdrożeniowy. URL: `backend/.env` (`DATABASE_URL`).
-- **Backend** (z `backend/`, venv w `backend/.venv`):
-  - testy: `.\.venv\Scripts\python.exe -m pytest -q`
-  - pokrycie (NFR, próg ≥90%): `.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing` (konfiguracja w `backend/.coveragerc`)
-  - serwer: `.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`
-  - migracje: `.\.venv\Scripts\python.exe -m alembic upgrade head` (nowa: `... revision --autogenerate -m "..."`)
-  - backup/restore (NFR): `powershell -ExecutionPolicy Bypass -File scripts\backup-db.ps1`
-    (pg_dump `-Fc` + retencja → `backups/`); restore do bazy testowej: `... scripts\restore-db.ps1`
-    (nadpisanie produkcji: `-TargetDb novamed_dev -Force`). Szczegóły/HA: `docs/BACKUP_HA.md`
-- **Mock-serwisy** (venv backendu; z katalogu danego mocka, `..\..\backend\.venv\Scripts\python.exe -m uvicorn main:app --port <PORT>`):
-  - P1 → 8101, ZUS e-ZLA → 8102, eWUŚ → 8103, laboratorium → 8104, płatności → 8105,
-    SMS → 8106 (podgląd wysłanych: GET /api/v1/outbox)
-- **Frontend** (z `frontend/`): `npm run dev` → localhost:5174 (oczekuje API na :8000).
-  Auth: tryb dev (`/auth/dev-token`, hasła niesprawdzane) dopóki `VITE_SUPABASE_URL`
-  puste w `frontend/.env.development`; po wpisaniu kluczy Supabase przełącza się sam.
-- **Konta testowe**: `backend> .\.venv\Scripts\python.exe ..\scripts\provision-users.py`
-  (idempotentny; admin/3 lekarzy/pielęgniarka/rejestracja/2 pacjentów, np.
-  `janina.wisniewska@novamed.dev`). Bez kluczy Supabase: tryb dev-token (hasło dowolne).
-  Z kluczami (`SUPABASE_URL`+`SUPABASE_SERVICE_ROLE_KEY` w backend/.env): konta
-  zakładane w Supabase (hasło `NovaMed.Test1`), ponowny bieg podmienia uid-y dev→Supabase.
-  Demo-seed usunięty — wizyty/terminy/dokumenty tworzy się normalnie przez aplikację
-  (rejestracja dodaje terminy w Panelu Poradni).
-- **Słowniki ICD-10/leków**: `backend> .\.venv\Scripts\python.exe ..\scripts\import-dictionaries.py`
-  (starter z `data/dictionaries/`; pełne oficjalne pliki: `--icd10 plik.csv`, `--rpl plik.csv` z RPL)
-- **Makiety UI** (z `mockupy-ui/`): `npm run dev` → localhost:5173
+Całe środowisko jedną komendą (Windows, PowerShell):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-dev.ps1
+```
+Podnosi backend (`:8000`), frontend (`:5174`) i 6 mocków (`:8101–8106`) + konta i słowniki.
+Pełny przewodnik deweloperski (krok po kroku, testy, migracje, LAN/HTTPS) → **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)**.
 
-## Konwencje
+**Konta testowe** (hasło `NovaMed.Test1`):
 
-- Dokumentacja i komentarze domenowe po polsku; kod (nazwy, identyfikatory) po angielsku.
-- Nazwy tabel/kolumn DB zgodne z ERD (`schemat danych`); zmiany schematu
-  tylko przez migracje Alembic + wpis wmd jeśli odbiega od oryginalnego ERD.
-- Statusy domenowe (wizyta, e-recepta, badanie lab) — zgodne z diagramami stanów.
+| Rola | E‑mail |
+|---|---|
+| Pacjent | `janina.wisniewska@novamed.dev` |
+| Lekarz | `a.kowalczyk@novamed.dev` |
+| Pielęgniarka | `k.lis@novamed.dev` |
+| Rejestracja | `rejestracja@novamed.dev` |
+| Administrator | `admin@novamed.dev` |
+
+## Wdrożenie (jeden VPS, publiczny URL)
+
+Turnkey przez Docker Compose — backend + mocki + Postgres + frontend za Caddy z automatycznym TLS:
+```bash
+cp deploy/.env.prod.example deploy/.env      # uzupełnij domenę + Supabase + klucze
+docker compose -f deploy/docker-compose.prod.yml up -d --build
+```
+Świeży VPS od zera do działającego `https://twoja-domena` (DNS, firewall, Supabase ES256, dane demo) →
+**[`deploy/DEPLOY_VPS.md`](deploy/DEPLOY_VPS.md)**. Kopie zapasowe i HA → [`docs/BACKUP_HA.md`](docs/BACKUP_HA.md).
+
+## Jakość
+
+- **250+ testów** (pytest), pokrycie backendu **≥ 90 %** (próg NFR)
+- Dostępność **WCAG 2.1 AA** (audyt axe‑core na wszystkich ekranach)
+- Wydajność: indeksy hot‑ścieżek + skalowanie poziome ([`docs/PERF.md`](docs/PERF.md))
+
+## Struktura repozytorium
+
+```
+backend/     FastAPI — API domenowe, RBAC, szyfrowanie, integracje (port/adapter)
+frontend/    React (Vite, TS) — 5 portali w jednej aplikacji
+mobile/      Expo — aplikacja pacjenta (push, offline)
+mocks/       mock-serwisy: p1, zus_ezla, ewus, lab, payments, sms
+mockupy-ui/  klikalne makiety UI (referencja wyglądu)
+deploy/      wdrożenie na VPS (Docker Compose, Caddy, runbook)
+docs/        dokumentacja, diagramy (ERD/UML jako kod), odstępstwa, wdrożenie
+```
+
+## 📚 Dokumentacja
+
+- **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)** — uruchomienie i praca w trybie deweloperskim
+- **[`deploy/DEPLOY_VPS.md`](deploy/DEPLOY_VPS.md)** — wdrożenie produkcyjne na VPS, krok po kroku
+- **[`docs/md`]** — rejestr świadomych odstępstw od pierwotnego projektu
+- **[`docs/BACKUP_HA.md`](docs/BACKUP_HA.md)** · **[`docs/PERF.md`](docs/PERF.md)** — kopie/HA i wydajność
+- Diagramy **jako kod**: `diagramy` (ERD w DBML, UML w PlantUML)
+- Pełna dokumentacja pracy: pliki `.docx` w katalogu głównym
+
+## Autor
+
+**Kacper Pomykała** — praca inżynierska, Polsko‑Japońska Akademia Technik Komputerowych (PJATK), nr albumu **s27990**.
