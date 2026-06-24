@@ -52,10 +52,13 @@ class OtpVerifyIn(OtpSendIn):
 @router.post("/otp/send")
 def otp_send(body: OtpSendIn, db: Session = Depends(get_db)):
     """Wysyła kod SMS na podany numer (rezerwacja publiczna / rejestracja).
-    W DEV zwraca kod też w odpowiedzi — Twilio trial dostarcza tylko na numer
-    zweryfikowany, więc demo z dowolnym numerem korzysta z tego fallbacku."""
+    Zwraca kod też w odpowiedzi, gdy nie ma realnej dostawy SMS (DEV albo
+    SMS_PROVIDER=mock) — wtedy SMS nigdzie nie dolatuje, więc demo/rezerwacja
+    z dowolnym numerem korzysta z tego fallbacku. Przy realnym Twilio (≠mock,
+    DEV_MODE=false) kod NIE wychodzi w odpowiedzi — leci wyłącznie SMS-em."""
     code = send_otp(db, body.phone_number, body.purpose)
-    return {"sent": True, "dev_code": code if settings.dev_mode else None}
+    expose = settings.dev_mode or settings.sms_provider == "mock"
+    return {"sent": True, "dev_code": code if expose else None}
 
 
 @router.post("/otp/verify")
